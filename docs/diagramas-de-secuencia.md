@@ -50,21 +50,21 @@ sequenceDiagram
     API-->>-WebApp: Mostrar resumen
     WebApp-->>-Administrador: Presentar socio
     Administrador->>+WebApp: Ingresar datos del pago
-    WebApp->>+API: Crear pago
-    API->>+Database: Guardar pago pendiente
-    Database-->>-API: Pago creado
-    API-->>-WebApp: Mostrar resumen previo
+    WebApp->>+API: Solicitar resumen previo
+    API->>+Database: Obtener valor vigente de cuota
+    Database-->>-API: Valor vigente
+    API-->>-WebApp: Devolver resumen y vencimiento calculado
     WebApp-->>-Administrador: Presentar resumen previo
     Administrador->>+WebApp: Confirmar pago
-    WebApp->>+API: Acreditar pago
-    API->>+Database: Actualizar pago y vencimiento
+    WebApp->>+API: Registrar y acreditar pago
+    API->>+Database: Guardar pago acreditado y trazabilidad
     Database-->>-API: Pago acreditado
     API-)Notificaciones: Informar acreditación
     API-->>-WebApp: Pago confirmado
     WebApp-->>-Administrador: Mostrar comprobante
 ```
 
-La acreditación es una operación administrativa. El sistema no incorpora pagos en línea ni planes de membresía.
+La acreditación es una operación administrativa. El resumen previo no se persiste: `Payment` nace con estado `ACCREDITED` cuando el administrador confirma la operación. En ese momento se registran la creación, la confirmación, sus responsables y la vigencia de 30 días. El sistema no incorpora pagos en línea ni planes de membresía.
 
 ## Carga y revisión del apto médico
 
