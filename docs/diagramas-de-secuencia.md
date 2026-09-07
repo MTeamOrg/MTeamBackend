@@ -41,7 +41,6 @@ sequenceDiagram
     participant WebApp
     participant API
     participant Database
-    participant Notificaciones
 
     Administrador->>+WebApp: Buscar socio
     WebApp->>+API: Consultar socio
@@ -59,7 +58,6 @@ sequenceDiagram
     WebApp->>+API: Registrar y acreditar pago
     API->>+Database: Guardar pago acreditado y trazabilidad
     Database-->>-API: Pago acreditado
-    API-)Notificaciones: Informar acreditación
     API-->>-WebApp: Pago confirmado
     WebApp-->>-Administrador: Mostrar comprobante
 ```
@@ -158,7 +156,7 @@ sequenceDiagram
     WebApp-->>-Administrador: Mostrar cronograma
     Administrador->>+WebApp: Copiar semana anterior
     WebApp->>+API: Solicitar copia
-    API->>+Database: Crear nueva semana
+    API->>+Database: Copiar semana anterior y sus clases
     Database-->>-API: Nueva semana creada
     API-->>-WebApp: Copia confirmada
     WebApp-->>-Administrador: Mostrar nueva semana

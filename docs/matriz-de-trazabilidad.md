@@ -15,7 +15,7 @@ Esta matriz vincula los requerimientos funcionales del documento de alcance con 
 | USR-01 | `User`, `MemberProfile`, `UserRole` | Cubierto | Documento y correo deberán tener restricciones únicas. |
 | USR-02 | `User`, `UserStatus` | Aplicación | Validación de credenciales y mensajes seguros en autenticación. |
 | USR-03 | `User` | Aplicación | La invalidación de credenciales pertenece al mecanismo de sesión. |
-| USR-04 | `User.mustChangePassword`, `UserAuditLog` | Cubierto | El administrador asigna una clave temporal; no se requiere correo automático. |
+| USR-04 | `User.isPasswordChangeRequired`, `UserAuditLog` | Cubierto | El administrador asigna una clave temporal; no se requiere correo automático. |
 | USR-05 | `User.role`, `UserRole` | Aplicación | La autorización se valida en el backend. |
 | USR-06 | `User`, `MemberProfile`, `TrainerProfile` | Cubierto | La API debe impedir modificar campos protegidos. |
 | USR-07 | `User.status`, `UserAuditLog` | Cubierto | La desactivación no elimina relaciones ni historial. |
@@ -85,7 +85,7 @@ Esta matriz vincula los requerimientos funcionales del documento de alcance con 
 | CLA-01 | `WeeklySchedule`, `ScheduledClass`, `Branch`, `TrainerProfile` | Cubierto | El cronograma es informativo. |
 | CLA-02 | `WeeklySchedule`, `ScheduledClass` | Cubierto | Se administran actividad, fecha/hora, sede y entrenador opcional. |
 | CLA-03 | `Branch.isActive`, `User.status`, `ScheduledClass` | Aplicación | La validación ocurre antes de asignar sede o entrenador. |
-| CLA-04 | `WeeklySchedule.copiedFromId`, `ScheduledClass` | Cubierto | La copia crea una semana nueva sin alterar la anterior. |
+| CLA-04 | `WeeklySchedule.copiedFrom`, `ScheduledClass` | Cubierto | La copia crea una semana nueva, conserva la referencia conceptual a la semana de origen y no altera el historial anterior. |
 | ENT-01 | `User`, `TrainerProfile` | Cubierto | Nombre y foto provienen de `User`; especialidad y descripción del perfil. |
 | ENT-02 | `User`, `TrainerProfile`, `TrainerBranch` | Cubierto | Incluye datos, fotografía, especialidad, descripción y sedes. |
 | ENT-03 | `TrainerProfile`, `ScheduledClass`, `Branch` | Cubierto | Las clases asignadas se consultan por la relación existente. |

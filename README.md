@@ -2,7 +2,7 @@
 
 > Plataforma web para la gestión integral de gimnasios.
 
-M-Team es una plataforma diseñada para centralizar la administración de gimnasios en una única aplicación web. Permite gestionar socios, entrenadores, pagos, cuotas, aptos médicos, sedes, clases y accesos mediante códigos QR, simplificando las tareas administrativas y mejorando la experiencia tanto del personal como de los usuarios. :contentReference[oaicite:0]{index=0}
+M-Team es una plataforma web diseñada para centralizar la administración del gimnasio. Permitirá gestionar socios, entrenadores, pagos, la cuota mensual, aptos médicos, sedes, clases y accesos mediante códigos QR fijos.
 
 ## ✨ Características
 
@@ -21,7 +21,7 @@ M-Team es una plataforma diseñada para centralizar la administración de gimnas
 
 ## 🏗 Arquitectura
 
-M-Team está desarrollado siguiendo una arquitectura de tres capas:
+M-Team se construirá siguiendo una arquitectura de tres capas:
 
 ```
 Frontend
@@ -35,7 +35,7 @@ Prisma ORM
 PostgreSQL
 ```
 
-Esta separación permite mantener una clara división entre la interfaz de usuario, la lógica de negocio y el acceso a los datos. :contentReference[oaicite:1]{index=1}
+Esta separación mantiene una división clara entre la interfaz de usuario, la lógica de negocio y el acceso a los datos. El frontend se comunicará exclusivamente con el backend mediante la API REST.
 
 ---
 
@@ -78,33 +78,16 @@ Esta separación permite mantener una clara división entre la interfaz de usuar
 - Jest
 - Supertest
 
-:contentReference[oaicite:2]{index=2}
+## 📂 Documentación
 
----
-
-## 📂 Estructura del proyecto
-
-```
-m-team/
-├── frontend/
-├── backend/
-├── docs/
-└── README.md
-```
-
-El backend sigue una arquitectura basada en responsabilidades:
-
-```
-Routes
-    ↓
-Controllers
-    ↓
-Services
-    ↓
-Repositories (Prisma)
-    ↓
-Database
-```
+- [Documento de alcance](./docs/documento-de-alcance.md)
+- [Diagrama de clases](./docs/diagrama-de-clases.md)
+- [Modelo relacional](./docs/modelo-relacional.md)
+- [Matriz de trazabilidad](./docs/matriz-de-trazabilidad.md)
+- [Diagrama de arquitectura](./docs/diagrama-arquitectura-m-team.md)
+- [Diagramas de secuencia](./docs/diagramas-de-secuencia.md)
+- [Estrategia de ambientes](./docs/ambientes.md)
+- [Convenciones de nombres](./docs/convenciones-de-nombres-m-team.md)
 
 ---
 
@@ -123,13 +106,9 @@ Database
 - Notificaciones internas.
 - Dashboard administrativo.
 
-:contentReference[oaicite:3]{index=3}
+## Fuera del alcance actual
 
----
-
-## 🚧 Roadmap
-
-Entre las funcionalidades previstas para futuras versiones se incluyen:
+El proyecto no incluye:
 
 - Integración con pasarelas de pago.
 - Reserva de clases.
@@ -138,4 +117,4 @@ Entre las funcionalidades previstas para futuras versiones se incluyen:
 - Notificaciones push.
 - Planes de membresía.
 
-Estas características aún no forman parte del alcance actual del proyecto. :contentReference[oaicite:4]{index=4}
+Estas características no deben incorporarse durante la implementación del alcance vigente.

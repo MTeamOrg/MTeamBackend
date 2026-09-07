@@ -69,7 +69,6 @@ class Payment {
   - expiresAt: DateTime
   - voidedAt: DateTime [0..1]
   - voidReason: String [0..1]
-  + accredit(accreditedAt: DateTime) void
   + voidPayment(reason: String, voidedAt: DateTime) void
   + calculateExpiration() DateTime
   + isValidAt(date: DateTime) Boolean
@@ -95,8 +94,8 @@ class Branch {
   - address: String
   - openingHours: String
   - phone: String
-  - latitude: Decimal
-  - longitude: Decimal
+  - latitude: Decimal [0..1]
+  - longitude: Decimal [0..1]
   - isActive: Boolean
   + updatePresentation(name: String, description: String, imageUrl: String) void
   + updateContact(address: String, openingHours: String, phone: String) void
@@ -146,12 +145,12 @@ class Event {
   - title: String
   - description: String
   - startsAt: DateTime
-  - branch: Branch
+  - location: String
   - imageUrl: String
   - status: EventStatus
   + updateDetails(title: String, description: String) void
   + reschedule(startsAt: DateTime) void
-  + changeBranch(branch: Branch) void
+  + changeLocation(location: String) void
   + updateImage(imageUrl: String) void
   + saveAsDraft() void
   + publish() void
@@ -185,26 +184,26 @@ class Notification {
   + isRead() Boolean
 }
 
-User "1" *-- "0..1" MemberProfile : has
-User "1" *-- "0..1" TrainerProfile : has
+User "1" -- "0..1" MemberProfile : has
+User "1" -- "0..1" TrainerProfile : has
 User "1" -- "0..*" UserAuditLog : auditedUser
-User "0..1" -- "0..*" UserAuditLog : performedBy
+User "1" -- "0..*" UserAuditLog : performedBy
 MemberProfile "1" -- "0..*" Payment : has
 MemberProfile "1" -- "0..*" MedicalCertificate : submits
 User "1" -- "0..*" MembershipPrice : creates
 User "1" -- "0..*" Payment : creates
-User "0..1" -- "0..*" Payment : confirms
+User "1" -- "0..*" Payment : confirms
 User "0..1" -- "0..*" Payment : voids
 User "0..1" -- "0..*" MedicalCertificate : reviews
-Branch "1" *-- "0..*" AccessPoint : contains
+Branch "1" -- "0..*" AccessPoint : contains
 User "1" -- "0..*" AccessLog : attempts
 AccessPoint "0..1" -- "0..*" AccessLog : records
 TrainerProfile "0..*" -- "0..*" Branch : worksAt
+WeeklySchedule "0..1" -- "0..*" WeeklySchedule : copiedFrom
 WeeklySchedule "1" *-- "0..*" ScheduledClass : contains
 Branch "1" -- "0..*" ScheduledClass : hosts
 TrainerProfile "0..1" -- "0..*" ScheduledClass : teaches
 User "1" -- "0..*" Event : creates
-Branch "1" -- "0..*" Event : hosts
 User "1" -- "0..*" NewsPost : creates
 User "1" -- "0..*" Notification : receives
 Branch "0..1" -- "0..*" AccessLog : receives
