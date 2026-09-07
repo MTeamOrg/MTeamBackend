@@ -5,6 +5,7 @@ Estos diagramas documentan las interacciones principales del prototipo de M-Team
 ## Registro e inicio de sesión
 
 ```mermaid
+%%{init: {"sequence": {"mirrorActors": false}}}%%
 sequenceDiagram
     title Registro e inicio de sesión
     participant Socio
@@ -33,6 +34,7 @@ La recuperación automática por correo no forma parte del alcance. Cuando sea n
 ## Acreditación de un pago
 
 ```mermaid
+%%{init: {"sequence": {"mirrorActors": false}}}%%
 sequenceDiagram
     title Acreditación de un pago
     participant Administrador
@@ -67,6 +69,7 @@ La acreditación es una operación administrativa. El sistema no incorpora pagos
 ## Carga y revisión del apto médico
 
 ```mermaid
+%%{init: {"sequence": {"mirrorActors": false}}}%%
 sequenceDiagram
     title Carga y revisión del apto médico
     participant Socio
@@ -104,6 +107,7 @@ El resultado de la revisión puede ser aprobado o rechazado con una observación
 ## Validación de acceso mediante QR
 
 ```mermaid
+%%{init: {"sequence": {"mirrorActors": false}}}%%
 sequenceDiagram
     title Validación de acceso mediante QR
     participant Usuario
@@ -130,6 +134,7 @@ El QR pertenece al punto de acceso físico, no al usuario. Un rechazo puede debe
 ## Gestión del cronograma semanal
 
 ```mermaid
+%%{init: {"sequence": {"mirrorActors": false}}}%%
 sequenceDiagram
     title Gestión del cronograma semanal
     participant Administrador
@@ -164,6 +169,7 @@ El cronograma es informativo. No incluye reservas, cupos, listas de espera ni as
 ## Consulta de notificaciones
 
 ```mermaid
+%%{init: {"sequence": {"mirrorActors": false}}}%%
 sequenceDiagram
     title Consulta de notificaciones
     participant Usuario
