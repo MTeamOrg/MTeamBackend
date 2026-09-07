@@ -19,29 +19,29 @@ class User {
   - isPasswordChangeRequired: Boolean
   - createdAt: DateTime
   - updatedAt: DateTime
-  + updateContact(email: String, phone: String): void
-  + updatePhoto(photoUrl: String): void
-  + changePassword(passwordHash: String): void
-  + assignTemporaryPassword(passwordHash: String): void
-  + activate(): void
-  + deactivate(): void
-  + canAuthenticate(): Boolean
+  + updateContact(email: String, phone: String) void
+  + updatePhoto(photoUrl: String) void
+  + changePassword(passwordHash: String) void
+  + assignTemporaryPassword(passwordHash: String) void
+  + activate() void
+  + deactivate() void
+  + canAuthenticate() Boolean
 }
 
 class MemberProfile {
   - id: UUID
   - emergencyContactName: String
   - emergencyContactPhone: String
-  + updateEmergencyContact(name: String, phone: String): void
+  + updateEmergencyContact(name: String, phone: String) void
 }
 
 class TrainerProfile {
   - id: UUID
   - specialty: String
   - description: String
-  + updateProfessionalProfile(specialty: String, description: String): void
-  + assignBranch(branch: Branch): void
-  + removeBranch(branch: Branch): void
+  + updateProfessionalProfile(specialty: String, description: String) void
+  + assignBranch(branch: Branch) void
+  + removeBranch(branch: Branch) void
 }
 
 class UserAuditLog {
@@ -69,10 +69,9 @@ class Payment {
   - expiresAt: DateTime
   - voidedAt: DateTime [0..1]
   - voidReason: String [0..1]
-  + accredit(accreditedAt: DateTime): void
-  + voidPayment(reason: String, voidedAt: DateTime): void
-  + calculateExpiration(): DateTime
-  + isValidAt(date: DateTime): Boolean
+  + voidPayment(reason: String, voidedAt: DateTime) void
+  + calculateExpiration() DateTime
+  + isValidAt(date: DateTime) Boolean
 }
 
 class MedicalCertificate {
@@ -82,9 +81,9 @@ class MedicalCertificate {
   - uploadedAt: DateTime
   - reviewedAt: DateTime [0..1]
   - reviewComment: String [0..1]
-  + approve(reviewedAt: DateTime): void
-  + reject(comment: String, reviewedAt: DateTime): void
-  + isApproved(): Boolean
+  + approve(reviewedAt: DateTime) void
+  + reject(comment: String, reviewedAt: DateTime) void
+  + isApproved() Boolean
 }
 
 class Branch {
@@ -95,14 +94,14 @@ class Branch {
   - address: String
   - openingHours: String
   - phone: String
-  - latitude: Decimal
-  - longitude: Decimal
+  - latitude: Decimal [0..1]
+  - longitude: Decimal [0..1]
   - isActive: Boolean
-  + updatePresentation(name: String, description: String, imageUrl: String): void
-  + updateContact(address: String, openingHours: String, phone: String): void
-  + updateLocation(latitude: Decimal, longitude: Decimal): void
-  + activate(): void
-  + deactivate(): void
+  + updatePresentation(name: String, description: String, imageUrl: String) void
+  + updateContact(address: String, openingHours: String, phone: String) void
+  + updateLocation(latitude: Decimal, longitude: Decimal) void
+  + activate() void
+  + deactivate() void
 }
 
 class AccessPoint {
@@ -110,9 +109,9 @@ class AccessPoint {
   - name: String
   - qrToken: String
   - isActive: Boolean
-  + isQrTokenMatch(token: String): Boolean
-  + activate(): void
-  + deactivate(): void
+  + isQrTokenMatch(token: String) Boolean
+  + activate() void
+  + deactivate() void
 }
 
 class AccessLog {
@@ -127,18 +126,18 @@ class WeeklySchedule {
   - id: UUID
   - weekStartsOn: Date
   - createdAt: DateTime
-  + copyToWeek(weekStartsOn: Date): WeeklySchedule
+  + copyToWeek(weekStartsOn: Date) WeeklySchedule
 }
 
 class ScheduledClass {
   - id: UUID
   - activity: String
   - startsAt: DateTime
-  + reschedule(startsAt: DateTime): void
-  + changeActivity(activity: String): void
-  + assignTrainer(trainer: TrainerProfile): void
-  + removeTrainer(): void
-  + changeBranch(branch: Branch): void
+  + reschedule(startsAt: DateTime) void
+  + changeActivity(activity: String) void
+  + assignTrainer(trainer: TrainerProfile) void
+  + removeTrainer() void
+  + changeBranch(branch: Branch) void
 }
 
 class Event {
@@ -149,14 +148,14 @@ class Event {
   - location: String
   - imageUrl: String
   - status: EventStatus
-  + updateDetails(title: String, description: String): void
-  + reschedule(startsAt: DateTime): void
-  + changeLocation(location: String): void
-  + updateImage(imageUrl: String): void
-  + saveAsDraft(): void
-  + publish(): void
-  + cancel(): void
-  + isFinishedAt(date: DateTime): Boolean
+  + updateDetails(title: String, description: String) void
+  + reschedule(startsAt: DateTime) void
+  + changeLocation(location: String) void
+  + updateImage(imageUrl: String) void
+  + saveAsDraft() void
+  + publish() void
+  + cancel() void
+  + isFinishedAt(date: DateTime) Boolean
 }
 
 class NewsPost {
@@ -167,11 +166,11 @@ class NewsPost {
   - audience: PublicationAudience
   - status: PublicationStatus
   - publishedAt: DateTime [0..1]
-  + publish(publishedAt: DateTime): void
-  + updateContent(title: String, content: String): void
-  + updateImage(imageUrl: String): void
-  + changeAudience(audience: PublicationAudience): void
-  + deactivate(): void
+  + publish(publishedAt: DateTime) void
+  + updateContent(title: String, content: String) void
+  + updateImage(imageUrl: String) void
+  + changeAudience(audience: PublicationAudience) void
+  + deactivate() void
 }
 
 class Notification {
@@ -181,25 +180,26 @@ class Notification {
   - type: NotificationType
   - createdAt: DateTime
   - readAt: DateTime [0..1]
-  + markAsRead(readAt: DateTime): void
-  + isRead(): Boolean
+  + markAsRead(readAt: DateTime) void
+  + isRead() Boolean
 }
 
-User "1" *-- "0..1" MemberProfile : has
-User "1" *-- "0..1" TrainerProfile : has
+User "1" -- "0..1" MemberProfile : has
+User "1" -- "0..1" TrainerProfile : has
 User "1" -- "0..*" UserAuditLog : auditedUser
-User "0..1" -- "0..*" UserAuditLog : performedBy
+User "1" -- "0..*" UserAuditLog : performedBy
 MemberProfile "1" -- "0..*" Payment : has
 MemberProfile "1" -- "0..*" MedicalCertificate : submits
 User "1" -- "0..*" MembershipPrice : creates
 User "1" -- "0..*" Payment : creates
-User "0..1" -- "0..*" Payment : confirms
+User "1" -- "0..*" Payment : confirms
 User "0..1" -- "0..*" Payment : voids
 User "0..1" -- "0..*" MedicalCertificate : reviews
-Branch "1" *-- "0..*" AccessPoint : contains
+Branch "1" -- "0..*" AccessPoint : contains
 User "1" -- "0..*" AccessLog : attempts
 AccessPoint "0..1" -- "0..*" AccessLog : records
 TrainerProfile "0..*" -- "0..*" Branch : worksAt
+WeeklySchedule "0..1" -- "0..*" WeeklySchedule : copiedFrom
 WeeklySchedule "1" *-- "0..*" ScheduledClass : contains
 Branch "1" -- "0..*" ScheduledClass : hosts
 TrainerProfile "0..1" -- "0..*" ScheduledClass : teaches

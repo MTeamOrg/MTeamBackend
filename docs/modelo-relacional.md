@@ -1,12 +1,12 @@
 # Modelo relacional de M-Team
 
-Este modelo deriva del [modelo de dominio](./modelo-de-dominio.md) y de la [matriz de trazabilidad](./matriz-de-trazabilidad.md). Utiliza nombres de tablas y columnas en `snake_case`, tablas en plural y claves foráneas con el sufijo `_id`.
+Este modelo deriva del [diagrama de clases](./diagrama-de-clases.md) y de la [matriz de trazabilidad](./matriz-de-trazabilidad.md). Utiliza nombres de tablas y columnas en `snake_case`, tablas en singular y claves foráneas con el sufijo `_id`.
 
 ## Diagrama entidad-relación
 
 ```mermaid
 erDiagram
-    users {
+    user {
         uuid id PK
         varchar first_name
         varchar last_name
@@ -15,29 +15,29 @@ erDiagram
         varchar email UK
         varchar phone
         varchar password_hash
-        varchar photo_url
-        user_role role
-        user_status status
-        boolean must_change_password
+        varchar photo_url "nullable"
+        UserRole role
+        UserStatus status
+        boolean is_password_change_required
         timestamptz created_at
         timestamptz updated_at
     }
 
-    member_profiles {
+    member_profile {
         uuid id PK
         uuid user_id FK,UK
         varchar emergency_contact_name
         varchar emergency_contact_phone
     }
 
-    trainer_profiles {
+    trainer_profile {
         uuid id PK
         uuid user_id FK,UK
         varchar specialty
         text description
     }
 
-    membership_prices {
+    membership_price {
         uuid id PK
         numeric amount
         timestamptz effective_from
@@ -45,35 +45,35 @@ erDiagram
         timestamptz created_at
     }
 
-    payments {
+    payment {
         uuid id PK
         uuid member_id FK
         numeric amount
         varchar method
-        varchar receipt_number
-        payment_status status
+        varchar receipt_number "nullable"
+        PaymentStatus status
         uuid created_by_id FK
         timestamptz created_at
         uuid confirmed_by_id FK
         timestamptz accredited_at
         timestamptz expires_at
-        uuid voided_by_id FK
-        timestamptz voided_at
-        text void_reason
+        uuid voided_by_id FK "nullable"
+        timestamptz voided_at "nullable"
+        text void_reason "nullable"
     }
 
-    medical_certificates {
+    medical_certificate {
         uuid id PK
         uuid member_id FK
         varchar file_url
-        medical_certificate_status status
+        MedicalCertificateStatus status
         timestamptz uploaded_at
-        uuid reviewed_by_id FK
-        timestamptz reviewed_at
-        text review_comment
+        uuid reviewed_by_id FK "nullable"
+        timestamptz reviewed_at "nullable"
+        text review_comment "nullable"
     }
 
-    branches {
+    branch {
         uuid id PK
         varchar name UK
         text description
@@ -81,12 +81,12 @@ erDiagram
         varchar address UK
         varchar opening_hours
         varchar phone
-        numeric latitude
-        numeric longitude
+        numeric latitude "nullable"
+        numeric longitude "nullable"
         boolean is_active
     }
 
-    access_points {
+    access_point {
         uuid id PK
         uuid branch_id FK
         varchar name
@@ -94,154 +94,167 @@ erDiagram
         boolean is_active
     }
 
-    access_logs {
+    access_log {
         uuid id PK
         uuid user_id FK
-        user_role role_at_attempt
+        UserRole role_at_attempt
         uuid branch_id FK "nullable"
         uuid access_point_id FK "nullable"
-        access_result result
-        access_denial_reason denial_reason
+        AccessResult result
+        AccessDenialReason denial_reason "nullable"
         timestamptz attempted_at
     }
 
-    weekly_schedules {
+    weekly_schedule {
         uuid id PK
         date week_starts_on UK
-        uuid copied_from_id FK
+        uuid copied_from_id FK "nullable"
         timestamptz created_at
     }
 
-    scheduled_classes {
+    scheduled_class {
         uuid id PK
         uuid schedule_id FK
         uuid branch_id FK
-        uuid trainer_id FK
+        uuid trainer_id FK "nullable"
         varchar activity
         timestamptz starts_at
     }
 
-    trainer_branches {
-        uuid trainer_id PK,FK
-        uuid branch_id PK,FK
+    trainer_branch {
+        uuid id PK
+        uuid trainer_id FK
+        uuid branch_id FK
     }
 
-    user_audit_logs {
+    user_audit_log {
         uuid id PK
         uuid user_id FK
         uuid performed_by_id FK
-        user_audit_action action
-        text reason
+        UserAuditAction action
+        text reason "nullable"
         timestamptz occurred_at
     }
 
-    events {
+    event {
         uuid id PK
         varchar title
         text description
         timestamptz starts_at
         varchar location
         varchar image_url
-        event_status status
+        EventStatus status
         uuid created_by_id FK
     }
 
-    news_posts {
+    news_post {
         uuid id PK
         varchar title
         text content
-        varchar image_url
-        publication_audience audience
-        publication_status status
-        timestamptz published_at
+        varchar image_url "nullable"
+        PublicationAudience audience
+        PublicationStatus status
+        timestamptz published_at "nullable"
         uuid created_by_id FK
     }
 
-    notifications {
+    notification {
         uuid id PK
         uuid user_id FK
         varchar title
         text message
-        notification_type type
+        NotificationType type
         timestamptz created_at
-        timestamptz read_at
+        timestamptz read_at "nullable"
     }
 
-    users ||--o| member_profiles : "has"
-    users ||--o| trainer_profiles : "has"
-    member_profiles ||--o{ payments : "owns"
-    member_profiles ||--o{ medical_certificates : "uploads"
-    users ||--o{ membership_prices : "creates"
-    users ||--o{ payments : "creates/confirms/voids"
-    users ||--o{ medical_certificates : "reviews"
-    branches ||--o{ access_points : "contains"
-    users ||--o{ access_logs : "attempts"
-    branches o|--o{ access_logs : "receives"
-    access_points o|--o{ access_logs : "records"
-    weekly_schedules o|--o{ weekly_schedules : "copied into"
-    weekly_schedules ||--o{ scheduled_classes : "contains"
-    branches ||--o{ scheduled_classes : "hosts"
-    trainer_profiles o|--o{ scheduled_classes : "teaches"
-    trainer_profiles ||--o{ trainer_branches : "works at"
-    branches ||--o{ trainer_branches : "has trainers"
-    users ||--o{ user_audit_logs : "is audited/performs"
-    users ||--o{ events : "creates"
-    users ||--o{ news_posts : "creates"
-    users ||--o{ notifications : "receives"
+    user ||--o| member_profile : has
+    user ||--o| trainer_profile : has
+    member_profile ||--o{ payment : owns
+    member_profile ||--o{ medical_certificate : uploads
+    user ||--o{ membership_price : creates
+    user ||--o{ payment : creates
+    user ||--o{ payment : confirms
+    user o|--o{ payment : voids
+    user o|--o{ medical_certificate : reviews
+    branch ||--o{ access_point : contains
+    user ||--o{ access_log : attempts
+    branch o|--o{ access_log : receives
+    access_point o|--o{ access_log : records
+    weekly_schedule o|--o{ weekly_schedule : copied_from
+    weekly_schedule ||--o{ scheduled_class : contains
+    branch ||--o{ scheduled_class : hosts
+    trainer_profile o|--o{ scheduled_class : teaches
+    trainer_profile ||--o{ trainer_branch : works_at
+    branch ||--o{ trainer_branch : has_trainers
+    user ||--o{ user_audit_log : is_audited
+    user ||--o{ user_audit_log : performs
+    user ||--o{ event : creates
+    user ||--o{ news_post : creates
+    user ||--o{ notification : receives
 ```
 
 ## Enumeraciones
 
 | Enumeración | Valores |
 |---|---|
-| `user_role` | `MEMBER`, `TRAINER`, `ADMIN` |
-| `user_status` | `ACTIVE`, `INACTIVE` |
-| `payment_status` | `ACCREDITED`, `VOIDED` |
-| `medical_certificate_status` | `PENDING`, `APPROVED`, `REJECTED` |
-| `access_result` | `ALLOWED`, `DENIED` |
-| `access_denial_reason` | `INVALID_QR`, `INACTIVE_USER`, `INACTIVE_BRANCH`, `INACTIVE_ACCESS_POINT`, `EXPIRED_MEMBERSHIP`, `MEDICAL_CERTIFICATE_REQUIRED` |
-| `user_audit_action` | `CREATED`, `UPDATED`, `ACTIVATED`, `DEACTIVATED`, `PASSWORD_RESET` |
-| `event_status` | `DRAFT`, `PUBLISHED`, `CANCELLED` |
-| `publication_audience` | `ALL`, `MEMBERS`, `TRAINERS` |
-| `publication_status` | `DRAFT`, `PUBLISHED`, `INACTIVE` |
-| `notification_type` | `MEMBERSHIP_PRICE_CHANGED`, `MEMBERSHIP_EXPIRING`, `MEMBERSHIP_EXPIRED`, `MEDICAL_CERTIFICATE_REVIEWED`, `CLASS_CHANGED`, `EVENT_CANCELLED`, `GENERAL` |
+| `UserRole` | `MEMBER`, `TRAINER`, `ADMIN` |
+| `UserStatus` | `ACTIVE`, `INACTIVE` |
+| `PaymentStatus` | `ACCREDITED`, `VOIDED` |
+| `MedicalCertificateStatus` | `PENDING`, `APPROVED`, `REJECTED` |
+| `AccessResult` | `ALLOWED`, `DENIED` |
+| `AccessDenialReason` | `INVALID_QR`, `INACTIVE_USER`, `INACTIVE_BRANCH`, `INACTIVE_ACCESS_POINT`, `EXPIRED_MEMBERSHIP`, `MEDICAL_CERTIFICATE_REQUIRED` |
+| `UserAuditAction` | `CREATED`, `UPDATED`, `ACTIVATED`, `DEACTIVATED`, `PASSWORD_RESET` |
+| `EventStatus` | `DRAFT`, `PUBLISHED`, `CANCELLED` |
+| `PublicationAudience` | `ALL`, `MEMBERS`, `TRAINERS` |
+| `PublicationStatus` | `DRAFT`, `PUBLISHED`, `INACTIVE` |
+| `NotificationType` | `MEMBERSHIP_PRICE_CHANGED`, `MEMBERSHIP_EXPIRING`, `MEMBERSHIP_EXPIRED`, `MEDICAL_CERTIFICATE_REVIEWED`, `CLASS_CHANGED`, `EVENT_CANCELLED`, `GENERAL` |
 
-El medio de pago permanece como `varchar` validado por la aplicación hasta que M-Team confirme los valores aceptados. Luego podrá convertirse en una enumeración sin modificar las relaciones.
+Los nombres de las enumeraciones utilizan PascalCase y sus valores, UPPER_SNAKE_CASE. El medio de pago permanece como `varchar` hasta que M-Team confirme los valores aceptados; no se agrega una enumeración con opciones no definidas por el alcance.
 
 ## Restricciones principales
 
-- `users.email` y `users.document_number` son únicos, comparando el correo normalizado en minúsculas.
-- Cada usuario puede tener como máximo un perfil de socio o de entrenador, coherente con su rol.
-- `membership_prices.amount` y `payments.amount` deben ser mayores que cero.
-- `payments.expires_at` equivale a `accredited_at + 30 días` para pagos acreditados.
-- Un pago anulado requiere `voided_by_id`, `voided_at` y `void_reason`.
-- Un apto rechazado requiere `reviewed_by_id`, `reviewed_at` y `review_comment`.
-- Un apto aprobado requiere responsable y fecha de revisión, pero no fecha de vencimiento.
-- `branches.name`, `branches.address` y `access_points.qr_token` son únicos.
-- `access_logs.denial_reason` es obligatorio solamente cuando `result = DENIED`.
-- `access_logs.branch_id` y `access_logs.access_point_id` pueden ser nulos solamente cuando el QR es inexistente o fue alterado y el motivo es `INVALID_QR`.
-- `weekly_schedules.week_starts_on` debe representar siempre el comienzo acordado de una semana y ser único.
-- `trainer_branches` utiliza una clave primaria compuesta para evitar asignaciones duplicadas.
+- `user.email` y `user.document_number` son únicos; el correo se compara normalizado en minúsculas.
+- Cada usuario puede tener como máximo un perfil de socio o de entrenador, de forma coherente con su rol.
+- `membership_price.amount` y `payment.amount` deben ser mayores que cero.
+- `payment` nace cuando el administrador confirma la acreditación. Su estado inicial es `ACCREDITED`; no se persiste un estado `PENDING` que el alcance no define.
+- `payment.expires_at` equivale a `accredited_at + 30 días`; una acreditación nueva no acumula días de la vigencia anterior.
+- Todo pago registra por separado quién lo creó y quién lo confirmó. Si se anula, requiere `voided_by_id`, `voided_at` y `void_reason`.
+- Un apto `PENDING` no tiene revisor, fecha de revisión ni comentario obligatorios.
+- Un apto `APPROVED` requiere `reviewed_by_id` y `reviewed_at`, pero no tiene fecha de vencimiento.
+- Un apto `REJECTED` requiere `reviewed_by_id`, `reviewed_at` y `review_comment`.
+- `branch.name`, `branch.address` y `access_point.qr_token` son únicos.
+- `access_log.denial_reason` es obligatorio cuando `result = DENIED` y nulo cuando `result = ALLOWED`.
+- `access_log.branch_id` y `access_log.access_point_id` pueden ser nulos solamente cuando el QR es inexistente o fue alterado y el motivo es `INVALID_QR`.
+- `weekly_schedule.copied_from_id` es opcional; identifica la semana de origen cuando el cronograma fue copiado.
+- `weekly_schedule.week_starts_on` debe representar el comienzo acordado de una semana y ser único.
+- `scheduled_class.trainer_id` es opcional; `branch_id` siempre es obligatorio.
+- `trainer_branch` utiliza `id` como clave primaria y una restricción única compuesta sobre `(trainer_id, branch_id)` para evitar asignaciones duplicadas.
+- Los estados de cuota `CURRENT`, `EXPIRING_SOON` y `EXPIRED` se calculan y no se persisten como columna.
 - Los registros históricos no se eliminan al desactivar usuarios, entrenadores, sedes o puntos de acceso.
 
 ## Índices recomendados
 
 | Tabla | Índice |
 |---|---|
-| `users` | `(role, status)`, `last_name`, `first_name` |
-| `membership_prices` | `effective_from DESC` |
-| `payments` | `(member_id, accredited_at DESC)`, `(status, accredited_at)`, `receipt_number` |
-| `medical_certificates` | `(member_id, uploaded_at DESC)`, `(status, uploaded_at)` |
-| `access_logs` | `(user_id, attempted_at DESC)`, `(branch_id, attempted_at DESC)`, `(result, attempted_at)` |
-| `scheduled_classes` | `(schedule_id, starts_at)`, `(trainer_id, starts_at)`, `(branch_id, starts_at)` |
-| `events` | `(status, starts_at)` |
-| `news_posts` | `(status, audience, published_at DESC)` |
-| `notifications` | `(user_id, created_at DESC)`, `(user_id, read_at)` |
+| `user` | `(role, status)`, `last_name`, `first_name` |
+| `membership_price` | `effective_from DESC` |
+| `payment` | `(member_id, accredited_at DESC)`, `(status, accredited_at)`, `receipt_number` |
+| `medical_certificate` | `(member_id, uploaded_at DESC)`, `(status, uploaded_at)` |
+| `access_log` | `(user_id, attempted_at DESC)`, `(branch_id, attempted_at DESC)`, `(result, attempted_at)` |
+| `scheduled_class` | `(schedule_id, starts_at)`, `(trainer_id, starts_at)`, `(branch_id, starts_at)` |
+| `trainer_branch` | `UNIQUE (trainer_id, branch_id)` |
+| `event` | `(status, starts_at)` |
+| `news_post` | `(status, audience, published_at DESC)` |
+| `notification` | `(user_id, created_at DESC)`, `(user_id, read_at)` |
 
 ## Decisiones para la traducción a Prisma
 
+- Los modelos Prisma utilizarán singular y PascalCase; los campos, camelCase.
+- Las tablas PostgreSQL se mapearán en singular y snake_case, por ejemplo `MedicalCertificate` mediante `@@map("medical_certificate")`.
+- La tabla `user` respeta la convención acordada, pero coincide con una palabra especial de SQL/PostgreSQL; Prisma deberá generar identificadores correctamente entrecomillados al crear las migraciones.
 - Las claves primarias se generarán con UUID.
 - Todos los instantes se almacenarán como `timestamptz`; las fechas sin hora utilizarán `date`.
 - Las relaciones con datos históricos usarán `ON DELETE RESTRICT` o `NO ACTION`.
-- Los campos opcionales incluyen fotografías, comprobantes, revisiones aún no realizadas, anulaciones, coordenadas, entrenador de una clase y fecha de lectura.
-- Los estados de cuota y de finalización de eventos no se almacenarán porque se calculan con la fecha actual.
+- Las clases son informativas: no se modelan reservas, cupos, listas de espera ni asistencia.
+- No se modelan planes de membresía, pagos en línea ni QR personales.
