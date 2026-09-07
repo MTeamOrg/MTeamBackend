@@ -4,6 +4,16 @@
 
 M-Team es una plataforma diseñada para centralizar la administración de gimnasios en una única aplicación web. Permite gestionar socios, entrenadores, pagos, cuotas, aptos médicos, sedes, clases y accesos mediante códigos QR, simplificando las tareas administrativas y mejorando la experiencia tanto del personal como de los usuarios. :contentReference[oaicite:0]{index=0}
 
+## Documentación de la API
+
+La especificación inicial de la API REST se encuentra en
+[`backend/docs/openapi.yaml`](./backend/docs/openapi.yaml).
+
+El contrato documenta los endpoints, parámetros, cuerpos, respuestas,
+autenticación JWT y permisos necesarios para integrar el frontend con el
+backend. Cuando Swagger UI sea incorporado, estará disponible localmente en
+`http://localhost:3000/api/docs`.
+
 ## ✨ Características
 
 - 👥 Gestión de usuarios con roles (Socio, Entrenador y Administrador).

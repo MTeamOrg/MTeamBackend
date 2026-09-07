@@ -1,0 +1,1186 @@
+openapi: 3.1.0
+info:
+  title: M-Team API
+  version: 0.1.0
+  description: |
+    Contrato inicial de la API REST de M-Team. La API administra usuarios,
+    cuota mensual, pagos, aptos médicos, accesos QR, sedes, clases,
+    entrenadores, eventos, novedades y notificaciones.
+servers:
+  - url: http://localhost:3000/api
+    description: Desarrollo local
+tags:
+  - name: System
+  - name: Authentication
+  - name: Dashboard
+  - name: Users
+  - name: Members
+  - name: Membership Prices
+  - name: Payments
+  - name: Medical Certificates
+  - name: Access Attempts
+  - name: Access Points
+  - name: Branches
+  - name: Weekly Schedules
+  - name: Scheduled Classes
+  - name: Trainers
+  - name: Events
+  - name: News Posts
+  - name: Notifications
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [System]
+      summary: Verificar el estado de la API
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: API disponible
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Registrar una cuenta de socio
+      operationId: registerMember
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201": { $ref: "#/components/responses/Created" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Iniciar sesión
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Sesión iniciada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Cerrar sesión
+      operationId: logout
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Obtener la identidad autenticada
+      operationId: getCurrentIdentity
+      responses:
+        "200":
+          description: Identidad autenticada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /auth/password:
+    patch:
+      tags: [Authentication]
+      summary: Cambiar la contraseña propia
+      operationId: changePassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+
+  /dashboard:
+    get:
+      tags: [Dashboard]
+      summary: Obtener el panel correspondiente al rol autenticado
+      operationId: getDashboard
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /users:
+    get:
+      tags: [Users]
+      summary: Listar y filtrar usuarios
+      operationId: listUsers
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - name: role
+          in: query
+          schema: { $ref: "#/components/schemas/UserRole" }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/UserStatus" }
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Users]
+      summary: Crear una cuenta desde administración
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201": { $ref: "#/components/responses/Created" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /users/me:
+    get:
+      tags: [Users]
+      summary: Consultar el perfil propio
+      operationId: getOwnProfile
+      responses:
+        "200":
+          description: Perfil actual
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+    patch:
+      tags: [Users]
+      summary: Modificar los datos permitidos del perfil propio
+      operationId: updateOwnProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateProfileRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /users/me/photo:
+    put:
+      tags: [Users]
+      summary: Reemplazar la fotografía del perfil propio
+      operationId: updateOwnPhoto
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /users/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    get:
+      tags: [Users]
+      summary: Consultar el detalle administrativo de un usuario
+      operationId: getUser
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Users]
+      summary: Modificar un usuario desde administración
+      operationId: updateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateUserRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /users/{userId}/status:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    patch:
+      tags: [Users]
+      summary: Activar, desactivar o reactivar una cuenta
+      operationId: updateUserStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateUserStatusRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /users/{userId}/password-resets:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    post:
+      tags: [Users]
+      summary: Asignar una contraseña temporal
+      operationId: resetUserPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResetPasswordRequest" }
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+
+  /users/{userId}/audit-logs:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    get:
+      tags: [Users]
+      summary: Consultar el historial administrativo de una cuenta
+      operationId: listUserAuditLogs
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+
+  /members:
+    get:
+      tags: [Members]
+      summary: Listar socios y filtrar por estado de cuota
+      operationId: listMembers
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - name: membershipStatus
+          in: query
+          schema: { $ref: "#/components/schemas/MembershipStatus" }
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+
+  /members/me/membership:
+    get:
+      tags: [Members]
+      summary: Consultar el estado de la cuota propia
+      operationId: getOwnMembership
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /membership-prices/current:
+    get:
+      tags: [Membership Prices]
+      summary: Consultar el valor vigente de la cuota
+      operationId: getCurrentMembershipPrice
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /membership-prices:
+    get:
+      tags: [Membership Prices]
+      summary: Consultar el historial de valores de cuota
+      operationId: listMembershipPrices
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+    post:
+      tags: [Membership Prices]
+      summary: Registrar un nuevo valor de cuota
+      operationId: createMembershipPrice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateMembershipPriceRequest" }
+      responses:
+        "201": { $ref: "#/components/responses/Created" }
+
+  /payments:
+    get:
+      tags: [Payments]
+      summary: Buscar y filtrar pagos
+      operationId: listPayments
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: memberId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: documentNumber
+          in: query
+          schema: { type: string }
+        - name: method
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/PaymentStatus" }
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+    post:
+      tags: [Payments]
+      summary: Registrar y acreditar un pago
+      operationId: createPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreatePaymentRequest" }
+      responses:
+        "201": { $ref: "#/components/responses/Created" }
+
+  /payments/previews:
+    post:
+      tags: [Payments]
+      summary: Calcular un resumen previo sin crear el pago
+      operationId: previewPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PaymentPreviewRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /payments/summary:
+    get:
+      tags: [Payments]
+      summary: Calcular el total acreditado dentro de un período
+      operationId: getPaymentsSummary
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /payments/{paymentId}:
+    parameters:
+      - $ref: "#/components/parameters/PaymentId"
+    get:
+      tags: [Payments]
+      summary: Consultar un pago
+      operationId: getPayment
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /payments/{paymentId}/voids:
+    parameters:
+      - $ref: "#/components/parameters/PaymentId"
+    post:
+      tags: [Payments]
+      summary: Anular un pago acreditado
+      operationId: voidPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VoidPaymentRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /members/me/payments:
+    get:
+      tags: [Payments]
+      summary: Consultar el historial de pagos propio
+      operationId: listOwnPayments
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+
+  /members/{memberId}/payments:
+    parameters:
+      - $ref: "#/components/parameters/MemberId"
+    get:
+      tags: [Payments]
+      summary: Consultar los pagos de un socio
+      operationId: listMemberPayments
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+
+  /members/me/medical-certificates:
+    get:
+      tags: [Medical Certificates]
+      summary: Consultar el historial propio de aptos médicos
+      operationId: listOwnMedicalCertificates
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+    post:
+      tags: [Medical Certificates]
+      summary: Cargar un apto médico
+      operationId: uploadMedicalCertificate
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201": { $ref: "#/components/responses/Created" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+
+  /medical-certificates:
+    get:
+      tags: [Medical Certificates]
+      summary: Buscar y filtrar aptos médicos
+      operationId: listMedicalCertificates
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/MedicalCertificateStatus" }
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+
+  /medical-certificates/{certificateId}:
+    parameters:
+      - $ref: "#/components/parameters/CertificateId"
+    get:
+      tags: [Medical Certificates]
+      summary: Consultar el detalle de un apto médico
+      operationId: getMedicalCertificate
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /medical-certificates/{certificateId}/file:
+    parameters:
+      - $ref: "#/components/parameters/CertificateId"
+    get:
+      tags: [Medical Certificates]
+      summary: Obtener acceso temporal al archivo del apto
+      operationId: getMedicalCertificateFile
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /medical-certificates/{certificateId}/review:
+    parameters:
+      - $ref: "#/components/parameters/CertificateId"
+    patch:
+      tags: [Medical Certificates]
+      summary: Aprobar o rechazar un apto médico
+      operationId: reviewMedicalCertificate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MedicalReviewRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /access-attempts:
+    get:
+      tags: [Access Attempts]
+      summary: Consultar y filtrar intentos de ingreso
+      operationId: listAccessAttempts
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: userId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: branchId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: role
+          in: query
+          schema: { $ref: "#/components/schemas/UserRole" }
+        - name: result
+          in: query
+          schema: { $ref: "#/components/schemas/AccessResult" }
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+    post:
+      tags: [Access Attempts]
+      summary: Validar un QR fijo y registrar el intento
+      operationId: createAccessAttempt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AccessAttemptRequest" }
+      responses:
+        "201": { $ref: "#/components/responses/Created" }
+
+  /access-attempts/{attemptId}:
+    parameters:
+      - $ref: "#/components/parameters/AttemptId"
+    get:
+      tags: [Access Attempts]
+      summary: Consultar un intento de ingreso
+      operationId: getAccessAttempt
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /access-points:
+    get:
+      tags: [Access Points]
+      summary: Listar puntos de acceso
+      operationId: listAccessPoints
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+    post:
+      tags: [Access Points]
+      summary: Crear un punto de acceso
+      operationId: createAccessPoint
+      requestBody:
+        $ref: "#/components/requestBodies/GenericJson"
+      responses:
+        "201": { $ref: "#/components/responses/Created" }
+
+  /access-points/{accessPointId}:
+    parameters:
+      - $ref: "#/components/parameters/AccessPointId"
+    patch:
+      tags: [Access Points]
+      summary: Modificar o cambiar el estado de un punto de acceso
+      operationId: updateAccessPoint
+      requestBody:
+        $ref: "#/components/requestBodies/GenericJson"
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /branches:
+    get:
+      tags: [Branches]
+      summary: Listar sedes
+      operationId: listBranches
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Search"
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+    post:
+      tags: [Branches]
+      summary: Crear una sede
+      operationId: createBranch
+      requestBody:
+        $ref: "#/components/requestBodies/GenericJson"
+      responses:
+        "201": { $ref: "#/components/responses/Created" }
+
+  /branches/{branchId}:
+    parameters:
+      - $ref: "#/components/parameters/BranchId"
+    get:
+      tags: [Branches]
+      summary: Consultar una sede
+      operationId: getBranch
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+    patch:
+      tags: [Branches]
+      summary: Modificar una sede
+      operationId: updateBranch
+      requestBody:
+        $ref: "#/components/requestBodies/GenericJson"
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /branches/{branchId}/status:
+    parameters:
+      - $ref: "#/components/parameters/BranchId"
+    patch:
+      tags: [Branches]
+      summary: Activar o desactivar una sede
+      operationId: updateBranchStatus
+      requestBody:
+        $ref: "#/components/requestBodies/GenericJson"
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /branches/{branchId}/access-points:
+    parameters:
+      - $ref: "#/components/parameters/BranchId"
+    get:
+      tags: [Access Points]
+      summary: Listar los puntos de acceso de una sede
+      operationId: listBranchAccessPoints
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+    post:
+      tags: [Access Points]
+      summary: Crear un punto de acceso en una sede
+      operationId: createBranchAccessPoint
+      requestBody:
+        $ref: "#/components/requestBodies/GenericJson"
+      responses:
+        "201": { $ref: "#/components/responses/Created" }
+
+  /weekly-schedules:
+    get:
+      tags: [Weekly Schedules]
+      summary: Consultar el cronograma de una semana
+      operationId: listWeeklySchedules
+      security: []
+      parameters:
+        - name: weekStartsOn
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+
+  /weekly-schedules/{scheduleId}:
+    parameters:
+      - $ref: "#/components/parameters/ScheduleId"
+    get:
+      tags: [Weekly Schedules]
+      summary: Consultar un cronograma semanal
+      operationId: getWeeklySchedule
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /weekly-schedules/{scheduleId}/copies:
+    parameters:
+      - $ref: "#/components/parameters/ScheduleId"
+    post:
+      tags: [Weekly Schedules]
+      summary: Copiar el cronograma a otra semana
+      operationId: copyWeeklySchedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [weekStartsOn]
+              properties:
+                weekStartsOn: { type: string, format: date }
+      responses:
+        "201": { $ref: "#/components/responses/Created" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /scheduled-classes:
+    post:
+      tags: [Scheduled Classes]
+      summary: Crear una clase en un cronograma
+      operationId: createScheduledClass
+      requestBody:
+        $ref: "#/components/requestBodies/GenericJson"
+      responses:
+        "201": { $ref: "#/components/responses/Created" }
+
+  /scheduled-classes/{classId}:
+    parameters:
+      - $ref: "#/components/parameters/ClassId"
+    get:
+      tags: [Scheduled Classes]
+      summary: Consultar una clase
+      operationId: getScheduledClass
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+    patch:
+      tags: [Scheduled Classes]
+      summary: Modificar una clase
+      operationId: updateScheduledClass
+      requestBody:
+        $ref: "#/components/requestBodies/GenericJson"
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+    delete:
+      tags: [Scheduled Classes]
+      summary: Quitar una clase del cronograma
+      operationId: deleteScheduledClass
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+
+  /trainers:
+    get:
+      tags: [Trainers]
+      summary: Listar entrenadores activos
+      operationId: listTrainers
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+
+  /trainers/me:
+    get:
+      tags: [Trainers]
+      summary: Consultar el perfil profesional propio
+      operationId: getOwnTrainerProfile
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+    patch:
+      tags: [Trainers]
+      summary: Modificar el perfil profesional propio
+      operationId: updateOwnTrainerProfile
+      requestBody:
+        $ref: "#/components/requestBodies/GenericJson"
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /trainers/me/scheduled-classes:
+    get:
+      tags: [Trainers]
+      summary: Consultar las clases propias del entrenador
+      operationId: listOwnTrainerClasses
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+
+  /trainers/{trainerId}:
+    parameters:
+      - $ref: "#/components/parameters/TrainerId"
+    get:
+      tags: [Trainers]
+      summary: Consultar el perfil público de un entrenador
+      operationId: getTrainer
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /trainers/{trainerId}/branches:
+    parameters:
+      - $ref: "#/components/parameters/TrainerId"
+    put:
+      tags: [Trainers]
+      summary: Reemplazar las sedes asignadas a un entrenador
+      operationId: replaceTrainerBranches
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branchIds]
+              properties:
+                branchIds:
+                  type: array
+                  uniqueItems: true
+                  items: { type: string, format: uuid }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /events:
+    get:
+      tags: [Events]
+      summary: Listar eventos visibles
+      operationId: listEvents
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/EventStatus" }
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+    post:
+      tags: [Events]
+      summary: Crear un evento
+      operationId: createEvent
+      requestBody:
+        $ref: "#/components/requestBodies/GenericJson"
+      responses:
+        "201": { $ref: "#/components/responses/Created" }
+
+  /events/{eventId}:
+    parameters:
+      - $ref: "#/components/parameters/EventId"
+    get:
+      tags: [Events]
+      summary: Consultar un evento
+      operationId: getEvent
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+    patch:
+      tags: [Events]
+      summary: Modificar un evento
+      operationId: updateEvent
+      requestBody:
+        $ref: "#/components/requestBodies/GenericJson"
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /events/{eventId}/status:
+    parameters:
+      - $ref: "#/components/parameters/EventId"
+    patch:
+      tags: [Events]
+      summary: Publicar o cancelar un evento
+      operationId: updateEventStatus
+      requestBody:
+        $ref: "#/components/requestBodies/GenericJson"
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /news-posts:
+    get:
+      tags: [News Posts]
+      summary: Listar novedades visibles para la audiencia
+      operationId: listNewsPosts
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+    post:
+      tags: [News Posts]
+      summary: Crear una novedad
+      operationId: createNewsPost
+      requestBody:
+        $ref: "#/components/requestBodies/GenericJson"
+      responses:
+        "201": { $ref: "#/components/responses/Created" }
+
+  /news-posts/{newsPostId}:
+    parameters:
+      - $ref: "#/components/parameters/NewsPostId"
+    get:
+      tags: [News Posts]
+      summary: Consultar una novedad
+      operationId: getNewsPost
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+    patch:
+      tags: [News Posts]
+      summary: Modificar una novedad
+      operationId: updateNewsPost
+      requestBody:
+        $ref: "#/components/requestBodies/GenericJson"
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /news-posts/{newsPostId}/status:
+    parameters:
+      - $ref: "#/components/parameters/NewsPostId"
+    patch:
+      tags: [News Posts]
+      summary: Publicar o desactivar una novedad
+      operationId: updateNewsPostStatus
+      requestBody:
+        $ref: "#/components/requestBodies/GenericJson"
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: Consultar las notificaciones propias
+      operationId: listNotifications
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - name: isRead
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+
+  /notifications/read-status:
+    patch:
+      tags: [Notifications]
+      summary: Marcar todas las notificaciones propias como leídas
+      operationId: markAllNotificationsAsRead
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+
+  /notifications/{notificationId}:
+    parameters:
+      - $ref: "#/components/parameters/NotificationId"
+    get:
+      tags: [Notifications]
+      summary: Consultar una notificación propia
+      operationId: getNotification
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /notifications/{notificationId}/read-status:
+    parameters:
+      - $ref: "#/components/parameters/NotificationId"
+    patch:
+      tags: [Notifications]
+      summary: Marcar una notificación propia como leída
+      operationId: markNotificationAsRead
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Search:
+      name: search
+      in: query
+      schema: { type: string }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    From:
+      name: from
+      in: query
+      schema: { type: string, format: date-time }
+    To:
+      name: to
+      in: query
+      schema: { type: string, format: date-time }
+    UserId: { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
+    MemberId: { name: memberId, in: path, required: true, schema: { type: string, format: uuid } }
+    PaymentId: { name: paymentId, in: path, required: true, schema: { type: string, format: uuid } }
+    CertificateId: { name: certificateId, in: path, required: true, schema: { type: string, format: uuid } }
+    AttemptId: { name: attemptId, in: path, required: true, schema: { type: string, format: uuid } }
+    AccessPointId: { name: accessPointId, in: path, required: true, schema: { type: string, format: uuid } }
+    BranchId: { name: branchId, in: path, required: true, schema: { type: string, format: uuid } }
+    ScheduleId: { name: scheduleId, in: path, required: true, schema: { type: string, format: uuid } }
+    ClassId: { name: classId, in: path, required: true, schema: { type: string, format: uuid } }
+    TrainerId: { name: trainerId, in: path, required: true, schema: { type: string, format: uuid } }
+    EventId: { name: eventId, in: path, required: true, schema: { type: string, format: uuid } }
+    NewsPostId: { name: newsPostId, in: path, required: true, schema: { type: string, format: uuid } }
+    NotificationId: { name: notificationId, in: path, required: true, schema: { type: string, format: uuid } }
+
+  requestBodies:
+    GenericJson:
+      required: true
+      content:
+        application/json:
+          schema: { type: object, additionalProperties: true }
+
+  responses:
+    Success:
+      description: Operación exitosa
+      content:
+        application/json:
+          schema: { type: object, additionalProperties: true }
+    Created:
+      description: Recurso creado
+      content:
+        application/json:
+          schema: { type: object, additionalProperties: true }
+    NoContent:
+      description: Operación completada sin contenido
+    Paginated:
+      description: Resultado paginado
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/PaginatedResponse" }
+    ValidationError:
+      description: Datos inválidos
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Unauthorized:
+      description: Credenciales ausentes o inválidas
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Forbidden:
+      description: El usuario no tiene permisos para la operación
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    NotFound:
+      description: Recurso inexistente
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Conflict:
+      description: La operación entra en conflicto con el estado actual
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, environment]
+      properties:
+        status: { type: string, const: ok }
+        environment: { type: string, examples: [development] }
+    ErrorResponse:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+        code: { type: string }
+        details: { type: object, additionalProperties: true }
+    PaginatedResponse:
+      type: object
+      required: [items, page, limit, total]
+      properties:
+        items: { type: array, items: {} }
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+    UserRole:
+      type: string
+      enum: [MEMBER, TRAINER, ADMIN]
+    UserStatus:
+      type: string
+      enum: [ACTIVE, INACTIVE]
+    MembershipStatus:
+      type: string
+      description: Estado calculado; no se almacena en la base de datos.
+      enum: [CURRENT, EXPIRING_SOON, EXPIRED]
+    PaymentStatus:
+      type: string
+      enum: [ACCREDITED, VOIDED]
+    MedicalCertificateStatus:
+      type: string
+      enum: [PENDING, APPROVED, REJECTED]
+    AccessResult:
+      type: string
+      enum: [ALLOWED, DENIED]
+    EventStatus:
+      type: string
+      enum: [DRAFT, PUBLISHED, CANCELLED]
+    User:
+      type: object
+      required: [id, firstName, lastName, documentNumber, email, role, status]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        documentNumber: { type: string }
+        birthDate: { type: string, format: date }
+        email: { type: string, format: email }
+        phone: { type: string }
+        photoUrl: { type: [string, "null"], format: uri }
+        role: { $ref: "#/components/schemas/UserRole" }
+        status: { $ref: "#/components/schemas/UserStatus" }
+        isPasswordChangeRequired: { type: boolean }
+    RegisterRequest:
+      type: object
+      required: [firstName, lastName, documentNumber, birthDate, email, phone, password]
+      properties:
+        firstName: { type: string, minLength: 1 }
+        lastName: { type: string, minLength: 1 }
+        documentNumber: { type: string, minLength: 1 }
+        birthDate: { type: string, format: date }
+        email: { type: string, format: email }
+        phone: { type: string, minLength: 1 }
+        password: { type: string, format: password, minLength: 8 }
+        emergencyContactName: { type: string }
+        emergencyContactPhone: { type: string }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+    AuthResponse:
+      type: object
+      required: [accessToken, user]
+      properties:
+        accessToken: { type: string }
+        user: { $ref: "#/components/schemas/User" }
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string, format: password }
+        newPassword: { type: string, format: password, minLength: 8 }
+    UpdateProfileRequest:
+      type: object
+      properties:
+        email: { type: string, format: email }
+        phone: { type: string }
+        emergencyContactName: { type: string }
+        emergencyContactPhone: { type: string }
+      minProperties: 1
+    CreateUserRequest:
+      allOf:
+        - $ref: "#/components/schemas/RegisterRequest"
+        - type: object
+          required: [role]
+          properties:
+            role: { $ref: "#/components/schemas/UserRole" }
+            specialty: { type: string }
+            description: { type: string }
+    UpdateUserRequest:
+      type: object
+      properties:
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        specialty: { type: string }
+        description: { type: string }
+      minProperties: 1
+    UpdateUserStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status: { $ref: "#/components/schemas/UserStatus" }
+        reason: { type: string }
+    ResetPasswordRequest:
+      type: object
+      required: [temporaryPassword]
+      properties:
+        temporaryPassword: { type: string, format: password, minLength: 8 }
+    CreateMembershipPriceRequest:
+      type: object
+      required: [amount, effectiveFrom]
+      properties:
+        amount: { type: number, format: double, exclusiveMinimum: 0 }
+        effectiveFrom: { type: string, format: date-time }
+    PaymentPreviewRequest:
+      type: object
+      required: [memberId, amount, method]
+      properties:
+        memberId: { type: string, format: uuid }
+        amount: { type: number, format: double, exclusiveMinimum: 0 }
+        method: { type: string }
+        receiptNumber: { type: string }
+    CreatePaymentRequest:
+      allOf:
+        - $ref: "#/components/schemas/PaymentPreviewRequest"
+    VoidPaymentRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1 }
+    MedicalReviewRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [APPROVED, REJECTED]
+        reviewComment: { type: string }
+    AccessAttemptRequest:
+      type: object
+      required: [qrToken]
+      properties:
+        qrToken: { type: string, minLength: 1 }
