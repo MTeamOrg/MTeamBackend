@@ -1,17 +1,12 @@
 import express from "express";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import swaggerUi from "swagger-ui-express";
-import { parse } from "yaml";
+
+import { openApiDocument } from "./config/openapi.js";
+import { errorMiddleware } from "./middleware/error-middleware.js";
+import { notFoundMiddleware } from "./middleware/not-found-middleware.js";
+import { apiRouter } from "./route/index.js";
 
 export const app = express();
-
-const openApiPath = fileURLToPath(
-  new URL("../docs/openapi.yaml", import.meta.url),
-);
-const openApiDocument = parse(
-  readFileSync(openApiPath, "utf8"),
-) as Record<string, unknown>;
 
 app.disable("x-powered-by");
 app.use(express.json());
@@ -24,9 +19,6 @@ app.use(
   }),
 );
 
-app.get("/api/health", (_request, response) => {
-  response.status(200).json({
-    status: "ok",
-    environment: process.env.APP_ENV ?? "development",
-  });
-});
+app.use("/api", apiRouter);
+app.use(notFoundMiddleware);
+app.use(errorMiddleware);
