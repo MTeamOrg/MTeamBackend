@@ -11,6 +11,7 @@ const environmentSchema = z.object({
     .default("development"),
   PORT: z.coerce.number().int().positive().max(65_535).default(3000),
   CORS_ORIGIN: z.url().default("http://localhost:5173"),
+  DATABASE_URL: z.string().min(1),
 });
 
 const result = environmentSchema.safeParse(process.env);

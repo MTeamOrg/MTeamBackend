@@ -1,0 +1,342 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  MEMBER
+  TRAINER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum PaymentStatus {
+  ACCREDITED
+  VOIDED
+}
+
+enum MedicalCertificateStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AccessResult {
+  ALLOWED
+  DENIED
+}
+
+enum AccessDenialReason {
+  INVALID_QR
+  INACTIVE_USER
+  INACTIVE_BRANCH
+  INACTIVE_ACCESS_POINT
+  EXPIRED_MEMBERSHIP
+  MEDICAL_CERTIFICATE_REQUIRED
+}
+
+enum UserAuditAction {
+  CREATED
+  UPDATED
+  ACTIVATED
+  DEACTIVATED
+  PASSWORD_RESET
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+}
+
+enum PublicationAudience {
+  ALL
+  MEMBERS
+  TRAINERS
+}
+
+enum PublicationStatus {
+  DRAFT
+  PUBLISHED
+  INACTIVE
+}
+
+enum NotificationType {
+  MEMBERSHIP_PRICE_CHANGED
+  MEMBERSHIP_EXPIRING
+  MEMBERSHIP_EXPIRED
+  MEDICAL_CERTIFICATE_REVIEWED
+  CLASS_CHANGED
+  EVENT_CANCELLED
+  GENERAL
+}
+
+model User {
+  id                       String               @id @default(uuid()) @db.Uuid
+  firstName                String               @map("first_name") @db.VarChar(100)
+  lastName                 String               @map("last_name") @db.VarChar(100)
+  documentNumber           String               @unique @map("document_number") @db.VarChar(30)
+  birthDate                DateTime             @map("birth_date") @db.Date
+  email                    String               @unique @db.VarChar(255)
+  phone                    String               @db.VarChar(30)
+  passwordHash             String               @map("password_hash") @db.VarChar(255)
+  photoUrl                 String?              @map("photo_url") @db.VarChar(2048)
+  role                     UserRole
+  status                   UserStatus           @default(ACTIVE)
+  isPasswordChangeRequired Boolean              @default(true) @map("is_password_change_required")
+  createdAt                DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  memberProfile            MemberProfile?
+  trainerProfile           TrainerProfile?
+  createdMembershipPrices  MembershipPrice[]    @relation("MembershipPriceCreatedBy")
+  memberPayments           Payment[]            @relation("MemberPayments")
+  createdPayments          Payment[]            @relation("PaymentCreatedBy")
+  confirmedPayments        Payment[]            @relation("PaymentConfirmedBy")
+  voidedPayments           Payment[]            @relation("PaymentVoidedBy")
+  medicalCertificates      MedicalCertificate[] @relation("MemberMedicalCertificates")
+  reviewedCertificates     MedicalCertificate[] @relation("MedicalCertificateReviewedBy")
+  accessLogs               AccessLog[]
+  trainerBranches          TrainerBranch[]
+  taughtClasses            ScheduledClass[]
+  auditLogs                UserAuditLog[]       @relation("AuditedUser")
+  performedAuditLogs       UserAuditLog[]       @relation("AuditPerformedBy")
+  createdEvents            Event[]              @relation("EventCreatedBy")
+  createdNewsPosts         NewsPost[]           @relation("NewsPostCreatedBy")
+  notifications            Notification[]
+
+  @@map("user")
+}
+
+model MemberProfile {
+  id                    String @id @default(uuid()) @db.Uuid
+  userId                String @unique @map("user_id") @db.Uuid
+  emergencyContactName  String @map("emergency_contact_name") @db.VarChar(200)
+  emergencyContactPhone String @map("emergency_contact_phone") @db.VarChar(30)
+  user                  User   @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@map("member_profile")
+}
+
+model TrainerProfile {
+  id          String @id @default(uuid()) @db.Uuid
+  userId      String @unique @map("user_id") @db.Uuid
+  specialty   String @db.VarChar(150)
+  description String @db.Text
+  user        User   @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@map("trainer_profile")
+}
+
+model MembershipPrice {
+  id            String   @id @default(uuid()) @db.Uuid
+  amount        Decimal  @db.Decimal(12, 2)
+  effectiveFrom DateTime @map("effective_from") @db.Timestamptz(3)
+  createdById   String   @map("created_by_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdBy     User     @relation("MembershipPriceCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([effectiveFrom])
+  @@map("membership_price")
+}
+
+model Payment {
+  id            String        @id @default(uuid()) @db.Uuid
+  memberId      String        @map("member_id") @db.Uuid
+  amount        Decimal       @db.Decimal(12, 2)
+  method        String        @db.VarChar(50)
+  receiptNumber String?       @map("receipt_number") @db.VarChar(100)
+  status        PaymentStatus @default(ACCREDITED)
+  createdById   String        @map("created_by_id") @db.Uuid
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  confirmedById String        @map("confirmed_by_id") @db.Uuid
+  accreditedAt  DateTime      @map("accredited_at") @db.Timestamptz(3)
+  expiresAt     DateTime      @map("expires_at") @db.Timestamptz(3)
+  voidedById    String?       @map("voided_by_id") @db.Uuid
+  voidedAt      DateTime?     @map("voided_at") @db.Timestamptz(3)
+  voidReason    String?       @map("void_reason") @db.Text
+  member        User          @relation("MemberPayments", fields: [memberId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdBy     User          @relation("PaymentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  confirmedBy   User          @relation("PaymentConfirmedBy", fields: [confirmedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  voidedBy      User?         @relation("PaymentVoidedBy", fields: [voidedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([memberId, accreditedAt])
+  @@index([status, expiresAt])
+  @@map("payment")
+}
+
+model MedicalCertificate {
+  id            String                   @id @default(uuid()) @db.Uuid
+  memberId      String                   @map("member_id") @db.Uuid
+  fileUrl       String                   @map("file_url") @db.VarChar(2048)
+  status        MedicalCertificateStatus @default(PENDING)
+  uploadedAt    DateTime                 @default(now()) @map("uploaded_at") @db.Timestamptz(3)
+  reviewedById  String?                  @map("reviewed_by_id") @db.Uuid
+  reviewedAt    DateTime?                @map("reviewed_at") @db.Timestamptz(3)
+  reviewComment String?                  @map("review_comment") @db.Text
+  member        User                     @relation("MemberMedicalCertificates", fields: [memberId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  reviewedBy    User?                    @relation("MedicalCertificateReviewedBy", fields: [reviewedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([memberId, status])
+  @@map("medical_certificate")
+}
+
+model Branch {
+  id               String           @id @default(uuid()) @db.Uuid
+  name             String           @unique @db.VarChar(150)
+  description      String           @db.Text
+  imageUrl         String           @map("image_url") @db.VarChar(2048)
+  address          String           @unique @db.VarChar(255)
+  openingHours     String           @map("opening_hours") @db.VarChar(255)
+  phone            String           @db.VarChar(30)
+  latitude         Decimal?         @db.Decimal(9, 6)
+  longitude        Decimal?         @db.Decimal(9, 6)
+  isActive         Boolean          @default(true) @map("is_active")
+  accessPoints     AccessPoint[]
+  accessLogs       AccessLog[]
+  scheduledClasses ScheduledClass[]
+  trainerBranches  TrainerBranch[]
+
+  @@map("branch")
+}
+
+model AccessPoint {
+  id         String      @id @default(uuid()) @db.Uuid
+  branchId   String      @map("branch_id") @db.Uuid
+  name       String      @db.VarChar(100)
+  qrToken    String      @unique @map("qr_token") @db.VarChar(255)
+  isActive   Boolean     @default(true) @map("is_active")
+  branch     Branch      @relation(fields: [branchId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  accessLogs AccessLog[]
+
+  @@index([branchId, isActive])
+  @@map("access_point")
+}
+
+model AccessLog {
+  id            String              @id @default(uuid()) @db.Uuid
+  userId        String              @map("user_id") @db.Uuid
+  roleAtAttempt UserRole            @map("role_at_attempt")
+  branchId      String?             @map("branch_id") @db.Uuid
+  accessPointId String?             @map("access_point_id") @db.Uuid
+  result        AccessResult
+  denialReason  AccessDenialReason? @map("denial_reason")
+  attemptedAt   DateTime            @default(now()) @map("attempted_at") @db.Timestamptz(3)
+  user          User                @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  branch        Branch?             @relation(fields: [branchId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  accessPoint   AccessPoint?        @relation(fields: [accessPointId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([userId, attemptedAt])
+  @@index([branchId, attemptedAt])
+  @@map("access_log")
+}
+
+model WeeklySchedule {
+  id           String           @id @default(uuid()) @db.Uuid
+  weekStartsOn DateTime         @unique @map("week_starts_on") @db.Date
+  copiedFromId String?          @map("copied_from_id") @db.Uuid
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  copiedFrom   WeeklySchedule?  @relation("ScheduleCopies", fields: [copiedFromId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  copies       WeeklySchedule[] @relation("ScheduleCopies")
+  classes      ScheduledClass[]
+
+  @@map("weekly_schedule")
+}
+
+model ScheduledClass {
+  id         String         @id @default(uuid()) @db.Uuid
+  scheduleId String         @map("schedule_id") @db.Uuid
+  branchId   String         @map("branch_id") @db.Uuid
+  trainerId  String?        @map("trainer_id") @db.Uuid
+  activity   String         @db.VarChar(150)
+  startsAt   DateTime       @map("starts_at") @db.Timestamptz(3)
+  schedule   WeeklySchedule @relation(fields: [scheduleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  branch     Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  trainer    User?          @relation(fields: [trainerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([scheduleId, startsAt])
+  @@index([branchId, startsAt])
+  @@index([trainerId, startsAt])
+  @@map("scheduled_class")
+}
+
+model TrainerBranch {
+  id        String @id @default(uuid()) @db.Uuid
+  trainerId String @map("trainer_id") @db.Uuid
+  branchId  String @map("branch_id") @db.Uuid
+  trainer   User   @relation(fields: [trainerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  branch    Branch @relation(fields: [branchId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([trainerId, branchId])
+  @@map("trainer_branch")
+}
+
+model UserAuditLog {
+  id            String          @id @default(uuid()) @db.Uuid
+  userId        String          @map("user_id") @db.Uuid
+  performedById String          @map("performed_by_id") @db.Uuid
+  action        UserAuditAction
+  reason        String?         @db.Text
+  occurredAt    DateTime        @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  user          User            @relation("AuditedUser", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  performedBy   User            @relation("AuditPerformedBy", fields: [performedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([userId, occurredAt])
+  @@map("user_audit_log")
+}
+
+model Event {
+  id          String      @id @default(uuid()) @db.Uuid
+  title       String      @db.VarChar(200)
+  description String      @db.Text
+  startsAt    DateTime    @map("starts_at") @db.Timestamptz(3)
+  location    String      @db.VarChar(255)
+  imageUrl    String      @map("image_url") @db.VarChar(2048)
+  status      EventStatus @default(DRAFT)
+  createdById String      @map("created_by_id") @db.Uuid
+  createdBy   User        @relation("EventCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([status, startsAt])
+  @@map("event")
+}
+
+model NewsPost {
+  id          String              @id @default(uuid()) @db.Uuid
+  title       String              @db.VarChar(200)
+  content     String              @db.Text
+  imageUrl    String?             @map("image_url") @db.VarChar(2048)
+  audience    PublicationAudience
+  status      PublicationStatus   @default(DRAFT)
+  publishedAt DateTime?           @map("published_at") @db.Timestamptz(3)
+  createdById String              @map("created_by_id") @db.Uuid
+  createdBy   User                @relation("NewsPostCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([status, audience, publishedAt])
+  @@map("news_post")
+}
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  title     String           @db.VarChar(200)
+  message   String           @db.Text
+  type      NotificationType
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  readAt    DateTime?        @map("read_at") @db.Timestamptz(3)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@map("notification")
+}
