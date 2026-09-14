@@ -98,6 +98,26 @@ Esta separación mantiene una división clara entre la interfaz de usuario, la l
 - [Diagramas de secuencia](./docs/diagramas-de-secuencia.md)
 - [Estrategia de ambientes](./docs/ambientes.md)
 - [Convenciones de nombres](./docs/convenciones-de-nombres-m-team.md)
+- [Contrato OpenAPI: ejecución, validación y decisiones](./docs/openapi.md)
+- [Matriz de cobertura flujo → endpoint](./docs/matriz-cobertura-openapi.md)
+- [Estado de implementación de OpenAPI](./docs/estado-implementacion-openapi.md)
+
+## Documentación de la API
+
+El backend sirve Swagger UI en `http://localhost:3000/api/docs` y el mismo
+contrato como JSON en `http://localhost:3000/api/docs/openapi.json`.
+
+```bash
+cd backend
+npm ci
+npm run validate:openapi
+npm test
+npm run dev
+```
+
+Las operaciones marcadas como `pending` documentan el contrato futuro, pero
+todavía responden 404 en **Try it out**. El estado exacto por módulo se mantiene
+en la documentación enlazada arriba.
 
 ---
 

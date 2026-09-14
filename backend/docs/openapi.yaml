@@ -1,32 +1,50 @@
 openapi: 3.1.0
 info:
   title: M-Team API
-  version: 0.1.0
+  version: 0.2.0
   description: |
-    Contrato inicial de la API REST de M-Team. La API administra usuarios,
-    cuota mensual, pagos, aptos médicos, accesos QR, sedes, clases,
-    entrenadores, eventos, novedades y notificaciones.
+    Contrato de la API REST de M-Team para la gestión del gimnasio.
+
+    El prefijo `/api` está definido en `servers`; no debe repetirse en `paths`.
+    Swagger UI se publica en `/api/docs` y el documento JSON en
+    `/api/docs/openapi.json`.
+
+    Cada operación declara `x-implementation-status`:
+
+    - `implemented-verified`: existe en Express y fue cubierta por una prueba.
+    - `implemented-unverified`: existe en Express, pero no pudo comprobarse.
+    - `pending`: es un contrato acordado todavía sin ruta funcional. En estas
+      operaciones, **Try it out responderá 404** hasta que se implemente el módulo.
+
+    Los roles funcionales confirmados por el alcance vigente son `MEMBER`,
+    `TRAINER` y `ADMIN`. El rol recepcionista no está modelado y no se incorpora
+    silenciosamente a este contrato.
+  contact:
+    name: Equipo M-Team
+  license:
+    name: MIT
+    identifier: MIT
 servers:
   - url: http://localhost:3000/api
-    description: Desarrollo local
+    description: Desarrollo local con datos ficticios
 tags:
-  - name: System
-  - name: Authentication
-  - name: Dashboard
-  - name: Users
-  - name: Members
-  - name: Membership Prices
-  - name: Payments
-  - name: Medical Certificates
-  - name: Access Attempts
-  - name: Access Points
-  - name: Branches
-  - name: Weekly Schedules
-  - name: Scheduled Classes
-  - name: Trainers
-  - name: Events
-  - name: News Posts
-  - name: Notifications
+  - { name: System, description: "Estado técnico y publicación del contrato." }
+  - { name: Authentication, description: "Registro, autenticación e identidad de sesión." }
+  - { name: Dashboard, description: "Indicadores del panel administrativo." }
+  - { name: Users, description: "Perfiles, cuentas, estados y auditoría." }
+  - { name: Members, description: "Estado administrativo de socios." }
+  - { name: Membership Prices, description: "Precio único e historial de la cuota mensual." }
+  - { name: Payments, description: "Acreditación manual, consulta y anulación de pagos." }
+  - { name: Medical Certificates, description: "Carga, consulta y revisión de aptos médicos." }
+  - { name: Access Attempts, description: "Validación de ingreso y registros resultantes." }
+  - { name: Access Points, description: "Puntos físicos identificados por QR fijo." }
+  - { name: Branches, description: "Sedes y sus datos públicos y administrativos." }
+  - { name: Weekly Schedules, description: "Semanas que agrupan el cronograma informativo." }
+  - { name: Scheduled Classes, description: "Clases informativas sin reservas ni asistencia." }
+  - { name: Trainers, description: "Perfiles y clases asignadas a entrenadores." }
+  - { name: Events, description: "Eventos vinculados a una sede." }
+  - { name: News Posts, description: "Novedades segmentadas por audiencia." }
+  - { name: Notifications, description: "Notificaciones internas del usuario autenticado." }
 security:
   - bearerAuth: []
 
@@ -34,899 +52,1907 @@ paths:
   /health:
     get:
       tags: [System]
-      summary: Verificar el estado de la API
       operationId: getHealth
+      summary: Verificar el estado de la API
+      description: Devuelve el estado del proceso y el ambiente lógico configurado.
+      x-implementation-status: implemented-verified
       security: []
       responses:
         "200":
-          description: API disponible
+          description: API disponible.
           content:
             application/json:
-              schema:
-                $ref: "#/components/schemas/HealthResponse"
+              schema: { $ref: "#/components/schemas/HealthResponse" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /docs/openapi.json:
+    get:
+      tags: [System]
+      operationId: getOpenApiDocument
+      summary: Obtener el contrato OpenAPI utilizado por Swagger UI
+      description: Devuelve exactamente el documento cargado por Swagger UI.
+      x-implementation-status: implemented-verified
+      security: []
+      responses:
+        "200":
+          description: Documento OpenAPI vigente.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OpenApiDocumentResponse" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /auth/register:
     post:
       tags: [Authentication]
-      summary: Registrar una cuenta de socio
       operationId: registerMember
+      summary: Registrar una cuenta de socio
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Crea siempre un usuario `MEMBER` activo y valida que
+        documento y correo normalizado no estén registrados.
+      x-implementation-status: pending
       security: []
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: "#/components/schemas/RegisterRequest"
+            schema: { $ref: "#/components/schemas/RegisterMemberRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Socio registrado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserResponse" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /auth/login:
     post:
       tags: [Authentication]
-      summary: Iniciar sesión
       operationId: login
+      summary: Iniciar sesión
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Valida credenciales y cuenta activa sin revelar si el
+        correo existe. No se define refresh token.
+      x-implementation-status: pending
       security: []
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: "#/components/schemas/LoginRequest"
+            schema: { $ref: "#/components/schemas/LoginRequest" }
       responses:
         "200":
-          description: Sesión iniciada
+          description: Sesión iniciada.
           content:
             application/json:
-              schema:
-                $ref: "#/components/schemas/AuthResponse"
-        "401": { $ref: "#/components/responses/Unauthorized" }
-
-  /auth/logout:
-    post:
-      tags: [Authentication]
-      summary: Cerrar sesión
-      operationId: logout
-      responses:
-        "204": { $ref: "#/components/responses/NoContent" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-
-  /auth/me:
-    get:
-      tags: [Authentication]
-      summary: Obtener la identidad autenticada
-      operationId: getCurrentIdentity
-      responses:
-        "200":
-          description: Identidad autenticada
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/User"
-        "401": { $ref: "#/components/responses/Unauthorized" }
-
-  /auth/password:
-    patch:
-      tags: [Authentication]
-      summary: Cambiar la contraseña propia
-      operationId: changePassword
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ChangePasswordRequest"
-      responses:
-        "204": { $ref: "#/components/responses/NoContent" }
+              schema: { $ref: "#/components/schemas/AuthResponse" }
         "400": { $ref: "#/components/responses/ValidationError" }
-
-  /dashboard:
-    get:
-      tags: [Dashboard]
-      summary: Obtener el panel correspondiente al rol autenticado
-      operationId: getDashboard
-      responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /users:
     get:
       tags: [Users]
-      summary: Listar y filtrar usuarios
       operationId: listUsers
+      summary: Listar y filtrar usuarios
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. La búsqueda administrativa contempla nombre, apellido,
+        documento y correo.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       parameters:
         - $ref: "#/components/parameters/Search"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/Limit"
-        - name: role
-          in: query
-          schema: { $ref: "#/components/schemas/UserRole" }
-        - name: status
-          in: query
-          schema: { $ref: "#/components/schemas/UserStatus" }
+        - $ref: "#/components/parameters/UserRoleFilter"
+        - $ref: "#/components/parameters/UserStatusFilter"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Página de usuarios.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserPageResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
     post:
       tags: [Users]
-      summary: Crear una cuenta desde administración
       operationId: createUser
+      summary: Crear una cuenta desde administración
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Permite crear `MEMBER`, `TRAINER` o `ADMIN`; los datos de
+        perfil dependen del rol elegido.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: "#/components/schemas/CreateUserRequest"
+            schema: { $ref: "#/components/schemas/CreateUserRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Usuario creado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserDetailResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /users/me:
     get:
       tags: [Users]
-      summary: Consultar el perfil propio
       operationId: getOwnProfile
+      summary: Consultar el perfil propio
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Solo permite consultar el registro asociado a la sesión.
+      x-implementation-status: pending
+      x-roles: [MEMBER, TRAINER, ADMIN]
       responses:
         "200":
-          description: Perfil actual
+          description: Perfil del usuario autenticado.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/User" }
+              schema: { $ref: "#/components/schemas/UserDetailResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalError" }
     patch:
       tags: [Users]
-      summary: Modificar los datos permitidos del perfil propio
       operationId: updateOwnProfile
+      summary: Modificar los datos permitidos del perfil propio
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Solo actualiza correo, teléfono y contacto de emergencia;
+        no admite documento, rol ni estado.
+      x-implementation-status: pending
+      x-roles: [MEMBER, TRAINER, ADMIN]
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/UpdateProfileRequest" }
+            schema: { $ref: "#/components/schemas/UpdateOwnProfileRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Perfil actualizado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserDetailResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /users/me/photo:
     put:
       tags: [Users]
+      operationId: replaceOwnPhoto
       summary: Reemplazar la fotografía del perfil propio
-      operationId: updateOwnPhoto
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. El multipart proviene del contrato existente y de la
+        arquitectura de Storage; el límite máximo sigue sin definirse.
+      x-implementation-status: pending
+      x-roles: [MEMBER, TRAINER, ADMIN]
       requestBody:
         required: true
         content:
           multipart/form-data:
-            schema:
-              type: object
-              required: [file]
-              properties:
-                file: { type: string, format: binary }
+            schema: { $ref: "#/components/schemas/ProfilePhotoUploadRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Perfil con la fotografía actualizada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /users/{userId}:
     parameters:
       - $ref: "#/components/parameters/UserId"
     get:
       tags: [Users]
-      summary: Consultar el detalle administrativo de un usuario
       operationId: getUser
+      summary: Consultar el detalle administrativo de un usuario
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. El detalle compone perfil y resumen según el rol.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Detalle administrativo.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserDetailResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
     patch:
       tags: [Users]
-      summary: Modificar un usuario desde administración
       operationId: updateUser
+      summary: Modificar un usuario desde administración
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Estado y contraseña usan operaciones separadas y auditables.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: "#/components/schemas/UpdateUserRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Usuario actualizado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserDetailResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /users/{userId}/status:
     parameters:
       - $ref: "#/components/parameters/UserId"
     patch:
       tags: [Users]
-      summary: Activar, desactivar o reactivar una cuenta
       operationId: updateUserStatus
+      summary: Activar, desactivar o reactivar una cuenta
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Conserva el historial y no modifica cuota ni apto médico.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: "#/components/schemas/UpdateUserStatusRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Estado actualizado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /users/{userId}/password-resets:
     parameters:
       - $ref: "#/components/parameters/UserId"
     post:
       tags: [Users]
+      operationId: assignTemporaryPassword
       summary: Asignar una contraseña temporal
-      operationId: resetUserPassword
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Obliga a cambiarla en el próximo inicio y no envía correos.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/ResetPasswordRequest" }
+            schema: { $ref: "#/components/schemas/TemporaryPasswordRequest" }
       responses:
-        "204": { $ref: "#/components/responses/NoContent" }
+        "204": { description: Contraseña temporal asignada; no devuelve contenido. }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /users/{userId}/audit-logs:
     parameters:
       - $ref: "#/components/parameters/UserId"
     get:
       tags: [Users]
-      summary: Consultar el historial administrativo de una cuenta
       operationId: listUserAuditLogs
+      summary: Consultar el historial administrativo de una cuenta
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Es de solo lectura y muestra responsable, acción y fecha.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Página de eventos de auditoría.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserAuditLogPageResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /members:
     get:
       tags: [Members]
-      summary: Listar socios y filtrar por estado de cuota
       operationId: listMembers
+      summary: Listar socios y filtrar por estado de cuota
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Los estados de cuota se calculan; no se almacenan.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       parameters:
         - $ref: "#/components/parameters/Search"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/Limit"
-        - name: membershipStatus
-          in: query
-          schema: { $ref: "#/components/schemas/MembershipStatus" }
+        - $ref: "#/components/parameters/MembershipStatusFilter"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Página de socios.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemberPageResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /members/me/membership:
     get:
       tags: [Members]
-      summary: Consultar el estado de la cuota propia
       operationId: getOwnMembership
+      summary: Consultar el estado de la cuota propia
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Solo devuelve la situación del socio autenticado y aplica
+        30 días por pago sin acumular vigencias.
+      x-implementation-status: pending
+      x-roles: [MEMBER]
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Situación de cuota del socio autenticado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MembershipSummaryResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /membership-prices/current:
     get:
       tags: [Membership Prices]
-      summary: Consultar el valor vigente de la cuota
       operationId: getCurrentMembershipPrice
+      summary: Consultar el valor vigente de la cuota
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Devuelve el único precio con vigencia más reciente.
+      x-implementation-status: pending
+      x-roles: [MEMBER, ADMIN]
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Precio vigente.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MembershipPriceResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /membership-prices:
     get:
       tags: [Membership Prices]
-      summary: Consultar el historial de valores de cuota
       operationId: listMembershipPrices
+      summary: Consultar el historial de valores de cuota
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Conserva importes, vigencia y administrador responsable.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Página de precios históricos.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MembershipPricePageResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
     post:
       tags: [Membership Prices]
-      summary: Registrar un nuevo valor de cuota
       operationId: createMembershipPrice
+      summary: Registrar un nuevo valor de cuota
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Crea una vigencia nueva sin modificar pagos anteriores y
+        genera las notificaciones internas acordadas.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: "#/components/schemas/CreateMembershipPriceRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Precio registrado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MembershipPriceResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /payments:
     get:
       tags: [Payments]
-      summary: Buscar y filtrar pagos
       operationId: listPayments
+      summary: Buscar y filtrar pagos
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Filtra acreditaciones manuales y anulaciones conservadas.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/From"
-        - $ref: "#/components/parameters/To"
-        - name: memberId
-          in: query
-          schema: { type: string, format: uuid }
-        - name: documentNumber
-          in: query
-          schema: { type: string }
-        - name: method
-          in: query
-          schema: { type: string }
-        - name: status
-          in: query
-          schema: { $ref: "#/components/schemas/PaymentStatus" }
+        - $ref: "#/components/parameters/FromDateTime"
+        - $ref: "#/components/parameters/ToDateTime"
+        - $ref: "#/components/parameters/MemberIdFilter"
+        - $ref: "#/components/parameters/DocumentNumberFilter"
+        - $ref: "#/components/parameters/PaymentMethodFilter"
+        - $ref: "#/components/parameters/PaymentStatusFilter"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Página de pagos.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentPageResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
     post:
       tags: [Payments]
-      summary: Registrar y acreditar un pago
       operationId: createPayment
+      summary: Registrar y acreditar manualmente un pago
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. El pago nace `ACCREDITED`, inicia 30 días desde
+        `accreditedAt` y no se asocia directamente con `MembershipPrice`.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: "#/components/schemas/CreatePaymentRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Pago acreditado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /payments/previews:
     post:
       tags: [Payments]
-      summary: Calcular un resumen previo sin crear el pago
       operationId: previewPayment
+      summary: Calcular un resumen previo sin crear el pago
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Calcula el vencimiento esperado y no persiste información.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: "#/components/schemas/PaymentPreviewRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Resumen previo.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentPreviewResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /payments/summary:
     get:
       tags: [Payments]
-      summary: Calcular el total acreditado dentro de un período
       operationId: getPaymentsSummary
+      summary: Calcular el total acreditado dentro de un período
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Suma solamente pagos `ACCREDITED` y excluye anulados.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       parameters:
-        - $ref: "#/components/parameters/From"
-        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/RequiredFromDateTime"
+        - $ref: "#/components/parameters/RequiredToDateTime"
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Total del período.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentsSummaryResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /payments/{paymentId}:
     parameters:
       - $ref: "#/components/parameters/PaymentId"
     get:
       tags: [Payments]
-      summary: Consultar un pago
       operationId: getPayment
+      summary: Consultar un pago
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Incluye la trazabilidad de creación, confirmación y anulación.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Pago encontrado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /payments/{paymentId}/voids:
     parameters:
       - $ref: "#/components/parameters/PaymentId"
     post:
       tags: [Payments]
-      summary: Anular un pago acreditado
       operationId: voidPayment
+      summary: Anular un pago acreditado
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. No elimina el pago, exige motivo y recalcula la vigencia
+        usando el último pago válido restante.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: "#/components/schemas/VoidPaymentRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Pago anulado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /members/me/payments:
     get:
       tags: [Payments]
-      summary: Consultar el historial de pagos propio
       operationId: listOwnPayments
+      summary: Consultar el historial de pagos propio
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Restringe los resultados al socio de la sesión.
+      x-implementation-status: pending
+      x-roles: [MEMBER]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Página de pagos propios.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentPageResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /members/{memberId}/payments:
     parameters:
       - $ref: "#/components/parameters/MemberId"
     get:
       tags: [Payments]
-      summary: Consultar los pagos de un socio
       operationId: listMemberPayments
+      summary: Consultar los pagos de un socio
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Solo administración puede consultar el historial ajeno.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Página de pagos del socio.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentPageResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /members/me/medical-certificates:
     get:
       tags: [Medical Certificates]
-      summary: Consultar el historial propio de aptos médicos
       operationId: listOwnMedicalCertificates
+      summary: Consultar el historial propio de aptos médicos
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Restringe resultados al socio autenticado y conserva cargas previas.
+      x-implementation-status: pending
+      x-roles: [MEMBER]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Página de aptos propios.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalCertificatePageResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
     post:
       tags: [Medical Certificates]
-      summary: Cargar un apto médico
       operationId: uploadMedicalCertificate
+      summary: Cargar un apto médico
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Acepta PDF, JPEG o PNG y crea estado `PENDING`. El tamaño
+        máximo no está acordado y no se inventa en el contrato.
+      x-implementation-status: pending
+      x-roles: [MEMBER]
       requestBody:
         required: true
         content:
           multipart/form-data:
-            schema:
-              type: object
-              required: [file]
-              properties:
-                file:
-                  type: string
-                  format: binary
+            schema: { $ref: "#/components/schemas/MedicalCertificateUploadRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Apto cargado y pendiente de revisión.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalCertificateResponse" }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /medical-certificates:
     get:
       tags: [Medical Certificates]
-      summary: Buscar y filtrar aptos médicos
       operationId: listMedicalCertificates
+      summary: Buscar y filtrar aptos médicos
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Busca por socio o documento y filtra estado y carga.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       parameters:
         - $ref: "#/components/parameters/Search"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/Limit"
-        - name: status
-          in: query
-          schema: { $ref: "#/components/schemas/MedicalCertificateStatus" }
-        - $ref: "#/components/parameters/From"
-        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/MedicalCertificateStatusFilter"
+        - $ref: "#/components/parameters/FromDateTime"
+        - $ref: "#/components/parameters/ToDateTime"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Página de aptos médicos.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalCertificatePageResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /medical-certificates/{certificateId}:
     parameters:
       - $ref: "#/components/parameters/CertificateId"
     get:
       tags: [Medical Certificates]
-      summary: Consultar el detalle de un apto médico
       operationId: getMedicalCertificate
+      summary: Consultar el detalle de un apto médico
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Solo el socio propietario o un administrador pueden verlo.
+      x-implementation-status: pending
+      x-roles: [MEMBER, ADMIN]
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Detalle del apto.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalCertificateResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /medical-certificates/{certificateId}/file:
     parameters:
       - $ref: "#/components/parameters/CertificateId"
     get:
       tags: [Medical Certificates]
-      summary: Obtener acceso temporal al archivo del apto
-      operationId: getMedicalCertificateFile
+      operationId: downloadMedicalCertificateFile
+      summary: Descargar el archivo privado de un apto
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. El backend entrega el binario al socio propietario o a un
+        administrador; no presupone URLs firmadas públicas.
+      x-implementation-status: pending
+      x-roles: [MEMBER, ADMIN]
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Contenido original del apto.
+          headers:
+            Content-Disposition:
+              description: Nombre sugerido para la descarga.
+              schema: { type: string, example: 'attachment; filename="apto-medico.pdf"' }
+          content:
+            application/pdf:
+              schema: { type: string, format: binary, example: archivo-binario }
+            image/jpeg:
+              schema: { type: string, format: binary, example: archivo-binario }
+            image/png:
+              schema: { type: string, format: binary, example: archivo-binario }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /medical-certificates/{certificateId}/review:
     parameters:
       - $ref: "#/components/parameters/CertificateId"
     patch:
       tags: [Medical Certificates]
-      summary: Aprobar o rechazar un apto médico
       operationId: reviewMedicalCertificate
+      summary: Aprobar o rechazar un apto médico
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Un rechazo exige observación; un aprobado no vence y la
+        decisión genera una notificación interna.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: "#/components/schemas/MedicalReviewRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Revisión registrada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalCertificateResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /access-attempts:
     get:
       tags: [Access Attempts]
-      summary: Consultar y filtrar intentos de ingreso
       operationId: listAccessAttempts
+      summary: Consultar y filtrar intentos de ingreso
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. La consulta administrativa incluye intentos permitidos y rechazados.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/From"
-        - $ref: "#/components/parameters/To"
-        - name: userId
-          in: query
-          schema: { type: string, format: uuid }
-        - name: branchId
-          in: query
-          schema: { type: string, format: uuid }
-        - name: role
-          in: query
-          schema: { $ref: "#/components/schemas/UserRole" }
-        - name: result
-          in: query
-          schema: { $ref: "#/components/schemas/AccessResult" }
+        - $ref: "#/components/parameters/FromDateTime"
+        - $ref: "#/components/parameters/ToDateTime"
+        - $ref: "#/components/parameters/UserIdFilter"
+        - $ref: "#/components/parameters/BranchIdFilter"
+        - $ref: "#/components/parameters/UserRoleFilter"
+        - $ref: "#/components/parameters/AccessResultFilter"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Página de intentos de acceso.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccessAttemptPageResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
     post:
       tags: [Access Attempts]
-      summary: Validar un QR fijo y registrar el intento
       operationId: createAccessAttempt
+      summary: Validar un QR fijo y registrar el intento
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. El QR identifica al `AccessPoint`; la sesión identifica al
+        socio o entrenador. Siempre registra el resultado, incluso ante QR inválido.
+      x-implementation-status: pending
+      x-roles: [MEMBER, TRAINER]
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: "#/components/schemas/AccessAttemptRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Intento validado y registrado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccessAttemptResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /access-attempts/{attemptId}:
     parameters:
       - $ref: "#/components/parameters/AttemptId"
     get:
       tags: [Access Attempts]
-      summary: Consultar un intento de ingreso
       operationId: getAccessAttempt
+      summary: Consultar un intento de ingreso
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Solo administración accede al detalle histórico.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Intento encontrado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccessAttemptResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /access-points:
     get:
       tags: [Access Points]
-      summary: Listar puntos de acceso
       operationId: listAccessPoints
+      summary: Listar puntos de acceso
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Permite filtrar por sede y estado; no expone el token QR.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/BranchIdFilter"
+        - $ref: "#/components/parameters/ActiveFilter"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
-    post:
-      tags: [Access Points]
-      summary: Crear un punto de acceso
-      operationId: createAccessPoint
-      requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
-      responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "200":
+          description: Página de puntos de acceso.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccessPointPageResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /access-points/{accessPointId}:
     parameters:
       - $ref: "#/components/parameters/AccessPointId"
     patch:
       tags: [Access Points]
-      summary: Modificar o cambiar el estado de un punto de acceso
       operationId: updateAccessPoint
+      summary: Modificar o cambiar el estado de un punto de acceso
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. No cambia la sede histórica del punto ni permite editar el token QR.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateAccessPointRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Punto de acceso actualizado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccessPointResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /branches:
     get:
       tags: [Branches]
-      summary: Listar sedes
       operationId: listBranches
-      security: []
+      summary: Listar sedes
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Socios y entrenadores reciben solo sedes activas; la
+        administración puede incluir las inactivas con el filtro.
+      x-implementation-status: pending
+      x-roles: [MEMBER, TRAINER, ADMIN]
       parameters:
         - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/ActiveFilter"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Página de sedes visibles para el rol.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BranchPageResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
     post:
       tags: [Branches]
-      summary: Crear una sede
       operationId: createBranch
+      summary: Crear una sede
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Nombre y dirección deben ser únicos; las coordenadas son opcionales.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateBranchRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Sede creada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BranchResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /branches/{branchId}:
     parameters:
       - $ref: "#/components/parameters/BranchId"
     get:
       tags: [Branches]
-      summary: Consultar una sede
       operationId: getBranch
-      security: []
+      summary: Consultar una sede
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Incluye contacto, ubicación y próximas clases; los roles
+        no administrativos no pueden consultar una sede inactiva.
+      x-implementation-status: pending
+      x-roles: [MEMBER, TRAINER, ADMIN]
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Detalle de sede.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BranchDetailResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
     patch:
       tags: [Branches]
-      summary: Modificar una sede
       operationId: updateBranch
+      summary: Modificar una sede
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. El cambio de estado usa la operación específica `/status`.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateBranchRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Sede actualizada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BranchResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /branches/{branchId}/status:
     parameters:
       - $ref: "#/components/parameters/BranchId"
     patch:
       tags: [Branches]
-      summary: Activar o desactivar una sede
       operationId: updateBranchStatus
+      summary: Activar o desactivar una sede
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Desactivar conserva historia e impide nuevas asignaciones.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateActiveStatusRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Estado de sede actualizado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BranchResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /branches/{branchId}/access-points:
     parameters:
       - $ref: "#/components/parameters/BranchId"
     get:
       tags: [Access Points]
-      summary: Listar los puntos de acceso de una sede
       operationId: listBranchAccessPoints
+      summary: Listar los puntos de acceso de una sede
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. La consulta es administrativa y no expone tokens QR.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/ActiveFilter"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Página de puntos de acceso de la sede.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccessPointPageResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
     post:
       tags: [Access Points]
-      summary: Crear un punto de acceso en una sede
       operationId: createBranchAccessPoint
+      summary: Crear un punto de acceso en una sede
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Genera internamente un token QR único; el request no lo acepta.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAccessPointRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Punto creado; incluye el valor que debe codificarse en el QR fijo.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatedAccessPointResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /weekly-schedules:
     get:
       tags: [Weekly Schedules]
-      summary: Consultar el cronograma de una semana
       operationId: listWeeklySchedules
-      security: []
+      summary: Consultar cronogramas semanales
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Las variantes móvil y escritorio consumen esta misma operación.
+      x-implementation-status: pending
+      x-roles: [MEMBER, TRAINER, ADMIN]
       parameters:
-        - name: weekStartsOn
-          in: query
-          schema: { type: string, format: date }
+        - $ref: "#/components/parameters/WeekStartsOnFilter"
+        - $ref: "#/components/parameters/BranchIdFilter"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Página de cronogramas con sus clases.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeeklySchedulePageResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /weekly-schedules/{scheduleId}:
     parameters:
       - $ref: "#/components/parameters/ScheduleId"
     get:
       tags: [Weekly Schedules]
-      summary: Consultar un cronograma semanal
       operationId: getWeeklySchedule
-      security: []
+      summary: Consultar una semana y sus clases
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. El cronograma es informativo y no contiene cupos ni reservas.
+      x-implementation-status: pending
+      x-roles: [MEMBER, TRAINER, ADMIN]
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Cronograma semanal.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeeklyScheduleResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /weekly-schedules/{scheduleId}/copies:
     parameters:
       - $ref: "#/components/parameters/ScheduleId"
     post:
       tags: [Weekly Schedules]
-      summary: Copiar el cronograma a otra semana
       operationId: copyWeeklySchedule
+      summary: Copiar un cronograma a otra semana
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Crea una semana inexistente trasladando fechas y no altera
+        el cronograma de origen.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              required: [weekStartsOn]
-              properties:
-                weekStartsOn: { type: string, format: date }
+            schema: { $ref: "#/components/schemas/CopyWeeklyScheduleRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Nueva semana copiada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeeklyScheduleResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /scheduled-classes:
     post:
       tags: [Scheduled Classes]
-      summary: Crear una clase en un cronograma
       operationId: createScheduledClass
+      summary: Crear una clase en un cronograma
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Rechaza sedes inactivas y entrenadores inactivos; el
+        entrenador es opcional.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateScheduledClassRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Clase creada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduledClassResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /scheduled-classes/{classId}:
     parameters:
       - $ref: "#/components/parameters/ClassId"
     get:
       tags: [Scheduled Classes]
-      summary: Consultar una clase
       operationId: getScheduledClass
-      security: []
+      summary: Consultar una clase programada
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Devuelve actividad, horario, sede y entrenador opcional.
+      x-implementation-status: pending
+      x-roles: [MEMBER, TRAINER, ADMIN]
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Clase programada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduledClassResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
     patch:
       tags: [Scheduled Classes]
-      summary: Modificar una clase
       operationId: updateScheduledClass
+      summary: Modificar una clase programada
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Aplica las mismas validaciones de sede y entrenador activos.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateScheduledClassRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Clase actualizada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduledClassResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
     delete:
       tags: [Scheduled Classes]
-      summary: Quitar una clase del cronograma
       operationId: deleteScheduledClass
+      summary: Eliminar una clase del cronograma
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Elimina la clase futura seleccionada sin alterar semanas previas.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       responses:
-        "204": { $ref: "#/components/responses/NoContent" }
+        "204": { description: Clase eliminada; no devuelve contenido. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /trainers:
     get:
       tags: [Trainers]
-      summary: Listar entrenadores activos
       operationId: listTrainers
-      security: []
+      summary: Listar entrenadores
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Socios ven solo perfiles activos; administración puede
+        filtrar todos los estados y sedes.
+      x-implementation-status: pending
+      x-roles: [MEMBER, ADMIN]
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/UserStatusFilter"
+        - $ref: "#/components/parameters/BranchIdFilter"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Página de entrenadores visibles para el rol.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrainerPageResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /trainers/me:
     get:
       tags: [Trainers]
-      summary: Consultar el perfil profesional propio
       operationId: getOwnTrainerProfile
+      summary: Consultar el perfil profesional propio
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Solo devuelve el perfil asociado a la sesión del entrenador.
+      x-implementation-status: pending
+      x-roles: [TRAINER]
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Perfil profesional propio.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrainerResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
     patch:
       tags: [Trainers]
-      summary: Modificar el perfil profesional propio
       operationId: updateOwnTrainerProfile
+      summary: Modificar la información profesional propia
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Solo permite especialidad y descripción; sedes y estado
+        siguen bajo control administrativo.
+      x-implementation-status: pending
+      x-roles: [TRAINER]
       requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateTrainerProfileRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Perfil profesional actualizado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrainerResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /trainers/me/scheduled-classes:
     get:
       tags: [Trainers]
-      summary: Consultar las clases propias del entrenador
       operationId: listOwnTrainerClasses
+      summary: Consultar las clases asignadas propias
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Restringe la agenda al entrenador de la sesión.
+      x-implementation-status: pending
+      x-roles: [TRAINER]
+      parameters:
+        - $ref: "#/components/parameters/FromDateTime"
+        - $ref: "#/components/parameters/ToDateTime"
+        - $ref: "#/components/parameters/BranchIdFilter"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Página de clases asignadas.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduledClassPageResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /trainers/{trainerId}:
     parameters:
       - $ref: "#/components/parameters/TrainerId"
     get:
       tags: [Trainers]
-      summary: Consultar el perfil público de un entrenador
       operationId: getTrainer
-      security: []
+      summary: Consultar un perfil de entrenador
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Socios acceden solo a entrenadores activos; administración
+        puede consultar también los inactivos.
+      x-implementation-status: pending
+      x-roles: [MEMBER, ADMIN]
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Perfil de entrenador.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrainerDetailResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /trainers/{trainerId}/branches:
     parameters:
       - $ref: "#/components/parameters/TrainerId"
     put:
       tags: [Trainers]
-      summary: Reemplazar las sedes asignadas a un entrenador
       operationId: replaceTrainerBranches
+      summary: Reemplazar las sedes asignadas a un entrenador
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Reemplaza el conjunto completo y rechaza sedes inactivas.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              required: [branchIds]
-              properties:
-                branchIds:
-                  type: array
-                  uniqueItems: true
-                  items: { type: string, format: uuid }
+            schema: { $ref: "#/components/schemas/ReplaceTrainerBranchesRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Asignaciones actualizadas.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrainerResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /events:
     get:
       tags: [Events]
-      summary: Listar eventos visibles
       operationId: listEvents
-      security: []
+      summary: Listar eventos
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Miembros y entrenadores reciben publicados y cancelados;
+        administración puede incluir borradores. Próximo/finalizado se calcula.
+      x-implementation-status: pending
+      x-roles: [MEMBER, TRAINER, ADMIN]
       parameters:
-        - $ref: "#/components/parameters/Search"
-        - name: status
-          in: query
-          schema: { $ref: "#/components/schemas/EventStatus" }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/EventStatusFilter"
+        - $ref: "#/components/parameters/EventTimingFilter"
+        - $ref: "#/components/parameters/BranchIdFilter"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Página de eventos visibles para el rol.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventPageResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
     post:
       tags: [Events]
-      summary: Crear un evento
       operationId: createEvent
+      summary: Crear un evento
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. El evento referencia una `Branch`; no acepta ubicación libre.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateEventRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Evento creado en borrador o publicado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /events/{eventId}:
     parameters:
       - $ref: "#/components/parameters/EventId"
     get:
       tags: [Events]
-      summary: Consultar un evento
       operationId: getEvent
-      security: []
+      summary: Consultar un evento
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Los borradores solo son visibles para administración.
+      x-implementation-status: pending
+      x-roles: [MEMBER, TRAINER, ADMIN]
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Evento encontrado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
     patch:
       tags: [Events]
-      summary: Modificar un evento
       operationId: updateEvent
+      summary: Modificar un evento
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Permite cambiar contenido, fecha y sede; no cancela.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateEventRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Evento actualizado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /events/{eventId}/status:
     parameters:
       - $ref: "#/components/parameters/EventId"
     patch:
       tags: [Events]
-      summary: Publicar o cancelar un evento
       operationId: updateEventStatus
+      summary: Publicar, devolver a borrador o cancelar un evento
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. La cancelación conserva el evento y genera notificaciones.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateEventStatusRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Estado del evento actualizado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /news-posts:
     get:
       tags: [News Posts]
-      summary: Listar novedades visibles para la audiencia
       operationId: listNewsPosts
-      security: []
+      summary: Listar novedades
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Cada usuario recibe publicaciones activas para su audiencia;
+        administración puede filtrar borradores e inactivas.
+      x-implementation-status: pending
+      x-roles: [MEMBER, TRAINER, ADMIN]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/PublicationAudienceFilter"
+        - $ref: "#/components/parameters/PublicationStatusFilter"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Página de novedades visibles para el rol.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NewsPostPageResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
     post:
       tags: [News Posts]
-      summary: Crear una novedad
       operationId: createNewsPost
+      summary: Crear una novedad
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Puede guardarse como borrador o publicarse para una audiencia.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateNewsPostRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Novedad creada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NewsPostResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /news-posts/{newsPostId}:
     parameters:
       - $ref: "#/components/parameters/NewsPostId"
     get:
       tags: [News Posts]
-      summary: Consultar una novedad
       operationId: getNewsPost
-      security: []
+      summary: Consultar una novedad
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Aplica audiencia y estado para usuarios no administrativos.
+      x-implementation-status: pending
+      x-roles: [MEMBER, TRAINER, ADMIN]
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Novedad encontrada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NewsPostResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
     patch:
       tags: [News Posts]
-      summary: Modificar una novedad
       operationId: updateNewsPost
+      summary: Modificar una novedad
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. El cambio de estado usa la operación específica `/status`.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateNewsPostRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Novedad actualizada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NewsPostResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /news-posts/{newsPostId}/status:
     parameters:
       - $ref: "#/components/parameters/NewsPostId"
     patch:
       tags: [News Posts]
-      summary: Publicar o desactivar una novedad
       operationId: updateNewsPostStatus
+      summary: Publicar, desactivar o devolver a borrador una novedad
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. La desactivación es lógica y conserva el historial.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
       requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateNewsPostStatusRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Estado de novedad actualizado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NewsPostResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /notifications:
     get:
       tags: [Notifications]
-      summary: Consultar las notificaciones propias
-      operationId: listNotifications
+      operationId: listOwnNotifications
+      summary: Listar notificaciones propias
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Solo devuelve las notificaciones del usuario autenticado,
+        ordenadas de más reciente a más antigua.
+      x-implementation-status: pending
+      x-roles: [MEMBER, TRAINER, ADMIN]
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/Limit"
-        - name: isRead
-          in: query
-          schema: { type: boolean }
+        - $ref: "#/components/parameters/ReadFilter"
+        - $ref: "#/components/parameters/NotificationTypeFilter"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Página de notificaciones propias.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationPageResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /notifications/read-status:
     patch:
       tags: [Notifications]
+      operationId: markAllOwnNotificationsRead
       summary: Marcar todas las notificaciones propias como leídas
-      operationId: markAllNotificationsAsRead
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. No elimina notificaciones y solo afecta al usuario de sesión.
+      x-implementation-status: pending
+      x-roles: [MEMBER, TRAINER, ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MarkNotificationsReadRequest" }
       responses:
-        "204": { $ref: "#/components/responses/NoContent" }
+        "200":
+          description: Cantidad de notificaciones actualizadas.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationBulkUpdateResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /notifications/{notificationId}:
     parameters:
       - $ref: "#/components/parameters/NotificationId"
     get:
       tags: [Notifications]
+      operationId: getOwnNotification
       summary: Consultar una notificación propia
-      operationId: getNotification
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Impide consultar notificaciones de otro usuario.
+      x-implementation-status: pending
+      x-roles: [MEMBER, TRAINER, ADMIN]
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Notificación propia.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /notifications/{notificationId}/read-status:
     parameters:
       - $ref: "#/components/parameters/NotificationId"
     patch:
       tags: [Notifications]
+      operationId: markOwnNotificationRead
       summary: Marcar una notificación propia como leída
-      operationId: markNotificationAsRead
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Conserva la notificación y registra `readAt`.
+      x-implementation-status: pending
+      x-roles: [MEMBER, TRAINER, ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MarkNotificationsReadRequest" }
       responses:
-        "204": { $ref: "#/components/responses/NoContent" }
+        "200":
+          description: Notificación actualizada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /auth/me:
+    get:
+      tags: [Authentication]
+      operationId: getCurrentIdentity
+      summary: Obtener la identidad autenticada
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Devuelve identidad y rol, nunca contraseña ni hash.
+      x-implementation-status: pending
+      x-roles: [MEMBER, TRAINER, ADMIN]
+      responses:
+        "200":
+          description: Identidad autenticada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CurrentIdentityResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /auth/password:
+    patch:
+      tags: [Authentication]
+      operationId: changeOwnPassword
+      summary: Cambiar la contraseña propia
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Requiere la contraseña actual y elimina la obligación de
+        cambio cuando se utilizó una contraseña temporal.
+      x-implementation-status: pending
+      x-roles: [MEMBER, TRAINER, ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangePasswordRequest" }
+      responses:
+        "204": { description: Contraseña actualizada; no devuelve contenido. }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /dashboard:
+    get:
+      tags: [Dashboard]
+      operationId: getAdminDashboard
+      summary: Obtener indicadores del panel administrativo
+      description: |
+        **CONTRATO PENDIENTE:** todavía no existe la ruta Express; **Try it out**
+        responderá 404. Compone indicadores calculados, cronogramas y accesos
+        recientes; no persiste una entidad dashboard.
+      x-implementation-status: pending
+      x-roles: [ADMIN]
+      responses:
+        "200":
+          description: Resumen administrativo.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminDashboardResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
 components:
   securitySchemes:
@@ -934,140 +1960,500 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: JWT acordado por arquitectura; autenticación todavía pendiente.
 
   parameters:
     Search:
       name: search
       in: query
-      schema: { type: string }
+      description: Texto de búsqueda sin distinguir mayúsculas y minúsculas.
+      schema: { type: string, minLength: 1 }
+      example: martina
     Page:
       name: page
       in: query
+      description: Número de página, comenzando en uno.
       schema: { type: integer, minimum: 1, default: 1 }
+      example: 1
     Limit:
       name: limit
       in: query
+      description: Cantidad de elementos por página.
       schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
-    From:
+      example: 20
+    FromDateTime:
       name: from
       in: query
+      description: Inicio opcional e inclusivo del intervalo.
       schema: { type: string, format: date-time }
-    To:
+      example: "2026-09-01T00:00:00-03:00"
+    ToDateTime:
       name: to
       in: query
+      description: Fin opcional e inclusivo del intervalo.
       schema: { type: string, format: date-time }
-    UserId: { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
-    MemberId: { name: memberId, in: path, required: true, schema: { type: string, format: uuid } }
-    PaymentId: { name: paymentId, in: path, required: true, schema: { type: string, format: uuid } }
-    CertificateId: { name: certificateId, in: path, required: true, schema: { type: string, format: uuid } }
-    AttemptId: { name: attemptId, in: path, required: true, schema: { type: string, format: uuid } }
-    AccessPointId: { name: accessPointId, in: path, required: true, schema: { type: string, format: uuid } }
-    BranchId: { name: branchId, in: path, required: true, schema: { type: string, format: uuid } }
-    ScheduleId: { name: scheduleId, in: path, required: true, schema: { type: string, format: uuid } }
-    ClassId: { name: classId, in: path, required: true, schema: { type: string, format: uuid } }
-    TrainerId: { name: trainerId, in: path, required: true, schema: { type: string, format: uuid } }
-    EventId: { name: eventId, in: path, required: true, schema: { type: string, format: uuid } }
-    NewsPostId: { name: newsPostId, in: path, required: true, schema: { type: string, format: uuid } }
-    NotificationId: { name: notificationId, in: path, required: true, schema: { type: string, format: uuid } }
-
-  requestBodies:
-    GenericJson:
+      example: "2026-09-30T23:59:59-03:00"
+    RequiredFromDateTime:
+      name: from
+      in: query
       required: true
-      content:
-        application/json:
-          schema: { type: object, additionalProperties: true }
+      description: Inicio inclusivo del período.
+      schema: { type: string, format: date-time }
+      example: "2026-09-01T00:00:00-03:00"
+    RequiredToDateTime:
+      name: to
+      in: query
+      required: true
+      description: Fin inclusivo del período.
+      schema: { type: string, format: date-time }
+      example: "2026-09-30T23:59:59-03:00"
+    ActiveFilter:
+      name: isActive
+      in: query
+      description: Filtro administrativo por estado activo.
+      schema: { type: boolean }
+      example: true
+    ReadFilter:
+      name: isRead
+      in: query
+      description: Filtra notificaciones leídas o no leídas.
+      schema: { type: boolean }
+      example: false
+    UserRoleFilter:
+      name: role
+      in: query
+      schema: { $ref: "#/components/schemas/UserRole" }
+    UserStatusFilter:
+      name: status
+      in: query
+      schema: { $ref: "#/components/schemas/UserStatus" }
+    MembershipStatusFilter:
+      name: membershipStatus
+      in: query
+      schema: { $ref: "#/components/schemas/MembershipStatus" }
+    PaymentStatusFilter:
+      name: status
+      in: query
+      schema: { $ref: "#/components/schemas/PaymentStatus" }
+    MedicalCertificateStatusFilter:
+      name: status
+      in: query
+      schema: { $ref: "#/components/schemas/MedicalCertificateStatus" }
+    AccessResultFilter:
+      name: result
+      in: query
+      schema: { $ref: "#/components/schemas/AccessResult" }
+    EventStatusFilter:
+      name: status
+      in: query
+      schema: { $ref: "#/components/schemas/EventStatus" }
+    EventTimingFilter:
+      name: timing
+      in: query
+      description: Estado temporal calculado a partir de `startsAt`.
+      schema: { $ref: "#/components/schemas/EventTiming" }
+    PublicationAudienceFilter:
+      name: audience
+      in: query
+      schema: { $ref: "#/components/schemas/PublicationAudience" }
+    PublicationStatusFilter:
+      name: status
+      in: query
+      schema: { $ref: "#/components/schemas/PublicationStatus" }
+    NotificationTypeFilter:
+      name: type
+      in: query
+      schema: { $ref: "#/components/schemas/NotificationType" }
+    WeekStartsOnFilter:
+      name: weekStartsOn
+      in: query
+      description: Fecha acordada como inicio de la semana.
+      schema: { type: string, format: date }
+      example: "2026-09-14"
+    MemberIdFilter:
+      name: memberId
+      in: query
+      schema: { type: string, format: uuid }
+      example: 11111111-1111-4111-8111-111111111111
+    UserIdFilter:
+      name: userId
+      in: query
+      schema: { type: string, format: uuid }
+      example: 11111111-1111-4111-8111-111111111111
+    BranchIdFilter:
+      name: branchId
+      in: query
+      schema: { type: string, format: uuid }
+      example: 22222222-2222-4222-8222-222222222222
+    DocumentNumberFilter:
+      name: documentNumber
+      in: query
+      schema: { type: string, minLength: 1 }
+      example: "40111222"
+    PaymentMethodFilter:
+      name: method
+      in: query
+      description: Medio de pago como texto hasta que M-Team confirme un catálogo.
+      schema: { type: string, minLength: 1 }
+      example: transferencia
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+      example: 11111111-1111-4111-8111-111111111111
+    MemberId:
+      name: memberId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+      example: 11111111-1111-4111-8111-111111111111
+    PaymentId:
+      name: paymentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+      example: 33333333-3333-4333-8333-333333333333
+    CertificateId:
+      name: certificateId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+      example: 44444444-4444-4444-8444-444444444444
+    AttemptId:
+      name: attemptId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+      example: 55555555-5555-4555-8555-555555555555
+    AccessPointId:
+      name: accessPointId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+      example: 66666666-6666-4666-8666-666666666666
+    BranchId:
+      name: branchId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+      example: 22222222-2222-4222-8222-222222222222
+    ScheduleId:
+      name: scheduleId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+      example: 77777777-7777-4777-8777-777777777777
+    ClassId:
+      name: classId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+      example: 88888888-8888-4888-8888-888888888888
+    TrainerId:
+      name: trainerId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+      example: 99999999-9999-4999-8999-999999999999
+    EventId:
+      name: eventId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+      example: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+    NewsPostId:
+      name: newsPostId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+      example: bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb
+    NotificationId:
+      name: notificationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+      example: cccccccc-cccc-4ccc-8ccc-cccccccccccc
 
   responses:
-    Success:
-      description: Operación exitosa
-      content:
-        application/json:
-          schema: { type: object, additionalProperties: true }
-    Created:
-      description: Recurso creado
-      content:
-        application/json:
-          schema: { type: object, additionalProperties: true }
-    NoContent:
-      description: Operación completada sin contenido
-    Paginated:
-      description: Resultado paginado
-      content:
-        application/json:
-          schema: { $ref: "#/components/schemas/PaginatedResponse" }
     ValidationError:
-      description: Datos inválidos
+      description: La solicitud no cumple las validaciones.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            code: VALIDATION_ERROR
+            message: Los datos enviados no son válidos
+            details:
+              fields: { email: [Debe ser un correo válido] }
     Unauthorized:
-      description: Credenciales ausentes o inválidas
+      description: Falta una credencial válida.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example: { code: UNAUTHORIZED, message: Se requiere autenticación, details: null }
     Forbidden:
-      description: El usuario no tiene permisos para la operación
+      description: La identidad no tiene permiso para la operación.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example: { code: FORBIDDEN, message: No tenés permiso para esta operación, details: null }
     NotFound:
-      description: Recurso inexistente
+      description: El recurso solicitado no existe o no es visible para la identidad.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            code: NOT_FOUND
+            message: El recurso solicitado no existe
+            details: { method: GET, path: /api/payments/33333333-3333-4333-8333-333333333333 }
     Conflict:
-      description: La operación entra en conflicto con el estado actual
+      description: La operación entra en conflicto con el estado o una restricción única.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example: { code: CONFLICT, message: El recurso ya existe o cambió de estado, details: null }
+    InternalError:
+      description: Error inesperado sin exposición de información sensible.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example: { code: INTERNAL_ERROR, message: Ocurrió un error interno, details: null }
 
   schemas:
-    HealthResponse:
-      type: object
-      required: [status, environment]
-      properties:
-        status: { type: string, const: ok }
-        environment: { type: string, examples: [development] }
-    ErrorResponse:
-      type: object
-      required: [message]
-      properties:
-        message: { type: string }
-        code: { type: string }
-        details: { type: object, additionalProperties: true }
-    PaginatedResponse:
-      type: object
-      required: [items, page, limit, total]
-      properties:
-        items: { type: array, items: {} }
-        page: { type: integer }
-        limit: { type: integer }
-        total: { type: integer }
     UserRole:
       type: string
       enum: [MEMBER, TRAINER, ADMIN]
+      example: MEMBER
     UserStatus:
       type: string
       enum: [ACTIVE, INACTIVE]
+      example: ACTIVE
     MembershipStatus:
       type: string
-      description: Estado calculado; no se almacena en la base de datos.
+      description: Estado calculado; no se persiste.
       enum: [CURRENT, EXPIRING_SOON, EXPIRED]
+      example: CURRENT
     PaymentStatus:
       type: string
       enum: [ACCREDITED, VOIDED]
+      example: ACCREDITED
     MedicalCertificateStatus:
       type: string
       enum: [PENDING, APPROVED, REJECTED]
+      example: APPROVED
     AccessResult:
       type: string
       enum: [ALLOWED, DENIED]
+      example: ALLOWED
+    AccessDenialReason:
+      type: string
+      enum:
+        - INVALID_QR
+        - INACTIVE_USER
+        - INACTIVE_BRANCH
+        - INACTIVE_ACCESS_POINT
+        - EXPIRED_MEMBERSHIP
+        - MEDICAL_CERTIFICATE_REQUIRED
+      example: EXPIRED_MEMBERSHIP
+    UserAuditAction:
+      type: string
+      enum: [CREATED, UPDATED, ACTIVATED, DEACTIVATED, PASSWORD_RESET]
+      example: UPDATED
     EventStatus:
       type: string
       enum: [DRAFT, PUBLISHED, CANCELLED]
-    User:
+      example: PUBLISHED
+    EventTiming:
+      type: string
+      description: Estado calculado según la fecha actual.
+      enum: [UPCOMING, FINISHED]
+      example: UPCOMING
+    PublicationAudience:
+      type: string
+      enum: [ALL, MEMBERS, TRAINERS]
+      example: ALL
+    PublicationStatus:
+      type: string
+      enum: [DRAFT, PUBLISHED, INACTIVE]
+      example: PUBLISHED
+    NotificationType:
+      type: string
+      enum:
+        - MEMBERSHIP_PRICE_CHANGED
+        - MEMBERSHIP_EXPIRING
+        - MEMBERSHIP_EXPIRED
+        - MEDICAL_CERTIFICATE_REVIEWED
+        - CLASS_CHANGED
+        - EVENT_CANCELLED
+        - GENERAL
+      example: MEMBERSHIP_EXPIRING
+    HealthResponse:
       type: object
-      required: [id, firstName, lastName, documentNumber, email, role, status]
+      additionalProperties: false
+      required: [status, environment]
+      properties:
+        status: { type: string, const: ok }
+        environment: { type: string, enum: [development, test, staging, production] }
+      example: { status: ok, environment: development }
+    OpenApiDocumentResponse:
+      type: object
+      description: Documento OpenAPI completo; su forma se valida por el estándar.
+      required: [openapi, info, paths]
+      properties:
+        openapi: { type: string }
+        info: { type: object }
+        paths: { type: object }
+      additionalProperties: true
+      example:
+        openapi: 3.1.0
+        info: { title: M-Team API, version: 0.2.0 }
+        paths: { /health: { get: { operationId: getHealth } } }
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [code, message, details]
+      properties:
+        code: { type: string, minLength: 1 }
+        message: { type: string, minLength: 1 }
+        details:
+          description: Contexto seguro del error o null.
+      example:
+        code: VALIDATION_ERROR
+        message: Los datos enviados no son válidos
+        details: { fields: { email: [Debe ser un correo válido] } }
+    PaginationMeta:
+      type: object
+      additionalProperties: false
+      required: [page, limit, total, totalPages]
+      properties:
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1 }
+        total: { type: integer, minimum: 0 }
+        totalPages: { type: integer, minimum: 0 }
+      example: { page: 1, limit: 20, total: 1, totalPages: 1 }
+    ActorSummary:
+      type: object
+      additionalProperties: false
+      required: [id, firstName, lastName]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+      example:
+        id: dddddddd-dddd-4ddd-8ddd-dddddddddddd
+        firstName: Ana
+        lastName: Gómez
+    BranchSummary:
+      type: object
+      additionalProperties: false
+      required: [id, name, address, isActive]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        address: { type: string }
+        isActive: { type: boolean }
+      example:
+        id: 22222222-2222-4222-8222-222222222222
+        name: M-Team Centro
+        address: Avenida Ejemplo 123, CABA
+        isActive: true
+    RegisterMemberRequest:
+      type: object
+      additionalProperties: false
+      required: [firstName, lastName, documentNumber, birthDate, email, phone, password]
+      properties:
+        firstName: { type: string, minLength: 1 }
+        lastName: { type: string, minLength: 1 }
+        documentNumber: { type: string, minLength: 1 }
+        birthDate: { type: string, format: date }
+        email: { type: string, format: email }
+        phone: { type: string, minLength: 1 }
+        password: { type: string, format: password, minLength: 8, writeOnly: true }
+        emergencyContactName: { type: string }
+        emergencyContactPhone: { type: string }
+      example:
+        firstName: Martina
+        lastName: Pérez
+        documentNumber: "40111222"
+        birthDate: "1998-04-12"
+        email: martina.perez@example.com
+        phone: "+54 11 5555-0101"
+        password: ClaveFicticia2026
+        emergencyContactName: Juan Pérez
+        emergencyContactPhone: "+54 11 5555-0102"
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password, writeOnly: true }
+      example: { email: martina.perez@example.com, password: ClaveFicticia2026 }
+    AuthResponse:
+      type: object
+      additionalProperties: false
+      required: [accessToken, tokenType, user]
+      properties:
+        accessToken: { type: string }
+        tokenType: { type: string, const: Bearer }
+        user: { $ref: "#/components/schemas/UserResponse" }
+      example:
+        accessToken: jwt-ficticio-no-valido
+        tokenType: Bearer
+        user:
+          id: 11111111-1111-4111-8111-111111111111
+          firstName: Martina
+          lastName: Pérez
+          documentNumber: "40111222"
+          birthDate: "1998-04-12"
+          email: martina.perez@example.com
+          phone: "+54 11 5555-0101"
+          photoUrl: null
+          role: MEMBER
+          status: ACTIVE
+          isPasswordChangeRequired: false
+          createdAt: "2026-08-01T10:00:00-03:00"
+          updatedAt: "2026-08-01T10:00:00-03:00"
+    CurrentIdentityResponse:
+      type: object
+      additionalProperties: false
+      required: [id, role, status, isPasswordChangeRequired]
+      properties:
+        id: { type: string, format: uuid }
+        role: { $ref: "#/components/schemas/UserRole" }
+        status: { $ref: "#/components/schemas/UserStatus" }
+        isPasswordChangeRequired: { type: boolean }
+      example:
+        id: 11111111-1111-4111-8111-111111111111
+        role: MEMBER
+        status: ACTIVE
+        isPasswordChangeRequired: false
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string, format: password, writeOnly: true }
+        newPassword: { type: string, format: password, minLength: 8, writeOnly: true }
+      example: { currentPassword: ClaveFicticia2026, newPassword: NuevaClaveFicticia2026 }
+    UserResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - firstName
+        - lastName
+        - documentNumber
+        - birthDate
+        - email
+        - phone
+        - photoUrl
+        - role
+        - status
+        - isPasswordChangeRequired
+        - createdAt
+        - updatedAt
       properties:
         id: { type: string, format: uuid }
         firstName: { type: string }
@@ -1080,9 +2466,136 @@ components:
         role: { $ref: "#/components/schemas/UserRole" }
         status: { $ref: "#/components/schemas/UserStatus" }
         isPasswordChangeRequired: { type: boolean }
-    RegisterRequest:
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      example:
+        id: 11111111-1111-4111-8111-111111111111
+        firstName: Martina
+        lastName: Pérez
+        documentNumber: "40111222"
+        birthDate: "1998-04-12"
+        email: martina.perez@example.com
+        phone: "+54 11 5555-0101"
+        photoUrl: null
+        role: MEMBER
+        status: ACTIVE
+        isPasswordChangeRequired: false
+        createdAt: "2026-08-01T10:00:00-03:00"
+        updatedAt: "2026-09-10T18:30:00-03:00"
+    MemberProfileResponse:
       type: object
-      required: [firstName, lastName, documentNumber, birthDate, email, phone, password]
+      additionalProperties: false
+      required: [id, emergencyContactName, emergencyContactPhone, membership]
+      properties:
+        id: { type: string, format: uuid }
+        emergencyContactName: { type: string }
+        emergencyContactPhone: { type: string }
+        membership: { $ref: "#/components/schemas/MembershipSummaryResponse" }
+      example:
+        id: eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee
+        emergencyContactName: Juan Pérez
+        emergencyContactPhone: "+54 11 5555-0102"
+        membership:
+          status: CURRENT
+          canEnter: true
+          currentPrice: 45000.0
+          lastAccreditedAt: "2026-09-01T12:00:00-03:00"
+          expiresAt: "2026-10-01T12:00:00-03:00"
+          remainingDays: 17
+          initialMedicalGraceEndsAt: "2026-09-21T12:00:00-03:00"
+          initialMedicalGraceRemainingDays: 7
+          medicalCertificateStatus: PENDING
+    TrainerProfileResponse:
+      type: object
+      additionalProperties: false
+      required: [id, specialty, description, branches]
+      properties:
+        id: { type: string, format: uuid }
+        specialty: { type: string }
+        description: { type: string }
+        branches:
+          type: array
+          items: { $ref: "#/components/schemas/BranchSummary" }
+      example:
+        id: ffffffff-ffff-4fff-8fff-ffffffffffff
+        specialty: Entrenamiento funcional
+        description: Entrenadora con experiencia en clases grupales.
+        branches:
+          - id: 22222222-2222-4222-8222-222222222222
+            name: M-Team Centro
+            address: Avenida Ejemplo 123, CABA
+            isActive: true
+    UserDetailResponse:
+      type: object
+      additionalProperties: false
+      required: [user, memberProfile, trainerProfile]
+      properties:
+        user: { $ref: "#/components/schemas/UserResponse" }
+        memberProfile:
+          oneOf:
+            - $ref: "#/components/schemas/MemberProfileResponse"
+            - type: "null"
+        trainerProfile:
+          oneOf:
+            - $ref: "#/components/schemas/TrainerProfileResponse"
+            - type: "null"
+      example:
+        user:
+          id: 11111111-1111-4111-8111-111111111111
+          firstName: Martina
+          lastName: Pérez
+          documentNumber: "40111222"
+          birthDate: "1998-04-12"
+          email: martina.perez@example.com
+          phone: "+54 11 5555-0101"
+          photoUrl: null
+          role: MEMBER
+          status: ACTIVE
+          isPasswordChangeRequired: false
+          createdAt: "2026-08-01T10:00:00-03:00"
+          updatedAt: "2026-09-10T18:30:00-03:00"
+        memberProfile:
+          id: eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee
+          emergencyContactName: Juan Pérez
+          emergencyContactPhone: "+54 11 5555-0102"
+          membership:
+            status: CURRENT
+            canEnter: true
+            currentPrice: 45000.0
+            lastAccreditedAt: "2026-09-01T12:00:00-03:00"
+            expiresAt: "2026-10-01T12:00:00-03:00"
+            remainingDays: 17
+            initialMedicalGraceEndsAt: "2026-09-21T12:00:00-03:00"
+            initialMedicalGraceRemainingDays: 7
+            medicalCertificateStatus: PENDING
+        trainerProfile: null
+    UserPageResponse:
+      type: object
+      additionalProperties: false
+      required: [items, pagination]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/UserResponse" } }
+        pagination: { $ref: "#/components/schemas/PaginationMeta" }
+      example:
+        items:
+          - id: 11111111-1111-4111-8111-111111111111
+            firstName: Martina
+            lastName: Pérez
+            documentNumber: "40111222"
+            birthDate: "1998-04-12"
+            email: martina.perez@example.com
+            phone: "+54 11 5555-0101"
+            photoUrl: null
+            role: MEMBER
+            status: ACTIVE
+            isPasswordChangeRequired: false
+            createdAt: "2026-08-01T10:00:00-03:00"
+            updatedAt: "2026-09-10T18:30:00-03:00"
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 }
+    CreateUserRequest:
+      type: object
+      additionalProperties: false
+      required: [firstName, lastName, documentNumber, birthDate, email, phone, temporaryPassword, role]
       properties:
         firstName: { type: string, minLength: 1 }
         lastName: { type: string, minLength: 1 }
@@ -1090,97 +2603,1320 @@ components:
         birthDate: { type: string, format: date }
         email: { type: string, format: email }
         phone: { type: string, minLength: 1 }
-        password: { type: string, format: password, minLength: 8 }
+        temporaryPassword: { type: string, format: password, minLength: 8, writeOnly: true }
+        role: { $ref: "#/components/schemas/UserRole" }
         emergencyContactName: { type: string }
         emergencyContactPhone: { type: string }
-    LoginRequest:
-      type: object
-      required: [email, password]
-      properties:
-        email: { type: string, format: email }
-        password: { type: string, format: password }
-    AuthResponse:
-      type: object
-      required: [accessToken, user]
-      properties:
-        accessToken: { type: string }
-        user: { $ref: "#/components/schemas/User" }
-    ChangePasswordRequest:
-      type: object
-      required: [currentPassword, newPassword]
-      properties:
-        currentPassword: { type: string, format: password }
-        newPassword: { type: string, format: password, minLength: 8 }
-    UpdateProfileRequest:
-      type: object
-      properties:
-        email: { type: string, format: email }
-        phone: { type: string }
-        emergencyContactName: { type: string }
-        emergencyContactPhone: { type: string }
-      minProperties: 1
-    CreateUserRequest:
-      allOf:
-        - $ref: "#/components/schemas/RegisterRequest"
-        - type: object
-          required: [role]
-          properties:
-            role: { $ref: "#/components/schemas/UserRole" }
-            specialty: { type: string }
-            description: { type: string }
-    UpdateUserRequest:
-      type: object
-      properties:
-        firstName: { type: string }
-        lastName: { type: string }
-        email: { type: string, format: email }
-        phone: { type: string }
         specialty: { type: string }
         description: { type: string }
+      example:
+        firstName: Laura
+        lastName: Benítez
+        documentNumber: "30123456"
+        birthDate: "1990-02-20"
+        email: laura.benitez@example.com
+        phone: "+54 11 5555-0110"
+        temporaryPassword: TemporalFicticia2026
+        role: TRAINER
+        specialty: Musculación
+        description: Entrenadora de sala.
+    UpdateOwnProfileRequest:
+      type: object
+      additionalProperties: false
       minProperties: 1
+      properties:
+        email: { type: string, format: email }
+        phone: { type: string, minLength: 1 }
+        emergencyContactName: { type: string }
+        emergencyContactPhone: { type: string }
+      example: { phone: "+54 11 5555-0199", emergencyContactPhone: "+54 11 5555-0188" }
+    ProfilePhotoUploadRequest:
+      type: object
+      additionalProperties: false
+      required: [file]
+      properties:
+        file: { type: string, format: binary, contentMediaType: image/jpeg }
+      example: { file: archivo-binario }
+    UpdateUserRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        firstName: { type: string, minLength: 1 }
+        lastName: { type: string, minLength: 1 }
+        documentNumber: { type: string, minLength: 1 }
+        birthDate: { type: string, format: date }
+        email: { type: string, format: email }
+        phone: { type: string, minLength: 1 }
+        emergencyContactName: { type: string }
+        emergencyContactPhone: { type: string }
+        specialty: { type: string }
+        description: { type: string }
+      example: { phone: "+54 11 5555-0140", specialty: Entrenamiento funcional }
     UpdateUserStatusRequest:
       type: object
+      additionalProperties: false
       required: [status]
       properties:
         status: { $ref: "#/components/schemas/UserStatus" }
-        reason: { type: string }
-    ResetPasswordRequest:
+        reason: { type: string, minLength: 1 }
+      example: { status: INACTIVE, reason: Baja solicitada presencialmente }
+    TemporaryPasswordRequest:
       type: object
+      additionalProperties: false
       required: [temporaryPassword]
       properties:
-        temporaryPassword: { type: string, format: password, minLength: 8 }
+        temporaryPassword: { type: string, format: password, minLength: 8, writeOnly: true }
+      example: { temporaryPassword: TemporalFicticia2026 }
+    UserAuditLogResponse:
+      type: object
+      additionalProperties: false
+      required: [id, action, reason, occurredAt, performedBy]
+      properties:
+        id: { type: string, format: uuid }
+        action: { $ref: "#/components/schemas/UserAuditAction" }
+        reason: { type: [string, "null"] }
+        occurredAt: { type: string, format: date-time }
+        performedBy: { $ref: "#/components/schemas/ActorSummary" }
+      example:
+        id: 12121212-1212-4212-8212-121212121212
+        action: UPDATED
+        reason: Actualización de teléfono
+        occurredAt: "2026-09-10T18:30:00-03:00"
+        performedBy:
+          id: dddddddd-dddd-4ddd-8ddd-dddddddddddd
+          firstName: Ana
+          lastName: Gómez
+    UserAuditLogPageResponse:
+      type: object
+      additionalProperties: false
+      required: [items, pagination]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/UserAuditLogResponse" } }
+        pagination: { $ref: "#/components/schemas/PaginationMeta" }
+      example:
+        items:
+          - id: 12121212-1212-4212-8212-121212121212
+            action: UPDATED
+            reason: Actualización de teléfono
+            occurredAt: "2026-09-10T18:30:00-03:00"
+            performedBy:
+              id: dddddddd-dddd-4ddd-8ddd-dddddddddddd
+              firstName: Ana
+              lastName: Gómez
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 }
+    MembershipSummaryResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - canEnter
+        - currentPrice
+        - lastAccreditedAt
+        - expiresAt
+        - remainingDays
+        - initialMedicalGraceEndsAt
+        - initialMedicalGraceRemainingDays
+        - medicalCertificateStatus
+      properties:
+        status: { $ref: "#/components/schemas/MembershipStatus" }
+        canEnter: { type: boolean }
+        currentPrice: { type: number, format: double, exclusiveMinimum: 0 }
+        lastAccreditedAt: { type: [string, "null"], format: date-time }
+        expiresAt: { type: [string, "null"], format: date-time }
+        remainingDays: { type: integer }
+        initialMedicalGraceEndsAt: { type: [string, "null"], format: date-time }
+        initialMedicalGraceRemainingDays: { type: integer, minimum: 0 }
+        medicalCertificateStatus:
+          oneOf:
+            - $ref: "#/components/schemas/MedicalCertificateStatus"
+            - type: "null"
+      example:
+        status: CURRENT
+        canEnter: true
+        currentPrice: 45000.0
+        lastAccreditedAt: "2026-09-01T12:00:00-03:00"
+        expiresAt: "2026-10-01T12:00:00-03:00"
+        remainingDays: 17
+        initialMedicalGraceEndsAt: "2026-09-21T12:00:00-03:00"
+        initialMedicalGraceRemainingDays: 7
+        medicalCertificateStatus: PENDING
+    MemberListItemResponse:
+      type: object
+      additionalProperties: false
+      required: [id, firstName, lastName, documentNumber, status, membership]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        documentNumber: { type: string }
+        status: { $ref: "#/components/schemas/UserStatus" }
+        membership: { $ref: "#/components/schemas/MembershipSummaryResponse" }
+      example:
+        id: 11111111-1111-4111-8111-111111111111
+        firstName: Martina
+        lastName: Pérez
+        documentNumber: "40111222"
+        status: ACTIVE
+        membership:
+          status: CURRENT
+          canEnter: true
+          currentPrice: 45000.0
+          lastAccreditedAt: "2026-09-01T12:00:00-03:00"
+          expiresAt: "2026-10-01T12:00:00-03:00"
+          remainingDays: 17
+          initialMedicalGraceEndsAt: "2026-09-21T12:00:00-03:00"
+          initialMedicalGraceRemainingDays: 7
+          medicalCertificateStatus: PENDING
+    MemberPageResponse:
+      type: object
+      additionalProperties: false
+      required: [items, pagination]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/MemberListItemResponse" } }
+        pagination: { $ref: "#/components/schemas/PaginationMeta" }
+      example:
+        items:
+          - id: 11111111-1111-4111-8111-111111111111
+            firstName: Martina
+            lastName: Pérez
+            documentNumber: "40111222"
+            status: ACTIVE
+            membership:
+              status: CURRENT
+              canEnter: true
+              currentPrice: 45000.0
+              lastAccreditedAt: "2026-09-01T12:00:00-03:00"
+              expiresAt: "2026-10-01T12:00:00-03:00"
+              remainingDays: 17
+              initialMedicalGraceEndsAt: "2026-09-21T12:00:00-03:00"
+              initialMedicalGraceRemainingDays: 7
+              medicalCertificateStatus: PENDING
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 }
+    MembershipPriceResponse:
+      type: object
+      additionalProperties: false
+      required: [id, amount, effectiveFrom, createdAt, createdBy]
+      properties:
+        id: { type: string, format: uuid }
+        amount: { type: number, format: double, exclusiveMinimum: 0 }
+        effectiveFrom: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        createdBy: { $ref: "#/components/schemas/ActorSummary" }
+      example:
+        id: 13131313-1313-4313-8313-131313131313
+        amount: 45000.0
+        effectiveFrom: "2026-09-01T00:00:00-03:00"
+        createdAt: "2026-08-25T14:00:00-03:00"
+        createdBy:
+          id: dddddddd-dddd-4ddd-8ddd-dddddddddddd
+          firstName: Ana
+          lastName: Gómez
     CreateMembershipPriceRequest:
       type: object
+      additionalProperties: false
       required: [amount, effectiveFrom]
       properties:
         amount: { type: number, format: double, exclusiveMinimum: 0 }
         effectiveFrom: { type: string, format: date-time }
+      example: { amount: 45000.0, effectiveFrom: "2026-09-01T00:00:00-03:00" }
+    MembershipPricePageResponse:
+      type: object
+      additionalProperties: false
+      required: [items, pagination]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/MembershipPriceResponse" } }
+        pagination: { $ref: "#/components/schemas/PaginationMeta" }
+      example:
+        items:
+          - id: 13131313-1313-4313-8313-131313131313
+            amount: 45000.0
+            effectiveFrom: "2026-09-01T00:00:00-03:00"
+            createdAt: "2026-08-25T14:00:00-03:00"
+            createdBy:
+              id: dddddddd-dddd-4ddd-8ddd-dddddddddddd
+              firstName: Ana
+              lastName: Gómez
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 }
+    MemberSummary:
+      type: object
+      additionalProperties: false
+      required: [id, firstName, lastName, documentNumber]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        documentNumber: { type: string }
+      example:
+        id: 11111111-1111-4111-8111-111111111111
+        firstName: Martina
+        lastName: Pérez
+        documentNumber: "40111222"
     PaymentPreviewRequest:
       type: object
-      required: [memberId, amount, method]
+      additionalProperties: false
+      required: [memberId, amount, method, accreditedAt]
       properties:
         memberId: { type: string, format: uuid }
         amount: { type: number, format: double, exclusiveMinimum: 0 }
-        method: { type: string }
+        method:
+          type: string
+          minLength: 1
+          description: Texto libre hasta que M-Team confirme los valores admitidos.
         receiptNumber: { type: string }
+        accreditedAt: { type: string, format: date-time }
+      example:
+        memberId: 11111111-1111-4111-8111-111111111111
+        amount: 45000.0
+        method: transferencia
+        receiptNumber: TRX-000123
+        accreditedAt: "2026-09-01T12:00:00-03:00"
     CreatePaymentRequest:
       allOf:
         - $ref: "#/components/schemas/PaymentPreviewRequest"
+      example:
+        memberId: 11111111-1111-4111-8111-111111111111
+        amount: 45000.0
+        method: transferencia
+        receiptNumber: TRX-000123
+        accreditedAt: "2026-09-01T12:00:00-03:00"
+    PaymentPreviewResponse:
+      type: object
+      additionalProperties: false
+      required: [member, currentMembershipPrice, amount, method, receiptNumber, accreditedAt, expiresAt]
+      properties:
+        member: { $ref: "#/components/schemas/MemberSummary" }
+        currentMembershipPrice: { type: number, format: double, exclusiveMinimum: 0 }
+        amount: { type: number, format: double, exclusiveMinimum: 0 }
+        method: { type: string }
+        receiptNumber: { type: [string, "null"] }
+        accreditedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+      example:
+        member:
+          id: 11111111-1111-4111-8111-111111111111
+          firstName: Martina
+          lastName: Pérez
+          documentNumber: "40111222"
+        currentMembershipPrice: 45000.0
+        amount: 45000.0
+        method: transferencia
+        receiptNumber: TRX-000123
+        accreditedAt: "2026-09-01T12:00:00-03:00"
+        expiresAt: "2026-10-01T12:00:00-03:00"
+    PaymentResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - member
+        - amount
+        - method
+        - receiptNumber
+        - status
+        - createdBy
+        - createdAt
+        - confirmedBy
+        - accreditedAt
+        - expiresAt
+        - voidedBy
+        - voidedAt
+        - voidReason
+      properties:
+        id: { type: string, format: uuid }
+        member: { $ref: "#/components/schemas/MemberSummary" }
+        amount: { type: number, format: double, exclusiveMinimum: 0 }
+        method: { type: string }
+        receiptNumber: { type: [string, "null"] }
+        status: { $ref: "#/components/schemas/PaymentStatus" }
+        createdBy: { $ref: "#/components/schemas/ActorSummary" }
+        createdAt: { type: string, format: date-time }
+        confirmedBy: { $ref: "#/components/schemas/ActorSummary" }
+        accreditedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        voidedBy:
+          oneOf:
+            - $ref: "#/components/schemas/ActorSummary"
+            - type: "null"
+        voidedAt: { type: [string, "null"], format: date-time }
+        voidReason: { type: [string, "null"] }
+      example:
+        id: 33333333-3333-4333-8333-333333333333
+        member:
+          id: 11111111-1111-4111-8111-111111111111
+          firstName: Martina
+          lastName: Pérez
+          documentNumber: "40111222"
+        amount: 45000.0
+        method: transferencia
+        receiptNumber: TRX-000123
+        status: ACCREDITED
+        createdBy:
+          id: dddddddd-dddd-4ddd-8ddd-dddddddddddd
+          firstName: Ana
+          lastName: Gómez
+        createdAt: "2026-09-01T12:00:00-03:00"
+        confirmedBy:
+          id: dddddddd-dddd-4ddd-8ddd-dddddddddddd
+          firstName: Ana
+          lastName: Gómez
+        accreditedAt: "2026-09-01T12:00:00-03:00"
+        expiresAt: "2026-10-01T12:00:00-03:00"
+        voidedBy: null
+        voidedAt: null
+        voidReason: null
+    PaymentPageResponse:
+      type: object
+      additionalProperties: false
+      required: [items, pagination]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/PaymentResponse" } }
+        pagination: { $ref: "#/components/schemas/PaginationMeta" }
+      example:
+        items:
+          - id: 33333333-3333-4333-8333-333333333333
+            member:
+              id: 11111111-1111-4111-8111-111111111111
+              firstName: Martina
+              lastName: Pérez
+              documentNumber: "40111222"
+            amount: 45000.0
+            method: transferencia
+            receiptNumber: TRX-000123
+            status: ACCREDITED
+            createdBy:
+              id: dddddddd-dddd-4ddd-8ddd-dddddddddddd
+              firstName: Ana
+              lastName: Gómez
+            createdAt: "2026-09-01T12:00:00-03:00"
+            confirmedBy:
+              id: dddddddd-dddd-4ddd-8ddd-dddddddddddd
+              firstName: Ana
+              lastName: Gómez
+            accreditedAt: "2026-09-01T12:00:00-03:00"
+            expiresAt: "2026-10-01T12:00:00-03:00"
+            voidedBy: null
+            voidedAt: null
+            voidReason: null
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 }
     VoidPaymentRequest:
       type: object
+      additionalProperties: false
       required: [reason]
       properties:
         reason: { type: string, minLength: 1 }
+      example: { reason: Importe cargado de forma incorrecta }
+    PaymentsSummaryResponse:
+      type: object
+      additionalProperties: false
+      required: [from, to, accreditedPayments, totalAmount]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        accreditedPayments: { type: integer, minimum: 0 }
+        totalAmount: { type: number, format: double, minimum: 0 }
+      example:
+        from: "2026-09-01T00:00:00-03:00"
+        to: "2026-09-30T23:59:59-03:00"
+        accreditedPayments: 12
+        totalAmount: 540000.0
+    MedicalCertificateUploadRequest:
+      type: object
+      additionalProperties: false
+      required: [file]
+      properties:
+        file:
+          type: string
+          format: binary
+          description: Archivo PDF, JPEG o PNG. Tamaño máximo pendiente de definición.
+      example: { file: archivo-binario }
     MedicalReviewRequest:
       type: object
-      required: [status]
+      additionalProperties: false
+      required: [status, reviewComment]
       properties:
-        status:
+        status: { type: string, enum: [APPROVED, REJECTED] }
+        reviewComment:
+          type: [string, "null"]
+          description: Debe contener texto no vacío cuando `status` es `REJECTED`; puede ser null al aprobar.
+      example: { status: REJECTED, reviewComment: La imagen no permite leer la firma. }
+    MedicalCertificateResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - member
+        - status
+        - uploadedAt
+        - reviewedBy
+        - reviewedAt
+        - reviewComment
+        - downloadPath
+      properties:
+        id: { type: string, format: uuid }
+        member: { $ref: "#/components/schemas/MemberSummary" }
+        status: { $ref: "#/components/schemas/MedicalCertificateStatus" }
+        uploadedAt: { type: string, format: date-time }
+        reviewedBy:
+          oneOf:
+            - $ref: "#/components/schemas/ActorSummary"
+            - type: "null"
+        reviewedAt: { type: [string, "null"], format: date-time }
+        reviewComment: { type: [string, "null"] }
+        downloadPath:
           type: string
-          enum: [APPROVED, REJECTED]
-        reviewComment: { type: string }
+          description: Ruta autenticada relativa al server de la API.
+      example:
+        id: 44444444-4444-4444-8444-444444444444
+        member:
+          id: 11111111-1111-4111-8111-111111111111
+          firstName: Martina
+          lastName: Pérez
+          documentNumber: "40111222"
+        status: APPROVED
+        uploadedAt: "2026-08-20T09:15:00-03:00"
+        reviewedBy:
+          id: dddddddd-dddd-4ddd-8ddd-dddddddddddd
+          firstName: Ana
+          lastName: Gómez
+        reviewedAt: "2026-08-21T13:10:00-03:00"
+        reviewComment: null
+        downloadPath: /medical-certificates/44444444-4444-4444-8444-444444444444/file
+    MedicalCertificatePageResponse:
+      type: object
+      additionalProperties: false
+      required: [items, pagination]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/MedicalCertificateResponse" } }
+        pagination: { $ref: "#/components/schemas/PaginationMeta" }
+      example:
+        items:
+          - id: 44444444-4444-4444-8444-444444444444
+            member:
+              id: 11111111-1111-4111-8111-111111111111
+              firstName: Martina
+              lastName: Pérez
+              documentNumber: "40111222"
+            status: APPROVED
+            uploadedAt: "2026-08-20T09:15:00-03:00"
+            reviewedBy:
+              id: dddddddd-dddd-4ddd-8ddd-dddddddddddd
+              firstName: Ana
+              lastName: Gómez
+            reviewedAt: "2026-08-21T13:10:00-03:00"
+            reviewComment: null
+            downloadPath: /medical-certificates/44444444-4444-4444-8444-444444444444/file
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 }
+    AccessPointSummary:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+      example: { id: 66666666-6666-4666-8666-666666666666, name: Ingreso principal }
     AccessAttemptRequest:
       type: object
+      additionalProperties: false
       required: [qrToken]
       properties:
-        qrToken: { type: string, minLength: 1 }
+        qrToken: { type: string, minLength: 1, writeOnly: true }
+      example: { qrToken: qr-fijo-ficticio-centro-principal }
+    AccessAttemptResponse:
+      type: object
+      additionalProperties: false
+      required: [id, user, roleAtAttempt, branch, accessPoint, result, denialReason, attemptedAt]
+      properties:
+        id: { type: string, format: uuid }
+        user: { $ref: "#/components/schemas/ActorSummary" }
+        roleAtAttempt: { $ref: "#/components/schemas/UserRole" }
+        branch:
+          oneOf:
+            - $ref: "#/components/schemas/BranchSummary"
+            - type: "null"
+        accessPoint:
+          oneOf:
+            - $ref: "#/components/schemas/AccessPointSummary"
+            - type: "null"
+        result: { $ref: "#/components/schemas/AccessResult" }
+        denialReason:
+          oneOf:
+            - $ref: "#/components/schemas/AccessDenialReason"
+            - type: "null"
+        attemptedAt: { type: string, format: date-time }
+      example:
+        id: 55555555-5555-4555-8555-555555555555
+        user:
+          id: 11111111-1111-4111-8111-111111111111
+          firstName: Martina
+          lastName: Pérez
+        roleAtAttempt: MEMBER
+        branch:
+          id: 22222222-2222-4222-8222-222222222222
+          name: M-Team Centro
+          address: Avenida Ejemplo 123, CABA
+          isActive: true
+        accessPoint:
+          id: 66666666-6666-4666-8666-666666666666
+          name: Ingreso principal
+        result: ALLOWED
+        denialReason: null
+        attemptedAt: "2026-09-14T08:05:00-03:00"
+    AccessAttemptPageResponse:
+      type: object
+      additionalProperties: false
+      required: [items, pagination]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AccessAttemptResponse" } }
+        pagination: { $ref: "#/components/schemas/PaginationMeta" }
+      example:
+        items:
+          - id: 55555555-5555-4555-8555-555555555555
+            user:
+              id: 11111111-1111-4111-8111-111111111111
+              firstName: Martina
+              lastName: Pérez
+            roleAtAttempt: MEMBER
+            branch:
+              id: 22222222-2222-4222-8222-222222222222
+              name: M-Team Centro
+              address: Avenida Ejemplo 123, CABA
+              isActive: true
+            accessPoint:
+              id: 66666666-6666-4666-8666-666666666666
+              name: Ingreso principal
+            result: ALLOWED
+            denialReason: null
+            attemptedAt: "2026-09-14T08:05:00-03:00"
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 }
+    AccessPointResponse:
+      type: object
+      additionalProperties: false
+      required: [id, branch, name, isActive]
+      properties:
+        id: { type: string, format: uuid }
+        branch: { $ref: "#/components/schemas/BranchSummary" }
+        name: { type: string }
+        isActive: { type: boolean }
+      example:
+        id: 66666666-6666-4666-8666-666666666666
+        branch:
+          id: 22222222-2222-4222-8222-222222222222
+          name: M-Team Centro
+          address: Avenida Ejemplo 123, CABA
+          isActive: true
+        name: Ingreso principal
+        isActive: true
+    CreatedAccessPointResponse:
+      type: object
+      additionalProperties: false
+      required: [accessPoint, qrToken]
+      properties:
+        accessPoint: { $ref: "#/components/schemas/AccessPointResponse" }
+        qrToken:
+          type: string
+          description: Valor que debe codificarse en el QR fijo; solo se devuelve al crear.
+      example:
+        accessPoint:
+          id: 66666666-6666-4666-8666-666666666666
+          branch:
+            id: 22222222-2222-4222-8222-222222222222
+            name: M-Team Centro
+            address: Avenida Ejemplo 123, CABA
+            isActive: true
+          name: Ingreso principal
+          isActive: true
+        qrToken: qr-fijo-ficticio-centro-principal
+    AccessPointPageResponse:
+      type: object
+      additionalProperties: false
+      required: [items, pagination]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AccessPointResponse" } }
+        pagination: { $ref: "#/components/schemas/PaginationMeta" }
+      example:
+        items:
+          - id: 66666666-6666-4666-8666-666666666666
+            branch:
+              id: 22222222-2222-4222-8222-222222222222
+              name: M-Team Centro
+              address: Avenida Ejemplo 123, CABA
+              isActive: true
+            name: Ingreso principal
+            isActive: true
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 }
+    CreateAccessPointRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+      example: { name: Ingreso principal }
+    UpdateAccessPointRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1 }
+        isActive: { type: boolean }
+      example: { name: Ingreso principal renovado, isActive: true }
+    BranchResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - description
+        - imageUrl
+        - address
+        - openingHours
+        - phone
+        - latitude
+        - longitude
+        - isActive
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        imageUrl: { type: string, format: uri }
+        address: { type: string }
+        openingHours: { type: string }
+        phone: { type: string }
+        latitude: { type: [number, "null"], minimum: -90, maximum: 90 }
+        longitude: { type: [number, "null"], minimum: -180, maximum: 180 }
+        isActive: { type: boolean }
+      example:
+        id: 22222222-2222-4222-8222-222222222222
+        name: M-Team Centro
+        description: Sede con sala de musculación y clases grupales.
+        imageUrl: https://example.com/images/branch-centro.jpg
+        address: Avenida Ejemplo 123, CABA
+        openingHours: Lunes a viernes de 07:00 a 22:00
+        phone: "+54 11 5555-0200"
+        latitude: -34.6037
+        longitude: -58.3816
+        isActive: true
+    BranchDetailResponse:
+      type: object
+      additionalProperties: false
+      required: [branch, upcomingClasses]
+      properties:
+        branch: { $ref: "#/components/schemas/BranchResponse" }
+        upcomingClasses:
+          type: array
+          items: { $ref: "#/components/schemas/ScheduledClassResponse" }
+      example:
+        branch:
+          id: 22222222-2222-4222-8222-222222222222
+          name: M-Team Centro
+          description: Sede con sala de musculación y clases grupales.
+          imageUrl: https://example.com/images/branch-centro.jpg
+          address: Avenida Ejemplo 123, CABA
+          openingHours: Lunes a viernes de 07:00 a 22:00
+          phone: "+54 11 5555-0200"
+          latitude: -34.6037
+          longitude: -58.3816
+          isActive: true
+        upcomingClasses: []
+    BranchPageResponse:
+      type: object
+      additionalProperties: false
+      required: [items, pagination]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/BranchResponse" } }
+        pagination: { $ref: "#/components/schemas/PaginationMeta" }
+      example:
+        items:
+          - id: 22222222-2222-4222-8222-222222222222
+            name: M-Team Centro
+            description: Sede con sala de musculación y clases grupales.
+            imageUrl: https://example.com/images/branch-centro.jpg
+            address: Avenida Ejemplo 123, CABA
+            openingHours: Lunes a viernes de 07:00 a 22:00
+            phone: "+54 11 5555-0200"
+            latitude: -34.6037
+            longitude: -58.3816
+            isActive: true
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 }
+    CreateBranchRequest:
+      type: object
+      additionalProperties: false
+      required: [name, description, imageUrl, address, openingHours, phone]
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: string, minLength: 1 }
+        imageUrl: { type: string, format: uri }
+        address: { type: string, minLength: 1 }
+        openingHours: { type: string, minLength: 1 }
+        phone: { type: string, minLength: 1 }
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+      example:
+        name: M-Team Norte
+        description: Nueva sede de ejemplo.
+        imageUrl: https://example.com/images/branch-norte.jpg
+        address: Calle Ficticia 456, CABA
+        openingHours: Lunes a sábados de 08:00 a 21:00
+        phone: "+54 11 5555-0210"
+        latitude: -34.55
+        longitude: -58.46
+    UpdateBranchRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: string, minLength: 1 }
+        imageUrl: { type: string, format: uri }
+        address: { type: string, minLength: 1 }
+        openingHours: { type: string, minLength: 1 }
+        phone: { type: string, minLength: 1 }
+        latitude: { type: [number, "null"], minimum: -90, maximum: 90 }
+        longitude: { type: [number, "null"], minimum: -180, maximum: 180 }
+      example: { openingHours: Lunes a viernes de 06:30 a 22:30, phone: "+54 11 5555-0201" }
+    UpdateActiveStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [isActive]
+      properties:
+        isActive: { type: boolean }
+      example: { isActive: false }
+    TrainerSummary:
+      type: object
+      additionalProperties: false
+      required: [id, firstName, lastName, photoUrl, specialty]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        photoUrl: { type: [string, "null"], format: uri }
+        specialty: { type: string }
+      example:
+        id: 99999999-9999-4999-8999-999999999999
+        firstName: Laura
+        lastName: Benítez
+        photoUrl: https://example.com/images/trainer-laura.jpg
+        specialty: Entrenamiento funcional
+    ScheduledClassResponse:
+      type: object
+      additionalProperties: false
+      required: [id, scheduleId, activity, startsAt, branch, trainer]
+      properties:
+        id: { type: string, format: uuid }
+        scheduleId: { type: string, format: uuid }
+        activity: { type: string }
+        startsAt: { type: string, format: date-time }
+        branch: { $ref: "#/components/schemas/BranchSummary" }
+        trainer:
+          oneOf:
+            - $ref: "#/components/schemas/TrainerSummary"
+            - type: "null"
+      example:
+        id: 88888888-8888-4888-8888-888888888888
+        scheduleId: 77777777-7777-4777-8777-777777777777
+        activity: Funcional
+        startsAt: "2026-09-15T18:00:00-03:00"
+        branch:
+          id: 22222222-2222-4222-8222-222222222222
+          name: M-Team Centro
+          address: Avenida Ejemplo 123, CABA
+          isActive: true
+        trainer:
+          id: 99999999-9999-4999-8999-999999999999
+          firstName: Laura
+          lastName: Benítez
+          photoUrl: https://example.com/images/trainer-laura.jpg
+          specialty: Entrenamiento funcional
+    ScheduledClassPageResponse:
+      type: object
+      additionalProperties: false
+      required: [items, pagination]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ScheduledClassResponse" } }
+        pagination: { $ref: "#/components/schemas/PaginationMeta" }
+      example:
+        items:
+          - id: 88888888-8888-4888-8888-888888888888
+            scheduleId: 77777777-7777-4777-8777-777777777777
+            activity: Funcional
+            startsAt: "2026-09-15T18:00:00-03:00"
+            branch:
+              id: 22222222-2222-4222-8222-222222222222
+              name: M-Team Centro
+              address: Avenida Ejemplo 123, CABA
+              isActive: true
+            trainer:
+              id: 99999999-9999-4999-8999-999999999999
+              firstName: Laura
+              lastName: Benítez
+              photoUrl: https://example.com/images/trainer-laura.jpg
+              specialty: Entrenamiento funcional
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 }
+    WeeklyScheduleResponse:
+      type: object
+      additionalProperties: false
+      required: [id, weekStartsOn, copiedFromId, createdAt, classes]
+      properties:
+        id: { type: string, format: uuid }
+        weekStartsOn: { type: string, format: date }
+        copiedFromId: { type: [string, "null"], format: uuid }
+        createdAt: { type: string, format: date-time }
+        classes:
+          type: array
+          items: { $ref: "#/components/schemas/ScheduledClassResponse" }
+      example:
+        id: 77777777-7777-4777-8777-777777777777
+        weekStartsOn: "2026-09-14"
+        copiedFromId: null
+        createdAt: "2026-09-10T12:00:00-03:00"
+        classes:
+          - id: 88888888-8888-4888-8888-888888888888
+            scheduleId: 77777777-7777-4777-8777-777777777777
+            activity: Funcional
+            startsAt: "2026-09-15T18:00:00-03:00"
+            branch:
+              id: 22222222-2222-4222-8222-222222222222
+              name: M-Team Centro
+              address: Avenida Ejemplo 123, CABA
+              isActive: true
+            trainer:
+              id: 99999999-9999-4999-8999-999999999999
+              firstName: Laura
+              lastName: Benítez
+              photoUrl: https://example.com/images/trainer-laura.jpg
+              specialty: Entrenamiento funcional
+    WeeklySchedulePageResponse:
+      type: object
+      additionalProperties: false
+      required: [items, pagination]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/WeeklyScheduleResponse" } }
+        pagination: { $ref: "#/components/schemas/PaginationMeta" }
+      example:
+        items:
+          - id: 77777777-7777-4777-8777-777777777777
+            weekStartsOn: "2026-09-14"
+            copiedFromId: null
+            createdAt: "2026-09-10T12:00:00-03:00"
+            classes: []
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 }
+    CopyWeeklyScheduleRequest:
+      type: object
+      additionalProperties: false
+      required: [targetWeekStartsOn]
+      properties:
+        targetWeekStartsOn: { type: string, format: date }
+      example: { targetWeekStartsOn: "2026-09-21" }
+    CreateScheduledClassRequest:
+      type: object
+      additionalProperties: false
+      required: [scheduleId, branchId, activity, startsAt]
+      properties:
+        scheduleId: { type: string, format: uuid }
+        branchId: { type: string, format: uuid }
+        trainerId: { type: [string, "null"], format: uuid }
+        activity: { type: string, minLength: 1 }
+        startsAt: { type: string, format: date-time }
+      example:
+        scheduleId: 77777777-7777-4777-8777-777777777777
+        branchId: 22222222-2222-4222-8222-222222222222
+        trainerId: 99999999-9999-4999-8999-999999999999
+        activity: Funcional
+        startsAt: "2026-09-15T18:00:00-03:00"
+    UpdateScheduledClassRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        branchId: { type: string, format: uuid }
+        trainerId: { type: [string, "null"], format: uuid }
+        activity: { type: string, minLength: 1 }
+        startsAt: { type: string, format: date-time }
+      example: { trainerId: null, startsAt: "2026-09-15T19:00:00-03:00" }
+    TrainerResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - firstName
+        - lastName
+        - email
+        - phone
+        - photoUrl
+        - specialty
+        - description
+        - status
+        - branches
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        photoUrl: { type: [string, "null"], format: uri }
+        specialty: { type: string }
+        description: { type: string }
+        status: { $ref: "#/components/schemas/UserStatus" }
+        branches: { type: array, items: { $ref: "#/components/schemas/BranchSummary" } }
+      example:
+        id: 99999999-9999-4999-8999-999999999999
+        firstName: Laura
+        lastName: Benítez
+        email: laura.benitez@example.com
+        phone: "+54 11 5555-0110"
+        photoUrl: https://example.com/images/trainer-laura.jpg
+        specialty: Entrenamiento funcional
+        description: Entrenadora con experiencia en clases grupales.
+        status: ACTIVE
+        branches:
+          - id: 22222222-2222-4222-8222-222222222222
+            name: M-Team Centro
+            address: Avenida Ejemplo 123, CABA
+            isActive: true
+    TrainerDetailResponse:
+      type: object
+      additionalProperties: false
+      required: [trainer, upcomingClasses]
+      properties:
+        trainer: { $ref: "#/components/schemas/TrainerResponse" }
+        upcomingClasses: { type: array, items: { $ref: "#/components/schemas/ScheduledClassResponse" } }
+      example:
+        trainer:
+          id: 99999999-9999-4999-8999-999999999999
+          firstName: Laura
+          lastName: Benítez
+          email: laura.benitez@example.com
+          phone: "+54 11 5555-0110"
+          photoUrl: https://example.com/images/trainer-laura.jpg
+          specialty: Entrenamiento funcional
+          description: Entrenadora con experiencia en clases grupales.
+          status: ACTIVE
+          branches:
+            - id: 22222222-2222-4222-8222-222222222222
+              name: M-Team Centro
+              address: Avenida Ejemplo 123, CABA
+              isActive: true
+        upcomingClasses: []
+    TrainerPageResponse:
+      type: object
+      additionalProperties: false
+      required: [items, pagination]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/TrainerResponse" } }
+        pagination: { $ref: "#/components/schemas/PaginationMeta" }
+      example:
+        items:
+          - id: 99999999-9999-4999-8999-999999999999
+            firstName: Laura
+            lastName: Benítez
+            email: laura.benitez@example.com
+            phone: "+54 11 5555-0110"
+            photoUrl: https://example.com/images/trainer-laura.jpg
+            specialty: Entrenamiento funcional
+            description: Entrenadora con experiencia en clases grupales.
+            status: ACTIVE
+            branches: []
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 }
+    UpdateTrainerProfileRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        specialty: { type: string, minLength: 1 }
+        description: { type: string, minLength: 1 }
+      example: { specialty: Entrenamiento funcional, description: Clases para todos los niveles. }
+    ReplaceTrainerBranchesRequest:
+      type: object
+      additionalProperties: false
+      required: [branchIds]
+      properties:
+        branchIds:
+          type: array
+          uniqueItems: true
+          items: { type: string, format: uuid }
+      example: { branchIds: [22222222-2222-4222-8222-222222222222] }
+    EventResponse:
+      type: object
+      additionalProperties: false
+      required: [id, title, description, startsAt, branch, imageUrl, status, timing, createdBy]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: string }
+        startsAt: { type: string, format: date-time }
+        branch: { $ref: "#/components/schemas/BranchSummary" }
+        imageUrl: { type: string, format: uri }
+        status: { $ref: "#/components/schemas/EventStatus" }
+        timing: { $ref: "#/components/schemas/EventTiming" }
+        createdBy: { $ref: "#/components/schemas/ActorSummary" }
+      example:
+        id: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+        title: Jornada de entrenamiento
+        description: Encuentro abierto con actividades guiadas.
+        startsAt: "2026-10-10T10:00:00-03:00"
+        branch:
+          id: 22222222-2222-4222-8222-222222222222
+          name: M-Team Centro
+          address: Avenida Ejemplo 123, CABA
+          isActive: true
+        imageUrl: https://example.com/images/evento-jornada.jpg
+        status: PUBLISHED
+        timing: UPCOMING
+        createdBy:
+          id: dddddddd-dddd-4ddd-8ddd-dddddddddddd
+          firstName: Ana
+          lastName: Gómez
+    EventPageResponse:
+      type: object
+      additionalProperties: false
+      required: [items, pagination]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/EventResponse" } }
+        pagination: { $ref: "#/components/schemas/PaginationMeta" }
+      example:
+        items:
+          - id: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+            title: Jornada de entrenamiento
+            description: Encuentro abierto con actividades guiadas.
+            startsAt: "2026-10-10T10:00:00-03:00"
+            branch:
+              id: 22222222-2222-4222-8222-222222222222
+              name: M-Team Centro
+              address: Avenida Ejemplo 123, CABA
+              isActive: true
+            imageUrl: https://example.com/images/evento-jornada.jpg
+            status: PUBLISHED
+            timing: UPCOMING
+            createdBy:
+              id: dddddddd-dddd-4ddd-8ddd-dddddddddddd
+              firstName: Ana
+              lastName: Gómez
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 }
+    CreateEventRequest:
+      type: object
+      additionalProperties: false
+      required: [title, description, startsAt, branchId, imageUrl, status]
+      properties:
+        title: { type: string, minLength: 1 }
+        description: { type: string, minLength: 1 }
+        startsAt: { type: string, format: date-time }
+        branchId: { type: string, format: uuid }
+        imageUrl: { type: string, format: uri }
+        status: { type: string, enum: [DRAFT, PUBLISHED] }
+      example:
+        title: Jornada de entrenamiento
+        description: Encuentro abierto con actividades guiadas.
+        startsAt: "2026-10-10T10:00:00-03:00"
+        branchId: 22222222-2222-4222-8222-222222222222
+        imageUrl: https://example.com/images/evento-jornada.jpg
+        status: DRAFT
+    UpdateEventRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        title: { type: string, minLength: 1 }
+        description: { type: string, minLength: 1 }
+        startsAt: { type: string, format: date-time }
+        branchId: { type: string, format: uuid }
+        imageUrl: { type: string, format: uri }
+      example: { startsAt: "2026-10-10T11:00:00-03:00", branchId: 22222222-2222-4222-8222-222222222222 }
+    UpdateEventStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { $ref: "#/components/schemas/EventStatus" }
+      example: { status: CANCELLED }
+    NewsPostResponse:
+      type: object
+      additionalProperties: false
+      required: [id, title, content, imageUrl, audience, status, publishedAt, createdBy]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        content: { type: string }
+        imageUrl: { type: [string, "null"], format: uri }
+        audience: { $ref: "#/components/schemas/PublicationAudience" }
+        status: { $ref: "#/components/schemas/PublicationStatus" }
+        publishedAt: { type: [string, "null"], format: date-time }
+        createdBy: { $ref: "#/components/schemas/ActorSummary" }
+      example:
+        id: bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb
+        title: Horario especial
+        content: El sábado la sede Centro abrirá de 09:00 a 18:00.
+        imageUrl: null
+        audience: ALL
+        status: PUBLISHED
+        publishedAt: "2026-09-12T09:00:00-03:00"
+        createdBy:
+          id: dddddddd-dddd-4ddd-8ddd-dddddddddddd
+          firstName: Ana
+          lastName: Gómez
+    NewsPostPageResponse:
+      type: object
+      additionalProperties: false
+      required: [items, pagination]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/NewsPostResponse" } }
+        pagination: { $ref: "#/components/schemas/PaginationMeta" }
+      example:
+        items:
+          - id: bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb
+            title: Horario especial
+            content: El sábado la sede Centro abrirá de 09:00 a 18:00.
+            imageUrl: null
+            audience: ALL
+            status: PUBLISHED
+            publishedAt: "2026-09-12T09:00:00-03:00"
+            createdBy:
+              id: dddddddd-dddd-4ddd-8ddd-dddddddddddd
+              firstName: Ana
+              lastName: Gómez
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 }
+    CreateNewsPostRequest:
+      type: object
+      additionalProperties: false
+      required: [title, content, audience, status]
+      properties:
+        title: { type: string, minLength: 1 }
+        content: { type: string, minLength: 1 }
+        imageUrl: { type: [string, "null"], format: uri }
+        audience: { $ref: "#/components/schemas/PublicationAudience" }
+        status: { type: string, enum: [DRAFT, PUBLISHED] }
+      example:
+        title: Horario especial
+        content: El sábado la sede Centro abrirá de 09:00 a 18:00.
+        imageUrl: null
+        audience: ALL
+        status: DRAFT
+    UpdateNewsPostRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        title: { type: string, minLength: 1 }
+        content: { type: string, minLength: 1 }
+        imageUrl: { type: [string, "null"], format: uri }
+        audience: { $ref: "#/components/schemas/PublicationAudience" }
+      example: { title: Horario especial del sábado, audience: MEMBERS }
+    UpdateNewsPostStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { $ref: "#/components/schemas/PublicationStatus" }
+      example: { status: PUBLISHED }
+    NotificationResponse:
+      type: object
+      additionalProperties: false
+      required: [id, title, message, type, createdAt, readAt, isRead]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        message: { type: string }
+        type: { $ref: "#/components/schemas/NotificationType" }
+        createdAt: { type: string, format: date-time }
+        readAt: { type: [string, "null"], format: date-time }
+        isRead: { type: boolean }
+      example:
+        id: cccccccc-cccc-4ccc-8ccc-cccccccccccc
+        title: Tu cuota vence pronto
+        message: Restan cinco días de vigencia para tu cuota.
+        type: MEMBERSHIP_EXPIRING
+        createdAt: "2026-09-14T08:00:00-03:00"
+        readAt: null
+        isRead: false
+    NotificationPageResponse:
+      type: object
+      additionalProperties: false
+      required: [items, pagination, unreadCount]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/NotificationResponse" } }
+        pagination: { $ref: "#/components/schemas/PaginationMeta" }
+        unreadCount: { type: integer, minimum: 0 }
+      example:
+        items:
+          - id: cccccccc-cccc-4ccc-8ccc-cccccccccccc
+            title: Tu cuota vence pronto
+            message: Restan cinco días de vigencia para tu cuota.
+            type: MEMBERSHIP_EXPIRING
+            createdAt: "2026-09-14T08:00:00-03:00"
+            readAt: null
+            isRead: false
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 }
+        unreadCount: 1
+    MarkNotificationsReadRequest:
+      type: object
+      additionalProperties: false
+      required: [isRead]
+      properties:
+        isRead: { type: boolean, const: true }
+      example: { isRead: true }
+    NotificationBulkUpdateResponse:
+      type: object
+      additionalProperties: false
+      required: [updatedCount]
+      properties:
+        updatedCount: { type: integer, minimum: 0 }
+      example: { updatedCount: 3 }
+    AdminDashboardResponse:
+      type: object
+      additionalProperties: false
+      required: [users, memberships, medicalCertificates, initialMedicalGraceMembers, schedules, recentAccessAttempts]
+      properties:
+        users:
+          type: object
+          additionalProperties: false
+          required: [activeMembers, inactiveMembers, activeTrainers, inactiveTrainers]
+          properties:
+            activeMembers: { type: integer, minimum: 0 }
+            inactiveMembers: { type: integer, minimum: 0 }
+            activeTrainers: { type: integer, minimum: 0 }
+            inactiveTrainers: { type: integer, minimum: 0 }
+        memberships:
+          type: object
+          additionalProperties: false
+          required: [current, expiringSoon, expired]
+          properties:
+            current: { type: integer, minimum: 0 }
+            expiringSoon: { type: integer, minimum: 0 }
+            expired: { type: integer, minimum: 0 }
+        medicalCertificates:
+          type: object
+          additionalProperties: false
+          required: [pending, rejected]
+          properties:
+            pending: { type: integer, minimum: 0 }
+            rejected: { type: integer, minimum: 0 }
+        initialMedicalGraceMembers: { type: integer, minimum: 0 }
+        schedules:
+          type: object
+          additionalProperties: false
+          required: [currentWeek, nextWeek]
+          properties:
+            currentWeek:
+              oneOf:
+                - $ref: "#/components/schemas/WeeklyScheduleResponse"
+                - type: "null"
+            nextWeek:
+              oneOf:
+                - $ref: "#/components/schemas/WeeklyScheduleResponse"
+                - type: "null"
+        recentAccessAttempts:
+          type: array
+          items: { $ref: "#/components/schemas/AccessAttemptResponse" }
+      example:
+        users: { activeMembers: 120, inactiveMembers: 8, activeTrainers: 12, inactiveTrainers: 1 }
+        memberships: { current: 90, expiringSoon: 18, expired: 20 }
+        medicalCertificates: { pending: 6, rejected: 2 }
+        initialMedicalGraceMembers: 4
+        schedules:
+          currentWeek:
+            id: 77777777-7777-4777-8777-777777777777
+            weekStartsOn: "2026-09-14"
+            copiedFromId: null
+            createdAt: "2026-09-10T12:00:00-03:00"
+            classes: []
+          nextWeek: null
+        recentAccessAttempts: []

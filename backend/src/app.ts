@@ -11,11 +11,18 @@ export const app = express();
 app.disable("x-powered-by");
 app.use(express.json());
 
+app.get("/api/docs/openapi.json", (_request, response) => {
+  response.status(200).json(openApiDocument);
+});
+
 app.use(
   "/api/docs",
   swaggerUi.serve,
-  swaggerUi.setup(openApiDocument, {
+  swaggerUi.setup(undefined, {
     customSiteTitle: "M-Team API",
+    swaggerOptions: {
+      url: "/api/docs/openapi.json",
+    },
   }),
 );
 
