@@ -34,9 +34,15 @@ export interface RegisteredMember {
 }
 
 export interface UserRepositoryPort {
+  findByEmail(email: string): Promise<AuthenticationUser | null>;
   findConflict(email: string, documentNumber: string): Promise<UserConflictField | null>;
   createMember(data: CreateMemberData): Promise<RegisteredMember>;
 }
+
+export type AuthenticationUser = Pick<
+  RegisteredMember,
+  "id" | "firstName" | "lastName" | "email" | "role" | "status" | "isPasswordChangeRequired"
+> & { passwordHash: string };
 
 export class DuplicateUserError extends Error {
   constructor(readonly field: UserConflictField) {
@@ -61,6 +67,22 @@ const registeredMemberSelection = {
 
 export class UserRepository implements UserRepositoryPort {
   constructor(private readonly database: PrismaClient) {}
+
+  async findByEmail(email: string): Promise<AuthenticationUser | null> {
+    return this.database.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        passwordHash: true,
+        role: true,
+        status: true,
+        isPasswordChangeRequired: true,
+      },
+    });
+  }
 
   async findConflict(
     email: string,

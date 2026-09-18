@@ -23,7 +23,7 @@ const registeredMember = {
 function createTestApp(service: MemberRegistrationService) {
   const app = express();
   app.use(express.json());
-  app.use("/api", createAuthRouter(new AuthController(service)));
+  app.use("/api", createAuthRouter(new AuthController({ ...service, login: jest.fn() })));
   app.use(errorMiddleware);
   return app;
 }
