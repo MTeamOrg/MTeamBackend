@@ -9,5 +9,7 @@ describe("PasswordService", () => {
 
     expect(hash).not.toBe(password);
     await expect(bcrypt.compare(password, hash)).resolves.toBe(true);
+    await expect(new PasswordService().compare(password, hash)).resolves.toBe(true);
+    await expect(new PasswordService().compare("incorrect", hash)).resolves.toBe(false);
   });
 });

@@ -2,12 +2,15 @@ import { ApplicationError } from "../error/application-error.js";
 import { ERROR_CODE } from "../error/error-code.js";
 import {
   DuplicateUserError,
+  type AuthenticationUser,
   type RegisteredMember,
   type UserConflictField,
   type UserRepositoryPort,
 } from "../repository/user-repository.js";
 import type { RegisterMemberInput } from "../validator/register-member-validator.js";
-import type { PasswordHasher } from "./password-service.js";
+import type { LoginInput } from "../validator/login-validator.js";
+import type { PasswordComparer, PasswordHasher } from "./password-service.js";
+import type { TokenIssuer } from "./token-service.js";
 
 const CONFLICT_MESSAGES: Record<UserConflictField, string> = {
   email: "El correo electrónico ya está asociado a una cuenta",
@@ -18,11 +21,58 @@ export interface MemberRegistrationService {
   registerMember(input: RegisterMemberInput): Promise<RegisteredMember>;
 }
 
-export class AuthService implements MemberRegistrationService {
+export interface LoginResponse {
+  accessToken: string;
+  tokenType: "Bearer";
+  expiresIn: number;
+  user: Omit<AuthenticationUser, "passwordHash">;
+}
+
+export interface UserLoginService {
+  login(input: LoginInput): Promise<LoginResponse>;
+}
+
+export class AuthService implements MemberRegistrationService, UserLoginService {
   constructor(
     private readonly userRepository: UserRepositoryPort,
-    private readonly passwordHasher: PasswordHasher,
+    private readonly passwordHasher: PasswordHasher & PasswordComparer,
+    private readonly tokenIssuer: TokenIssuer,
   ) {}
+
+  async login(input: LoginInput): Promise<LoginResponse> {
+    const user = await this.userRepository.findByEmail(input.email.trim().toLowerCase());
+
+    if (!user || !(await this.passwordHasher.compare(input.password, user.passwordHash))) {
+      throw new ApplicationError(
+        401,
+        ERROR_CODE.INVALID_CREDENTIALS,
+        "Correo electrónico o contraseña incorrectos",
+      );
+    }
+
+    if (user.status !== "ACTIVE") {
+      throw new ApplicationError(
+        403,
+        ERROR_CODE.ACCOUNT_INACTIVE,
+        "La cuenta se encuentra inactiva",
+      );
+    }
+
+    return {
+      accessToken: this.tokenIssuer.sign({ id: user.id, role: user.role }),
+      tokenType: "Bearer",
+      expiresIn: this.tokenIssuer.expiresIn,
+      user: {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        isPasswordChangeRequired: user.isPasswordChangeRequired,
+      },
+    };
+  }
 
   async registerMember(input: RegisterMemberInput): Promise<RegisteredMember> {
     const email = input.email.trim().toLowerCase();

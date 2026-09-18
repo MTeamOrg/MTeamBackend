@@ -78,14 +78,43 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/LoginRequest"
+            example:
+              email: socio@example.com
+              password: example-password-only
       responses:
         "200":
           description: Sesión iniciada
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuthResponse"
-        "401": { $ref: "#/components/responses/Unauthorized" }
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          description: Cuerpo de inicio de sesión inválido
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              example:
+                code: VALIDATION_ERROR
+                message: Los datos de inicio de sesión no son válidos
+                details: { formErrors: [], fieldErrors: { email: [Correo inválido] } }
+        "401":
+          description: El correo inexistente y la contraseña incorrecta producen el mismo error
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              example:
+                code: INVALID_CREDENTIALS
+                message: Correo electrónico o contraseña incorrectos
+                details: null
+        "403":
+          description: Cuenta inactiva con credenciales válidas
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              example:
+                code: ACCOUNT_INACTIVE
+                message: La cuenta se encuentra inactiva
+                details: null
 
   /auth/logout:
     post:
@@ -1038,7 +1067,7 @@ components:
       properties:
         message: { type: string }
         code: { type: string }
-        details: { type: object, additionalProperties: true }
+        details: { type: [object, "null"], additionalProperties: true }
     PaginatedResponse:
       type: object
       required: [items, page, limit, total]
@@ -1099,10 +1128,36 @@ components:
         emergencyContactPhone: { type: string }
     LoginRequest:
       type: object
+      additionalProperties: false
       required: [email, password]
       properties:
-        email: { type: string, format: email }
-        password: { type: string, format: password }
+        email:
+          type: string
+          format: email
+          description: Se eliminan espacios exteriores y se convierte a minúsculas antes de validar y buscar
+        password: { type: string, format: password, minLength: 1 }
+    LoginResponse:
+      type: object
+      additionalProperties: false
+      required: [accessToken, tokenType, expiresIn, user]
+      properties:
+        accessToken:
+          type: string
+          description: JWT HS256 con sub (ID), role y exp (expiración); sin datos personales ni iat
+        tokenType: { type: string, const: Bearer }
+        expiresIn: { type: integer, minimum: 1, examples: [3600], description: Vigencia en segundos }
+        user:
+          type: object
+          additionalProperties: false
+          required: [id, firstName, lastName, email, role, status, isPasswordChangeRequired]
+          properties:
+            id: { type: string, format: uuid }
+            firstName: { type: string }
+            lastName: { type: string }
+            email: { type: string, format: email }
+            role: { $ref: "#/components/schemas/UserRole" }
+            status: { type: string, const: ACTIVE }
+            isPasswordChangeRequired: { type: boolean }
     AuthResponse:
       type: object
       required: [accessToken, user]

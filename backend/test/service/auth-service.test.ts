@@ -34,6 +34,7 @@ const member: RegisteredMember = {
 };
 
 class FakeUserRepository implements UserRepositoryPort {
+  async findByEmail() { return null; }
   conflict: UserConflictField | null = null;
   duplicateOnCreate: UserConflictField | null = null;
   createdData: CreateMemberData | null = null;
@@ -52,6 +53,7 @@ class FakeUserRepository implements UserRepositoryPort {
 }
 
 class FakePasswordHasher implements PasswordHasher {
+  async compare() { return false; }
   receivedPassword: string | null = null;
 
   async hash(password: string): Promise<string> {
@@ -61,10 +63,11 @@ class FakePasswordHasher implements PasswordHasher {
 }
 
 describe("AuthService.registerMember", () => {
+  const tokenIssuer = { expiresIn: 3600, sign: jest.fn() };
   test("normalizes the identity data and hashes the password", async () => {
     const repository = new FakeUserRepository();
     const passwordHasher = new FakePasswordHasher();
-    const service = new AuthService(repository, passwordHasher);
+    const service = new AuthService(repository, passwordHasher, tokenIssuer);
 
     const result = await service.registerMember(input);
 
@@ -86,7 +89,7 @@ describe("AuthService.registerMember", () => {
       const repository = new FakeUserRepository();
       repository.conflict = field;
       const passwordHasher = new FakePasswordHasher();
-      const service = new AuthService(repository, passwordHasher);
+      const service = new AuthService(repository, passwordHasher, tokenIssuer);
 
       await expect(service.registerMember(input)).rejects.toMatchObject({
         statusCode: 409,
@@ -100,7 +103,7 @@ describe("AuthService.registerMember", () => {
   test("converts a concurrent unique constraint violation into a conflict", async () => {
     const repository = new FakeUserRepository();
     repository.duplicateOnCreate = "email";
-    const service = new AuthService(repository, new FakePasswordHasher());
+    const service = new AuthService(repository, new FakePasswordHasher(), tokenIssuer);
 
     await expect(service.registerMember(input)).rejects.toMatchObject({
       statusCode: 409,
