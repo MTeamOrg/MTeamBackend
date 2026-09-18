@@ -44,6 +44,12 @@ export type AuthenticationUser = Pick<
   "id" | "firstName" | "lastName" | "email" | "role" | "status" | "isPasswordChangeRequired"
 > & { passwordHash: string };
 
+export type AccessControlUser = Pick<RegisteredMember, "id" | "role" | "status">;
+
+export interface UserAccessRepositoryPort {
+  findAccessControlUserById(id: string): Promise<AccessControlUser | null>;
+}
+
 export class DuplicateUserError extends Error {
   constructor(readonly field: UserConflictField) {
     super(`Duplicate user field: ${field}`);
@@ -65,8 +71,15 @@ const registeredMemberSelection = {
   isPasswordChangeRequired: true,
 } satisfies Prisma.UserSelect;
 
-export class UserRepository implements UserRepositoryPort {
+export class UserRepository implements UserRepositoryPort, UserAccessRepositoryPort {
   constructor(private readonly database: PrismaClient) {}
+
+  async findAccessControlUserById(id: string): Promise<AccessControlUser | null> {
+    return this.database.user.findUnique({
+      where: { id },
+      select: { id: true, role: true, status: true },
+    });
+  }
 
   async findByEmail(email: string): Promise<AuthenticationUser | null> {
     return this.database.user.findUnique({
