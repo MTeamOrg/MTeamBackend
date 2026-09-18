@@ -967,6 +967,11 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: |
+        Enviar Authorization: Bearer <JWT>. La API verifica la firma HS256 y la
+        expiración, y consulta en cada solicitud privada el usuario actual.
+        El usuario debe existir y estar ACTIVE. Los permisos se evalúan con su
+        rol actual en la base de datos, no con el rol incluido en el JWT.
 
   parameters:
     Search:
@@ -1034,15 +1039,30 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
     Unauthorized:
-      description: Credenciales ausentes o inválidas
+      description: Bearer ausente o mal formado, JWT inválido o vencido, o usuario inexistente
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            code: UNAUTHORIZED
+            message: Se requiere una autenticación válida
+            details: null
     Forbidden:
-      description: El usuario no tiene permisos para la operación
+      description: Cuenta inactiva o rol actual sin permisos para la operación
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
+          examples:
+            insufficientRole:
+              value:
+                code: FORBIDDEN
+                message: No tiene permisos para realizar esta operación
+                details: null
+            inactiveAccount:
+              value:
+                code: ACCOUNT_INACTIVE
+                message: La cuenta se encuentra inactiva
+                details: null
     NotFound:
       description: Recurso inexistente
       content:

@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import { z } from "zod";
 
 import type { UserRole } from "../generated/prisma/client.js";
 
@@ -7,7 +8,17 @@ export interface TokenIssuer {
   sign(user: { id: string; role: UserRole }): string;
 }
 
-export class TokenService implements TokenIssuer {
+export interface TokenVerifier {
+  verify(token: string): { sub: string } | null;
+}
+
+const accessTokenSchema = z.object({
+  sub: z.uuid(),
+  role: z.enum(["MEMBER", "TRAINER", "ADMIN"]),
+  exp: z.number().int().positive(),
+});
+
+export class TokenService implements TokenIssuer, TokenVerifier {
   constructor(
     private readonly secret: string,
     readonly expiresIn: number,
@@ -23,5 +34,16 @@ export class TokenService implements TokenIssuer {
       expiresIn: this.expiresIn,
       noTimestamp: true,
     });
+  }
+
+  verify(token: string): { sub: string } | null {
+    try {
+      const payload = jwt.verify(token, this.secret, { algorithms: ["HS256"] });
+      const validation = accessTokenSchema.safeParse(payload);
+      return validation.success ? { sub: validation.data.sub } : null;
+    } catch (error: unknown) {
+      if (error instanceof jwt.JsonWebTokenError) return null;
+      throw error;
+    }
   }
 }
