@@ -1,6 +1,6 @@
 # Control de acceso (USR-05 / USR-07)
 
-Las futuras rutas privadas deben componer los middlewares en este orden,
+Las rutas privadas deben componer los middlewares en este orden,
 reutilizando las instancias de `TokenService` y `UserRepository`:
 
 ```ts
@@ -25,8 +25,16 @@ responde 403 `FORBIDDEN` cuando no está permitido. Sin autenticación responde
 401; una lista vacía de roles no permite accesos.
 
 Registro, login y health siguen siendo públicos. El login conserva su bloqueo
-de cuentas inactivas. Este incremento no agrega rutas privadas: proporciona la
-infraestructura que deberán aplicar los futuros endpoints, incluido el escáner.
-Las rutas usadas para probar los middlewares existen únicamente en los tests.
+de cuentas inactivas. Las siguientes rutas privadas reutilizan actualmente el
+middleware de autenticación:
+
+- `GET /api/auth/me`
+- `GET /api/users/me`
+- `PATCH /api/users/me`
+
+Estas rutas vuelven a consultar el estado y el rol actual antes de acceder a la
+identidad o al perfil propio. Los futuros endpoints privados, incluido el
+escáner, deberán aplicar el mismo criterio y agregar `authorize(...)` cuando la
+operación esté limitada a uno o más roles.
 
 No hay revocación de JWT, persistencia de sesiones ni cambios en Prisma.
