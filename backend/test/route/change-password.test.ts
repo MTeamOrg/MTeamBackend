@@ -14,7 +14,7 @@ import type {
 
 const userId = "83cd902e-0475-4c92-943c-129b751dacee";
 
-function setup(authenticated = true) {
+function setup(authenticated = true, isPasswordChangeRequired = false) {
   const service: jest.Mocked<
     MemberRegistrationService & UserLoginService & PasswordManagementService
   > = {
@@ -30,7 +30,11 @@ function setup(authenticated = true) {
         "Se requiere una autenticación válida",
       );
     }
-    request.authenticatedUser = { id: userId, role: "MEMBER" };
+    request.authenticatedUser = {
+      id: userId,
+      role: "MEMBER",
+      isPasswordChangeRequired,
+    };
     next();
   };
   const app = express();
@@ -83,5 +87,19 @@ describe("PATCH /api/auth/password", () => {
 
     expect(response.status).toBe(401);
     expect(service.changePassword).not.toHaveBeenCalled();
+  });
+
+  test("remains available when a temporary password must be changed", async () => {
+    const { app, service } = setup(true, true);
+    const response = await request(app).patch("/api/auth/password").send({
+      currentPassword: "temporary-password",
+      newPassword: "permanent-password",
+    });
+
+    expect(response.status).toBe(204);
+    expect(service.changePassword).toHaveBeenCalledWith(userId, {
+      currentPassword: "temporary-password",
+      newPassword: "permanent-password",
+    });
   });
 });

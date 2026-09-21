@@ -36,12 +36,24 @@ function setup(authenticated = true) {
     if (!authenticated) {
       throw new ApplicationError(401, ERROR_CODE.UNAUTHORIZED, "Se requiere una autenticación válida");
     }
-    req.authenticatedUser = { id: userId, role: "MEMBER" };
+    req.authenticatedUser = {
+      id: userId,
+      role: "MEMBER",
+      isPasswordChangeRequired: false,
+    };
     next();
   };
   const app = express();
   app.use(express.json());
-  app.use("/api", createUserRouter(new UserController(service), authenticate));
+  const requireCompletedPasswordChange: RequestHandler = (_req, _res, next) => next();
+  app.use(
+    "/api",
+    createUserRouter(
+      new UserController(service),
+      authenticate,
+      requireCompletedPasswordChange,
+    ),
+  );
   app.use(errorMiddleware);
   return { app, service };
 }
@@ -72,7 +84,7 @@ describe("own profile routes", () => {
 
     expect(response.status).toBe(200);
     expect(service.updateOwnProfile).toHaveBeenCalledWith(
-      { id: userId, role: "MEMBER" },
+      { id: userId, role: "MEMBER", isPasswordChangeRequired: false },
       { phone: "1100000000" },
     );
   });
