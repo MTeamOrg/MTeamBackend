@@ -40,7 +40,7 @@ describe("authentication middleware", () => {
     expect(controller).not.toHaveBeenCalled();
   });
 
-  test("accepts a valid token and attaches only the current id and role", async () => {
+  test("accepts a valid token and attaches only the current access-control data", async () => {
     const { app, repository, tokens, currentUser } = createAccessControlApp();
     repository.findAccessControlUserById.mockResolvedValue({
       ...currentUser, passwordHash: "must-not-leak", email: "private@example.com", documentNumber: "12345678",
@@ -49,7 +49,11 @@ describe("authentication middleware", () => {
       .set("Authorization", `Bearer ${tokens.sign({ id: userId, role: "ADMIN" })}`)
       .send({ id: "client-supplied-id", role: "ADMIN" });
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ id: userId, role: "MEMBER" });
+    expect(response.body).toEqual({
+      id: userId,
+      role: "MEMBER",
+      isPasswordChangeRequired: false,
+    });
     expect(repository.findAccessControlUserById).toHaveBeenCalledWith(userId);
   });
 

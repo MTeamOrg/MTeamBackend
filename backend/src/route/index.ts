@@ -3,14 +3,18 @@ import { Router } from "express";
 import { database } from "../config/database.js";
 import { environment } from "../config/environment.js";
 import { AuthController } from "../controller/auth-controller.js";
+import { AdminUserController } from "../controller/admin-user-controller.js";
 import { UserController } from "../controller/user-controller.js";
 import { createAuthenticationMiddleware } from "../middleware/authentication-middleware.js";
+import { requirePasswordChangeCompleted } from "../middleware/password-change-middleware.js";
 import { UserRepository } from "../repository/user-repository.js";
 import { AuthService } from "../service/auth-service.js";
+import { AdminUserService } from "../service/admin-user-service.js";
 import { PasswordService } from "../service/password-service.js";
 import { TokenService } from "../service/token-service.js";
 import { UserService } from "../service/user-service.js";
 import { createAuthRouter, createProtectedAuthRouter } from "./auth-route.js";
+import { createAdminUserRouter } from "./admin-user-route.js";
 import { healthRouter } from "./health-route.js";
 import { createUserRouter } from "./user-route.js";
 
@@ -21,6 +25,8 @@ const passwordService = new PasswordService();
 const tokenService = new TokenService(environment.JWT_SECRET, environment.JWT_EXPIRES_IN);
 const authService = new AuthService(userRepository, passwordService, tokenService);
 const authController = new AuthController(authService);
+const adminUserService = new AdminUserService(userRepository, passwordService);
+const adminUserController = new AdminUserController(adminUserService);
 const userService = new UserService(userRepository);
 const userController = new UserController(userService);
 const authenticate = createAuthenticationMiddleware(tokenService, userRepository);
@@ -28,4 +34,13 @@ const authenticate = createAuthenticationMiddleware(tokenService, userRepository
 apiRouter.use(healthRouter);
 apiRouter.use(createAuthRouter(authController));
 apiRouter.use(createProtectedAuthRouter(authController, authenticate));
-apiRouter.use(createUserRouter(userController, authenticate));
+apiRouter.use(
+  createUserRouter(userController, authenticate, requirePasswordChangeCompleted),
+);
+apiRouter.use(
+  createAdminUserRouter(
+    adminUserController,
+    authenticate,
+    requirePasswordChangeCompleted,
+  ),
+);

@@ -44,7 +44,10 @@ export type AuthenticationUser = Pick<
   "id" | "firstName" | "lastName" | "email" | "role" | "status" | "isPasswordChangeRequired"
 > & { passwordHash: string };
 
-export type AccessControlUser = Pick<RegisteredMember, "id" | "role" | "status">;
+export type AccessControlUser = Pick<
+  RegisteredMember,
+  "id" | "role" | "status" | "isPasswordChangeRequired"
+>;
 
 export interface UserAccessRepositoryPort {
   findAccessControlUserById(id: string): Promise<AccessControlUser | null>;
@@ -91,6 +94,15 @@ export interface PasswordRepositoryPort {
   changePassword(id: string, passwordHash: string): Promise<void>;
 }
 
+export interface TemporaryPasswordRepositoryPort {
+  findPasswordResetTargetById(id: string): Promise<{ id: string } | null>;
+  resetTemporaryPassword(
+    userId: string,
+    performedById: string,
+    passwordHash: string,
+  ): Promise<void>;
+}
+
 export class DuplicateUserError extends Error {
   constructor(readonly field: UserConflictField) {
     super(`Duplicate user field: ${field}`);
@@ -117,14 +129,20 @@ export class UserRepository
     UserRepositoryPort,
     UserAccessRepositoryPort,
     OwnProfileRepositoryPort,
-    PasswordRepositoryPort
+    PasswordRepositoryPort,
+    TemporaryPasswordRepositoryPort
 {
   constructor(private readonly database: PrismaClient) {}
 
   async findAccessControlUserById(id: string): Promise<AccessControlUser | null> {
     return this.database.user.findUnique({
       where: { id },
-      select: { id: true, role: true, status: true },
+      select: {
+        id: true,
+        role: true,
+        status: true,
+        isPasswordChangeRequired: true,
+      },
     });
   }
 
@@ -166,6 +184,36 @@ export class UserRepository
           performedById: id,
           action: "UPDATED",
           reason: "PASSWORD_CHANGED",
+        },
+      });
+    });
+  }
+
+  async findPasswordResetTargetById(id: string): Promise<{ id: string } | null> {
+    return this.database.user.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+  }
+
+  async resetTemporaryPassword(
+    userId: string,
+    performedById: string,
+    passwordHash: string,
+  ): Promise<void> {
+    await this.database.$transaction(async (transaction) => {
+      await transaction.user.update({
+        where: { id: userId },
+        data: {
+          passwordHash,
+          isPasswordChangeRequired: true,
+        },
+      });
+      await transaction.userAuditLog.create({
+        data: {
+          userId,
+          performedById,
+          action: "PASSWORD_RESET",
         },
       });
     });

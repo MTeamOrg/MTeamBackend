@@ -28,7 +28,11 @@ export function createAuthenticationMiddleware(
       throw new ApplicationError(403, ERROR_CODE.ACCOUNT_INACTIVE, "La cuenta se encuentra inactiva");
     }
 
-    request.authenticatedUser = { id: user.id, role: user.role } satisfies AuthenticatedUser;
+    request.authenticatedUser = {
+      id: user.id,
+      role: user.role,
+      isPasswordChangeRequired: user.isPasswordChangeRequired,
+    } satisfies AuthenticatedUser;
     next();
   };
 }

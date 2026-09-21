@@ -11,7 +11,12 @@ export const testSecret = "fictional-secret-only-for-access-control-tests";
 export const userId = "83cd902e-0475-4c92-943c-129b751dacee";
 
 export function createAccessControlApp(roles?: UserRole[]) {
-  const currentUser: AccessControlUser = { id: userId, role: "MEMBER", status: "ACTIVE" };
+  const currentUser: AccessControlUser = {
+    id: userId,
+    role: "MEMBER",
+    status: "ACTIVE",
+    isPasswordChangeRequired: false,
+  };
   const repository: jest.Mocked<UserAccessRepositoryPort> = {
     findAccessControlUserById: jest.fn().mockImplementation(async () => ({ ...currentUser })),
   };
