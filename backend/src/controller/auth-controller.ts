@@ -2,12 +2,39 @@ import type { RequestHandler } from "express";
 
 import { ApplicationError } from "../error/application-error.js";
 import { ERROR_CODE } from "../error/error-code.js";
-import type { MemberRegistrationService, UserLoginService } from "../service/auth-service.js";
+import type {
+  MemberRegistrationService,
+  PasswordManagementService,
+  UserLoginService,
+} from "../service/auth-service.js";
+import { changePasswordSchema } from "../validator/change-password-validator.js";
 import { loginSchema } from "../validator/login-validator.js";
 import { registerMemberSchema } from "../validator/register-member-validator.js";
 
 export class AuthController {
-  constructor(private readonly authService: MemberRegistrationService & UserLoginService) {}
+  constructor(
+    private readonly authService: MemberRegistrationService &
+      UserLoginService &
+      PasswordManagementService,
+  ) {}
+
+  changePassword: RequestHandler = async (request, response) => {
+    const validation = changePasswordSchema.safeParse(request.body);
+    if (!validation.success) {
+      throw new ApplicationError(
+        400,
+        ERROR_CODE.VALIDATION_ERROR,
+        "Los datos para cambiar la contraseña no son válidos",
+        validation.error.flatten(),
+      );
+    }
+
+    await this.authService.changePassword(
+      request.authenticatedUser!.id,
+      validation.data,
+    );
+    response.status(204).send();
+  };
 
   login: RequestHandler = async (request, response) => {
     const validation = loginSchema.safeParse(request.body);

@@ -31,6 +31,7 @@ middleware de autenticación:
 - `GET /api/auth/me`
 - `GET /api/users/me`
 - `PATCH /api/users/me`
+- `PATCH /api/auth/password`
 
 Estas rutas vuelven a consultar el estado y el rol actual antes de acceder a la
 identidad o al perfil propio. Los futuros endpoints privados, incluido el

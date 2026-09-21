@@ -10,7 +10,7 @@ import { AuthService } from "../service/auth-service.js";
 import { PasswordService } from "../service/password-service.js";
 import { TokenService } from "../service/token-service.js";
 import { UserService } from "../service/user-service.js";
-import { createAuthRouter } from "./auth-route.js";
+import { createAuthRouter, createProtectedAuthRouter } from "./auth-route.js";
 import { healthRouter } from "./health-route.js";
 import { createUserRouter } from "./user-route.js";
 
@@ -27,4 +27,5 @@ const authenticate = createAuthenticationMiddleware(tokenService, userRepository
 
 apiRouter.use(healthRouter);
 apiRouter.use(createAuthRouter(authController));
+apiRouter.use(createProtectedAuthRouter(authController, authenticate));
 apiRouter.use(createUserRouter(userController, authenticate));

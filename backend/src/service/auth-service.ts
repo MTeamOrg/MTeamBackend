@@ -3,11 +3,13 @@ import { ERROR_CODE } from "../error/error-code.js";
 import {
   DuplicateUserError,
   type AuthenticationUser,
+  type PasswordRepositoryPort,
   type RegisteredMember,
   type UserConflictField,
   type UserRepositoryPort,
 } from "../repository/user-repository.js";
 import type { RegisterMemberInput } from "../validator/register-member-validator.js";
+import type { ChangePasswordInput } from "../validator/change-password-validator.js";
 import type { LoginInput } from "../validator/login-validator.js";
 import type { PasswordComparer, PasswordHasher } from "./password-service.js";
 import type { TokenIssuer } from "./token-service.js";
@@ -32,12 +34,55 @@ export interface UserLoginService {
   login(input: LoginInput): Promise<LoginResponse>;
 }
 
-export class AuthService implements MemberRegistrationService, UserLoginService {
+export interface PasswordManagementService {
+  changePassword(userId: string, input: ChangePasswordInput): Promise<void>;
+}
+
+export class AuthService
+  implements MemberRegistrationService, UserLoginService, PasswordManagementService
+{
   constructor(
-    private readonly userRepository: UserRepositoryPort,
+    private readonly userRepository: UserRepositoryPort & PasswordRepositoryPort,
     private readonly passwordHasher: PasswordHasher & PasswordComparer,
     private readonly tokenIssuer: TokenIssuer,
   ) {}
+
+  async changePassword(
+    userId: string,
+    input: ChangePasswordInput,
+  ): Promise<void> {
+    const user = await this.userRepository.findPasswordUserById(userId);
+    if (!user) {
+      throw new ApplicationError(404, ERROR_CODE.NOT_FOUND, "El usuario no existe");
+    }
+
+    const isCurrentPasswordValid = await this.passwordHasher.compare(
+      input.currentPassword,
+      user.passwordHash,
+    );
+    if (!isCurrentPasswordValid) {
+      throw new ApplicationError(
+        400,
+        ERROR_CODE.INVALID_CURRENT_PASSWORD,
+        "La contraseña actual es incorrecta",
+      );
+    }
+
+    const isReusedPassword = await this.passwordHasher.compare(
+      input.newPassword,
+      user.passwordHash,
+    );
+    if (isReusedPassword) {
+      throw new ApplicationError(
+        400,
+        ERROR_CODE.PASSWORD_REUSE,
+        "La contraseña nueva debe ser diferente de la actual",
+      );
+    }
+
+    const passwordHash = await this.passwordHasher.hash(input.newPassword);
+    await this.userRepository.changePassword(userId, passwordHash);
+  }
 
   async login(input: LoginInput): Promise<LoginResponse> {
     const user = await this.userRepository.findByEmail(input.email.trim().toLowerCase());
