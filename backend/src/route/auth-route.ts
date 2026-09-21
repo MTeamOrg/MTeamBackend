@@ -14,6 +14,7 @@ export function createProtectedAuthRouter(
   authenticate: RequestHandler,
 ): Router {
   const authRouter = Router();
+  authRouter.post("/auth/logout", authenticate, authController.logout);
   authRouter.patch(
     "/auth/password",
     authenticate,

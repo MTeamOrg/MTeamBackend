@@ -6,6 +6,7 @@ export function createUserRouter(
   userController: UserController,
   authenticate: RequestHandler,
   requireCompletedPasswordChange: RequestHandler,
+  uploadPhoto: RequestHandler,
 ): Router {
   const userRouter = Router();
   userRouter.get(
@@ -25,6 +26,13 @@ export function createUserRouter(
     authenticate,
     requireCompletedPasswordChange,
     userController.updateOwnProfile,
+  );
+  userRouter.put(
+    "/users/me/photo",
+    authenticate,
+    requireCompletedPasswordChange,
+    uploadPhoto,
+    userController.updateOwnPhoto,
   );
   return userRouter;
 }

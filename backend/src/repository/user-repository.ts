@@ -83,6 +83,7 @@ export interface OwnProfileRepositoryPort {
     role: UserRole,
     data: UpdateOwnProfileData,
   ): Promise<OwnProfile>;
+  updateOwnPhoto(id: string, photoUrl: string): Promise<OwnProfile>;
 }
 
 export interface PasswordUser {
@@ -303,6 +304,36 @@ export class UserRepository
       }
       throw error;
     }
+  }
+
+  async updateOwnPhoto(id: string, photoUrl: string): Promise<OwnProfile> {
+    return this.database.$transaction(async (transaction) => {
+      const user = await transaction.user.update({
+        where: { id },
+        data: { photoUrl },
+        select: {
+          ...registeredMemberSelection,
+          memberProfile: {
+            select: {
+              emergencyContactName: true,
+              emergencyContactPhone: true,
+            },
+          },
+          trainerProfile: {
+            select: { specialty: true, description: true },
+          },
+        },
+      });
+      await transaction.userAuditLog.create({
+        data: {
+          userId: id,
+          performedById: id,
+          action: "UPDATED",
+          reason: "PROFILE_PHOTO_UPDATED",
+        },
+      });
+      return user;
+    });
   }
 
   async findConflict(

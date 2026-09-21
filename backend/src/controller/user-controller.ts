@@ -47,4 +47,19 @@ export class UserController {
     );
     response.status(200).json(serializeUser(profile));
   };
+
+  updateOwnPhoto: RequestHandler = async (request, response) => {
+    if (!request.file) {
+      throw new ApplicationError(
+        400,
+        ERROR_CODE.VALIDATION_ERROR,
+        "Debe adjuntar una fotografía",
+      );
+    }
+    const profile = await this.userService.updateOwnPhoto(
+      request.authenticatedUser!.id,
+      { buffer: request.file.buffer, mimeType: request.file.mimetype },
+    );
+    response.status(200).json(serializeUser(profile));
+  };
 }
