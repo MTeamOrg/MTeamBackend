@@ -26,11 +26,15 @@ const profile: OwnProfile = {
   trainerProfile: null,
 };
 
-function setup(authenticated = true) {
+function setup(authenticated = true, includePhoto = true) {
   const service: jest.Mocked<OwnProfileService> = {
     getCurrentIdentity: jest.fn().mockResolvedValue(profile),
     getOwnProfile: jest.fn().mockResolvedValue(profile),
     updateOwnProfile: jest.fn().mockResolvedValue(profile),
+    updateOwnPhoto: jest.fn().mockResolvedValue({
+      ...profile,
+      photoUrl: "https://storage.example/profile-photo/user",
+    }),
   };
   const authenticate: RequestHandler = (req, _res, next) => {
     if (!authenticated) {
@@ -46,12 +50,22 @@ function setup(authenticated = true) {
   const app = express();
   app.use(express.json());
   const requireCompletedPasswordChange: RequestHandler = (_req, _res, next) => next();
+  const uploadPhoto: RequestHandler = (req, _res, next) => {
+    if (includePhoto) {
+      req.file = {
+        buffer: Buffer.from("photo"),
+        mimetype: "image/png",
+      } as Express.Multer.File;
+    }
+    next();
+  };
   app.use(
     "/api",
     createUserRouter(
       new UserController(service),
       authenticate,
       requireCompletedPasswordChange,
+      uploadPhoto,
     ),
   );
   app.use(errorMiddleware);
@@ -76,6 +90,29 @@ describe("own profile routes", () => {
     expect(response.status).toBe(200);
     expect(response.body.memberProfile).toEqual(profile.memberProfile);
     expect(response.body.trainerProfile).toBeNull();
+  });
+
+  test("PUT /users/me/photo updates the authenticated user's photo", async () => {
+    const { app, service } = setup();
+
+    const response = await request(app).put("/api/users/me/photo");
+
+    expect(response.status).toBe(200);
+    expect(response.body.photoUrl).toBe("https://storage.example/profile-photo/user");
+    expect(service.updateOwnPhoto).toHaveBeenCalledWith(userId, {
+      buffer: Buffer.from("photo"),
+      mimeType: "image/png",
+    });
+  });
+
+  test("PUT /users/me/photo requires a file", async () => {
+    const { app, service } = setup(true, false);
+
+    const response = await request(app).put("/api/users/me/photo");
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe("VALIDATION_ERROR");
+    expect(service.updateOwnPhoto).not.toHaveBeenCalled();
   });
 
   test("PATCH /users/me accepts only editable fields", async () => {
@@ -108,6 +145,7 @@ describe("own profile routes", () => {
     ["get", "/api/auth/me"],
     ["get", "/api/users/me"],
     ["patch", "/api/users/me"],
+    ["put", "/api/users/me/photo"],
   ] as const)("%s %s requires authentication", async (method, path) => {
     const { app } = setup(false);
     const response = await request(app)[method](path).send({ phone: "1100000000" });

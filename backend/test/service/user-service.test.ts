@@ -5,6 +5,7 @@ import {
   type UpdateOwnProfileData,
 } from "../../src/repository/user-repository.js";
 import { UserService } from "../../src/service/user-service.js";
+import type { ProfilePhotoStorage } from "../../src/service/profile-photo-storage.js";
 
 const memberProfile: OwnProfile = {
   id: "83cd902e-0475-4c92-943c-129b751dacee",
@@ -48,11 +49,23 @@ class FakeOwnProfileRepository implements OwnProfileRepositoryPort {
     this.updatedData = data;
     return { ...memberProfile, ...data };
   }
+
+  async updateOwnPhoto(_id: string, photoUrl: string): Promise<OwnProfile> {
+    return { ...memberProfile, photoUrl };
+  }
+}
+
+const profilePhotoStorage: ProfilePhotoStorage = {
+  upload: jest.fn().mockResolvedValue("https://storage.example/profile-photo/user"),
+};
+
+function createService(repository = new FakeOwnProfileRepository()): UserService {
+  return new UserService(repository, profilePhotoStorage);
 }
 
 describe("UserService own profile", () => {
   test("returns a safe identity without role-specific profiles", async () => {
-    const service = new UserService(new FakeOwnProfileRepository());
+    const service = createService();
 
     await expect(service.getCurrentIdentity(memberProfile.id)).resolves.toEqual(
       expect.not.objectContaining({ memberProfile: expect.anything(), trainerProfile: expect.anything() }),
@@ -63,7 +76,7 @@ describe("UserService own profile", () => {
     const repository = new FakeOwnProfileRepository();
     repository.profile = null;
 
-    await expect(new UserService(repository).getOwnProfile(memberProfile.id)).rejects.toMatchObject({
+    await expect(createService(repository).getOwnProfile(memberProfile.id)).rejects.toMatchObject({
       statusCode: 404,
       code: "NOT_FOUND",
     });
@@ -71,7 +84,7 @@ describe("UserService own profile", () => {
 
   test("normalizes allowed member contact fields", async () => {
     const repository = new FakeOwnProfileRepository();
-    const service = new UserService(repository);
+    const service = createService(repository);
 
     await service.updateOwnProfile(
       { id: memberProfile.id, role: "MEMBER" },
@@ -90,7 +103,7 @@ describe("UserService own profile", () => {
     repository.emailOwnerId = "694891d5-df1c-4a29-89ae-4ef2625d7ea0";
 
     await expect(
-      new UserService(repository).updateOwnProfile(
+      createService(repository).updateOwnProfile(
         { id: memberProfile.id, role: "MEMBER" },
         { email: "used@example.com" },
       ),
@@ -102,7 +115,7 @@ describe("UserService own profile", () => {
     repository.updateError = new DuplicateUserError("email");
 
     await expect(
-      new UserService(repository).updateOwnProfile(
+      createService(repository).updateOwnProfile(
         { id: memberProfile.id, role: "MEMBER" },
         { email: "used@example.com" },
       ),
@@ -113,11 +126,25 @@ describe("UserService own profile", () => {
     const repository = new FakeOwnProfileRepository();
 
     await expect(
-      new UserService(repository).updateOwnProfile(
+      createService(repository).updateOwnProfile(
         { id: memberProfile.id, role: "TRAINER" },
         { emergencyContactPhone: "1188888888" },
       ),
     ).rejects.toMatchObject({ statusCode: 400, code: "VALIDATION_ERROR" });
     expect(repository.updatedData).toBeNull();
+  });
+
+  test("uploads a profile photo and persists only its URL", async () => {
+    const repository = new FakeOwnProfileRepository();
+    const storage: jest.Mocked<ProfilePhotoStorage> = {
+      upload: jest.fn().mockResolvedValue("https://storage.example/profile-photo/user"),
+    };
+    const service = new UserService(repository, storage);
+    const file = { buffer: Buffer.from("photo"), mimeType: "image/png" };
+
+    const result = await service.updateOwnPhoto(memberProfile.id, file);
+
+    expect(storage.upload).toHaveBeenCalledWith(memberProfile.id, file);
+    expect(result.photoUrl).toBe("https://storage.example/profile-photo/user");
   });
 });

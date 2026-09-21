@@ -103,3 +103,23 @@ describe("PATCH /api/auth/password", () => {
     });
   });
 });
+
+describe("POST /api/auth/logout", () => {
+  test("returns 204 for an authenticated user", async () => {
+    const { app } = setup();
+
+    const response = await request(app).post("/api/auth/logout");
+
+    expect(response.status).toBe(204);
+    expect(response.body).toEqual({});
+  });
+
+  test("requires authentication", async () => {
+    const { app } = setup(false);
+
+    const response = await request(app).post("/api/auth/logout");
+
+    expect(response.status).toBe(401);
+    expect(response.body.code).toBe("UNAUTHORIZED");
+  });
+});

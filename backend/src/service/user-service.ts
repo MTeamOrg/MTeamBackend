@@ -10,6 +10,10 @@ import {
 } from "../repository/user-repository.js";
 import type { AuthenticatedUser } from "../type/authenticated-request.js";
 import type { UpdateOwnProfileInput } from "../validator/update-own-profile-validator.js";
+import type {
+  ProfilePhotoFile,
+  ProfilePhotoStorage,
+} from "./profile-photo-storage.js";
 
 export interface OwnProfileService {
   getCurrentIdentity(id: string): Promise<RegisteredMember>;
@@ -18,10 +22,14 @@ export interface OwnProfileService {
     user: AuthenticatedUser,
     input: UpdateOwnProfileInput,
   ): Promise<OwnProfile>;
+  updateOwnPhoto(id: string, file: ProfilePhotoFile): Promise<OwnProfile>;
 }
 
 export class UserService implements OwnProfileService {
-  constructor(private readonly userRepository: OwnProfileRepositoryPort) {}
+  constructor(
+    private readonly userRepository: OwnProfileRepositoryPort,
+    private readonly profilePhotoStorage: ProfilePhotoStorage,
+  ) {}
 
   async getCurrentIdentity(id: string): Promise<RegisteredMember> {
     const profile = await this.getOwnProfile(id);
@@ -64,6 +72,14 @@ export class UserService implements OwnProfileService {
       if (error instanceof DuplicateUserError) throw this.createEmailConflict();
       throw error;
     }
+  }
+
+  async updateOwnPhoto(
+    id: string,
+    file: ProfilePhotoFile,
+  ): Promise<OwnProfile> {
+    const photoUrl = await this.profilePhotoStorage.upload(id, file);
+    return this.userRepository.updateOwnPhoto(id, photoUrl);
   }
 
   private validateRoleSpecificFields(

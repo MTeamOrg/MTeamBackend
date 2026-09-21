@@ -11,8 +11,11 @@ La especificación inicial de la API REST se encuentra en
 
 El contrato documenta los endpoints, parámetros, cuerpos, respuestas,
 autenticación JWT y permisos necesarios para integrar el frontend con el
-backend. Cuando Swagger UI sea incorporado, estará disponible localmente en
-`http://localhost:3000/api/docs`.
+backend. Swagger UI está disponible localmente en
+`http://localhost:3000/api/docs` cuando el backend está en ejecución.
+
+La especificación representa el contrato objetivo del sistema. Los endpoints
+se implementan incrementalmente conforme avanza cada requerimiento.
 
 ## ✨ Características
 
@@ -128,3 +131,33 @@ El proyecto no incluye:
 - Planes de membresía.
 
 Estas características no deben incorporarse durante la implementación del alcance vigente.
+
+## Ejecución local del backend
+
+Requisitos: Node.js, npm y una base PostgreSQL disponible.
+
+```powershell
+cd backend
+npm install
+Copy-Item .env.example .env.development.local
+npm run prisma:generate
+npm run prisma:migrate:dev
+npm run dev
+```
+
+Antes de iniciar, completá en `.env.development.local` las URLs y credenciales
+del ambiente de desarrollo. Los archivos `.env` locales no deben versionarse.
+Swagger UI quedará disponible en `http://localhost:3000/api/docs`.
+
+Para las fotografías de perfil se debe crear en Supabase Storage un bucket
+público exclusivo y asignar su nombre a `SUPABASE_PROFILE_PHOTO_BUCKET`. Los
+aptos médicos utilizarán un bucket privado diferente.
+
+Validaciones del proyecto:
+
+```powershell
+npm test
+npm run build
+npm run openapi:validate
+npm run prisma:validate
+```

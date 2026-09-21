@@ -36,12 +36,18 @@ Registro, login y health son públicos. Las rutas privadas actuales son:
 - `GET /api/users/me`
 - `PATCH /api/users/me`
 - `PATCH /api/auth/password`
+- `POST /api/auth/logout`
+- `PUT /api/users/me/photo`
 - `POST /api/users/{userId}/password-resets` (solo `ADMIN`)
 
-`PATCH /api/auth/password` es la única excepción al bloqueo por contraseña
-temporal: requiere autenticación, pero debe permanecer accesible para que el
-usuario pueda reemplazarla. El cambio exitoso desactiva
-`isPasswordChangeRequired`.
+`PATCH /api/auth/password` y `POST /api/auth/logout` son las excepciones al
+bloqueo por contraseña temporal. La primera debe permanecer accesible para que
+el usuario pueda reemplazarla y la segunda permite cerrar la sesión. El cambio
+exitoso desactiva `isPasswordChangeRequired`.
+
+El cierre de sesión valida el JWT y devuelve `204`. Debido a que no se
+persisten sesiones, el frontend es responsable de eliminar el token almacenado
+y redirigir al formulario de ingreso.
 
 El restablecimiento administrativo almacena exclusivamente el hash bcrypt,
 activa `isPasswordChangeRequired` y registra en `UserAuditLog` el usuario

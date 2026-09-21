@@ -7,10 +7,12 @@ import { AdminUserController } from "../controller/admin-user-controller.js";
 import { UserController } from "../controller/user-controller.js";
 import { createAuthenticationMiddleware } from "../middleware/authentication-middleware.js";
 import { requirePasswordChangeCompleted } from "../middleware/password-change-middleware.js";
+import { uploadProfilePhoto } from "../middleware/profile-photo-upload-middleware.js";
 import { UserRepository } from "../repository/user-repository.js";
 import { AuthService } from "../service/auth-service.js";
 import { AdminUserService } from "../service/admin-user-service.js";
 import { PasswordService } from "../service/password-service.js";
+import { SupabaseProfilePhotoStorage } from "../service/profile-photo-storage.js";
 import { TokenService } from "../service/token-service.js";
 import { UserService } from "../service/user-service.js";
 import { createAuthRouter, createProtectedAuthRouter } from "./auth-route.js";
@@ -27,16 +29,24 @@ const authService = new AuthService(userRepository, passwordService, tokenServic
 const authController = new AuthController(authService);
 const adminUserService = new AdminUserService(userRepository, passwordService);
 const adminUserController = new AdminUserController(adminUserService);
-const userService = new UserService(userRepository);
+const profilePhotoStorage = new SupabaseProfilePhotoStorage({
+  url: environment.SUPABASE_URL,
+  serviceRoleKey: environment.SUPABASE_SERVICE_ROLE_KEY,
+  bucket: environment.SUPABASE_PROFILE_PHOTO_BUCKET,
+});
+const userService = new UserService(userRepository, profilePhotoStorage);
 const userController = new UserController(userService);
 const authenticate = createAuthenticationMiddleware(tokenService, userRepository);
 
 apiRouter.use(healthRouter);
 apiRouter.use(createAuthRouter(authController));
 apiRouter.use(createProtectedAuthRouter(authController, authenticate));
-apiRouter.use(
-  createUserRouter(userController, authenticate, requirePasswordChangeCompleted),
-);
+apiRouter.use(createUserRouter(
+  userController,
+  authenticate,
+  requirePasswordChangeCompleted,
+  uploadProfilePhoto,
+));
 apiRouter.use(
   createAdminUserRouter(
     adminUserController,

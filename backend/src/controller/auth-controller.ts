@@ -18,6 +18,10 @@ export class AuthController {
       PasswordManagementService,
   ) {}
 
+  logout: RequestHandler = (_request, response) => {
+    response.status(204).send();
+  };
+
   changePassword: RequestHandler = async (request, response) => {
     const validation = changePasswordSchema.safeParse(request.body);
     if (!validation.success) {

@@ -120,10 +120,15 @@ paths:
     post:
       tags: [Authentication]
       summary: Cerrar sesión
+      description: >-
+        Valida la sesión actual y finaliza la operación sin contenido. Como
+        la API utiliza JWT sin sesiones persistentes, el frontend debe eliminar
+        el token almacenado y redirigir al formulario de ingreso.
       operationId: logout
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /auth/me:
     get:
@@ -264,11 +269,32 @@ paths:
           multipart/form-data:
             schema:
               type: object
+              additionalProperties: false
               required: [file]
               properties:
-                file: { type: string, format: binary }
+                file:
+                  type: string
+                  format: binary
+                  description: Fotografía JPG o PNG de hasta 5 MB.
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Perfil actualizado con la URL de la fotografía
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OwnProfile" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "502":
+          description: Fallo del servicio de almacenamiento
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "503":
+          description: Almacenamiento no configurado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
 
   /users/{userId}:
     parameters:
@@ -1132,7 +1158,8 @@ components:
         environment: { type: string, examples: [development] }
     ErrorResponse:
       type: object
-      required: [message]
+      additionalProperties: false
+      required: [code, message, details]
       properties:
         message: { type: string }
         code: { type: string }

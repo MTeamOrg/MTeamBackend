@@ -1,0 +1,56 @@
+name: Backend CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+  push:
+    branches: [develop, main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+
+jobs:
+  validate-backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: mteam
+          POSTGRES_PASSWORD: mteam_test_password
+          POSTGRES_DB: mteam_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mteam -d mteam_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      APP_ENV: test
+      DATABASE_URL: postgresql://mteam:mteam_test_password@localhost:5432/mteam_test
+      DIRECT_URL: postgresql://mteam:mteam_test_password@localhost:5432/mteam_test
+      JWT_SECRET: ci-only-secret
+      JWT_EXPIRES_IN: 3600
+      CORS_ORIGIN: http://localhost:5173
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run prisma:generate
+      - run: npm run prisma:validate
+      - run: npm run prisma:migrate:deploy
+      - run: npm test
+      - run: npm run build
+      - run: npm run openapi:validate

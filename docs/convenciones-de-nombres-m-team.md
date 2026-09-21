@@ -12,7 +12,7 @@
 | Clases, interfaces, tipos y enums | PascalCase | `PaymentService`, `UserProfile`, `MedicalCertificateStatus` |
 | Constantes globales | UPPER_SNAKE_CASE | `MEMBERSHIP_VALIDITY_DAYS = 30` |
 | Booleanos | is/has/can + camelCase | `isActive`, `hasApprovedMedicalCertificate`, `canEnter` |
-| Endpoints / rutas REST | minúsculas, singular y kebab-case | `/api/user`, `/api/medical-certificate`, `/api/access-log` |
+| Endpoints / rutas REST | minúsculas, plural y kebab-case | `/api/users`, `/api/medical-certificates`, `/api/access-logs` |
 | Variables de entorno | UPPER_SNAKE_CASE | `DATABASE_URL`, `JWT_SECRET`, `SUPABASE_URL` |
 
 ## Frontend (React + Vite + TypeScript)
