@@ -50,6 +50,38 @@ export interface UserAccessRepositoryPort {
   findAccessControlUserById(id: string): Promise<AccessControlUser | null>;
 }
 
+export interface MemberProfileData {
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+}
+
+export interface TrainerProfileData {
+  specialty: string;
+  description: string;
+}
+
+export interface OwnProfile extends RegisteredMember {
+  memberProfile: MemberProfileData | null;
+  trainerProfile: TrainerProfileData | null;
+}
+
+export interface UpdateOwnProfileData {
+  email?: string;
+  phone?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+}
+
+export interface OwnProfileRepositoryPort {
+  findOwnProfileById(id: string): Promise<OwnProfile | null>;
+  findEmailOwnerId(email: string): Promise<string | null>;
+  updateOwnProfile(
+    id: string,
+    role: UserRole,
+    data: UpdateOwnProfileData,
+  ): Promise<OwnProfile>;
+}
+
 export class DuplicateUserError extends Error {
   constructor(readonly field: UserConflictField) {
     super(`Duplicate user field: ${field}`);
@@ -71,7 +103,9 @@ const registeredMemberSelection = {
   isPasswordChangeRequired: true,
 } satisfies Prisma.UserSelect;
 
-export class UserRepository implements UserRepositoryPort, UserAccessRepositoryPort {
+export class UserRepository
+  implements UserRepositoryPort, UserAccessRepositoryPort, OwnProfileRepositoryPort
+{
   constructor(private readonly database: PrismaClient) {}
 
   async findAccessControlUserById(id: string): Promise<AccessControlUser | null> {
@@ -95,6 +129,92 @@ export class UserRepository implements UserRepositoryPort, UserAccessRepositoryP
         isPasswordChangeRequired: true,
       },
     });
+  }
+
+  async findOwnProfileById(id: string): Promise<OwnProfile | null> {
+    return this.database.user.findUnique({
+      where: { id },
+      select: {
+        ...registeredMemberSelection,
+        memberProfile: {
+          select: {
+            emergencyContactName: true,
+            emergencyContactPhone: true,
+          },
+        },
+        trainerProfile: {
+          select: { specialty: true, description: true },
+        },
+      },
+    });
+  }
+
+  async findEmailOwnerId(email: string): Promise<string | null> {
+    const user = await this.database.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    return user?.id ?? null;
+  }
+
+  async updateOwnProfile(
+    id: string,
+    role: UserRole,
+    data: UpdateOwnProfileData,
+  ): Promise<OwnProfile> {
+    try {
+      return await this.database.$transaction(async (transaction) => {
+        const userData: Prisma.UserUpdateInput = {};
+        if (data.email !== undefined) userData.email = data.email;
+        if (data.phone !== undefined) userData.phone = data.phone;
+        if (role === "MEMBER") {
+          const memberData: Prisma.MemberProfileUpdateInput = {};
+          if (data.emergencyContactName !== undefined) {
+            memberData.emergencyContactName = data.emergencyContactName;
+          }
+          if (data.emergencyContactPhone !== undefined) {
+            memberData.emergencyContactPhone = data.emergencyContactPhone;
+          }
+          if (Object.keys(memberData).length > 0) {
+            userData.memberProfile = { update: memberData };
+          }
+        }
+
+        const user = await transaction.user.update({
+          where: { id },
+          data: userData,
+          select: {
+            ...registeredMemberSelection,
+            memberProfile: {
+              select: {
+                emergencyContactName: true,
+                emergencyContactPhone: true,
+              },
+            },
+            trainerProfile: {
+              select: { specialty: true, description: true },
+            },
+          },
+        });
+
+        await transaction.userAuditLog.create({
+          data: {
+            userId: id,
+            performedById: id,
+            action: "UPDATED",
+          },
+        });
+        return user;
+      });
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        throw new DuplicateUserError("email");
+      }
+      throw error;
+    }
   }
 
   async findConflict(

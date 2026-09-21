@@ -138,6 +138,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/User"
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /auth/password:
     patch:
@@ -204,7 +205,9 @@ paths:
           description: Perfil actual
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/User" }
+              schema: { $ref: "#/components/schemas/OwnProfile" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
     patch:
       tags: [Users]
       summary: Modificar los datos permitidos del perfil propio
@@ -215,7 +218,15 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/UpdateProfileRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Perfil actualizado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OwnProfile" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /users/me/photo:
     put:
@@ -1133,6 +1144,32 @@ components:
         role: { $ref: "#/components/schemas/UserRole" }
         status: { $ref: "#/components/schemas/UserStatus" }
         isPasswordChangeRequired: { type: boolean }
+    MemberProfile:
+      type: object
+      required: [emergencyContactName, emergencyContactPhone]
+      properties:
+        emergencyContactName: { type: string }
+        emergencyContactPhone: { type: string }
+    TrainerProfile:
+      type: object
+      required: [specialty, description]
+      properties:
+        specialty: { type: string }
+        description: { type: string }
+    OwnProfile:
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - type: object
+          required: [memberProfile, trainerProfile]
+          properties:
+            memberProfile:
+              oneOf:
+                - $ref: "#/components/schemas/MemberProfile"
+                - type: "null"
+            trainerProfile:
+              oneOf:
+                - $ref: "#/components/schemas/TrainerProfile"
+                - type: "null"
     RegisterRequest:
       type: object
       required: [firstName, lastName, documentNumber, birthDate, email, phone, password]
