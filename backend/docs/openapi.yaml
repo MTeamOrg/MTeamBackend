@@ -153,7 +153,32 @@ paths:
               $ref: "#/components/schemas/ChangePasswordRequest"
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
-        "400": { $ref: "#/components/responses/ValidationError" }
+        "400":
+          description: Datos inválidos, contraseña actual incorrecta o reutilización de contraseña
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              examples:
+                validationError:
+                  summary: Cuerpo inválido
+                  value:
+                    code: VALIDATION_ERROR
+                    message: Los datos para cambiar la contraseña no son válidos
+                    details: { formErrors: [], fieldErrors: { newPassword: [La contraseña debe tener al menos 8 caracteres] } }
+                invalidCurrentPassword:
+                  summary: Contraseña actual incorrecta
+                  value:
+                    code: INVALID_CURRENT_PASSWORD
+                    message: La contraseña actual es incorrecta
+                    details: null
+                passwordReuse:
+                  summary: Reutilización de la contraseña actual
+                  value:
+                    code: PASSWORD_REUSE
+                    message: La contraseña nueva debe ser diferente de la actual
+                    details: null
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /dashboard:
     get:
@@ -1225,8 +1250,8 @@ components:
       type: object
       required: [currentPassword, newPassword]
       properties:
-        currentPassword: { type: string, format: password }
-        newPassword: { type: string, format: password, minLength: 8 }
+        currentPassword: { type: string, format: password, minLength: 1, maxLength: 72 }
+        newPassword: { type: string, format: password, minLength: 8, maxLength: 72 }
     UpdateProfileRequest:
       type: object
       properties:

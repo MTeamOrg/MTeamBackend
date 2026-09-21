@@ -82,6 +82,15 @@ export interface OwnProfileRepositoryPort {
   ): Promise<OwnProfile>;
 }
 
+export interface PasswordUser {
+  passwordHash: string;
+}
+
+export interface PasswordRepositoryPort {
+  findPasswordUserById(id: string): Promise<PasswordUser | null>;
+  changePassword(id: string, passwordHash: string): Promise<void>;
+}
+
 export class DuplicateUserError extends Error {
   constructor(readonly field: UserConflictField) {
     super(`Duplicate user field: ${field}`);
@@ -104,7 +113,11 @@ const registeredMemberSelection = {
 } satisfies Prisma.UserSelect;
 
 export class UserRepository
-  implements UserRepositoryPort, UserAccessRepositoryPort, OwnProfileRepositoryPort
+  implements
+    UserRepositoryPort,
+    UserAccessRepositoryPort,
+    OwnProfileRepositoryPort,
+    PasswordRepositoryPort
 {
   constructor(private readonly database: PrismaClient) {}
 
@@ -128,6 +141,33 @@ export class UserRepository
         status: true,
         isPasswordChangeRequired: true,
       },
+    });
+  }
+
+  async findPasswordUserById(id: string): Promise<PasswordUser | null> {
+    return this.database.user.findUnique({
+      where: { id },
+      select: { passwordHash: true },
+    });
+  }
+
+  async changePassword(id: string, passwordHash: string): Promise<void> {
+    await this.database.$transaction(async (transaction) => {
+      await transaction.user.update({
+        where: { id },
+        data: {
+          passwordHash,
+          isPasswordChangeRequired: false,
+        },
+      });
+      await transaction.userAuditLog.create({
+        data: {
+          userId: id,
+          performedById: id,
+          action: "UPDATED",
+          reason: "PASSWORD_CHANGED",
+        },
+      });
     });
   }
 
