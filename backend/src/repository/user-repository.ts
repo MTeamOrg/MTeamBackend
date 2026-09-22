@@ -135,6 +135,77 @@ export interface UpdateUserStatusData {
   reason?: string;
 }
 
+export interface CreateAdminUserData {
+  firstName: string;
+  lastName: string;
+  documentNumber: string;
+  birthDate: Date;
+  email: string;
+  phone: string;
+  passwordHash: string;
+  role: UserRole;
+  memberProfile?: MemberProfileData;
+  trainerProfile?: TrainerProfileData;
+}
+
+export interface UpdateAdminUserData {
+  firstName?: string;
+  lastName?: string;
+  documentNumber?: string;
+  birthDate?: Date;
+  email?: string;
+  phone?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  specialty?: string;
+  description?: string;
+  reason?: string;
+}
+
+export interface AdminUserPayment {
+  id: string;
+  amount: string;
+  method: string;
+  receiptNumber: string | null;
+  status: string;
+  createdAt: Date;
+  accreditedAt: Date;
+  expiresAt: Date;
+}
+
+export interface AdminUserMedicalCertificate {
+  id: string;
+  fileUrl: string;
+  status: string;
+  uploadedAt: Date;
+  reviewedAt: Date | null;
+  reviewComment: string | null;
+}
+
+export interface AdminUserDetail extends RegisteredMember {
+  createdAt: Date;
+  memberProfile: MemberProfileData | null;
+  trainerProfile: TrainerProfileData | null;
+  membership: {
+    status: "ACTIVE" | "EXPIRED";
+    paymentId: string;
+    expiresAt: Date;
+  } | null;
+  payments: AdminUserPayment[];
+  medicalCertificates: AdminUserMedicalCertificate[];
+  trainerBranches: Array<{
+    id: string;
+    name: string;
+    address: string;
+  }>;
+  classes: Array<{
+    id: string;
+    activity: string;
+    startsAt: Date;
+    branch: { id: string; name: string };
+  }>;
+}
+
 export interface UserAuditLogItem {
   id: string;
   userId: string;
@@ -158,8 +229,24 @@ export interface UserAuditLogListResult {
 }
 
 export interface AdminUserRepositoryPort {
+  findConflict(email: string, documentNumber: string): Promise<UserConflictField | null>;
   listUsers(query: UserListQuery): Promise<UserListResult>;
   findUserById(id: string): Promise<UserListItem | null>;
+  findAdminUserDetailById(id: string): Promise<AdminUserDetail | null>;
+  findConflictForUpdate(
+    email: string | undefined,
+    documentNumber: string | undefined,
+    excludedUserId: string,
+  ): Promise<UserConflictField | null>;
+  createAdminUser(
+    data: CreateAdminUserData,
+    performedById: string,
+  ): Promise<AdminUserDetail>;
+  updateAdminUser(
+    id: string,
+    performedById: string,
+    data: UpdateAdminUserData,
+  ): Promise<AdminUserDetail>;
   updateUserStatus(
     id: string,
     performedById: string,
@@ -259,6 +346,248 @@ export class UserRepository
         status: true,
       },
     });
+  }
+
+  async findAdminUserDetailById(id: string): Promise<AdminUserDetail | null> {
+    const user = await this.database.user.findUnique({
+      where: { id },
+      select: {
+        ...registeredMemberSelection,
+        createdAt: true,
+        memberProfile: {
+          select: {
+            emergencyContactName: true,
+            emergencyContactPhone: true,
+          },
+        },
+        trainerProfile: { select: { specialty: true, description: true } },
+        memberPayments: {
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          select: {
+            id: true,
+            amount: true,
+            method: true,
+            receiptNumber: true,
+            status: true,
+            createdAt: true,
+            accreditedAt: true,
+            expiresAt: true,
+          },
+        },
+        medicalCertificates: {
+          orderBy: [{ uploadedAt: "desc" }, { id: "desc" }],
+          select: {
+            id: true,
+            fileUrl: true,
+            status: true,
+            uploadedAt: true,
+            reviewedAt: true,
+            reviewComment: true,
+          },
+        },
+        trainerBranches: {
+          select: { branch: { select: { id: true, name: true, address: true } } },
+          orderBy: { branch: { name: "asc" } },
+        },
+        taughtClasses: {
+          orderBy: [{ startsAt: "asc" }, { id: "asc" }],
+          select: {
+            id: true,
+            activity: true,
+            startsAt: true,
+            branch: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+    if (!user) return null;
+
+    const payments = user.memberPayments.map((payment) => ({
+      ...payment,
+      amount: payment.amount.toString(),
+    }));
+    const latestAccreditedPayment = payments.find(
+      (payment) => payment.status === "ACCREDITED",
+    );
+
+    return {
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      documentNumber: user.documentNumber,
+      birthDate: user.birthDate,
+      email: user.email,
+      phone: user.phone,
+      photoUrl: user.photoUrl,
+      role: user.role,
+      status: user.status,
+      isPasswordChangeRequired: user.isPasswordChangeRequired,
+      createdAt: user.createdAt,
+      memberProfile: user.memberProfile,
+      trainerProfile: user.trainerProfile,
+      membership: latestAccreditedPayment
+        ? {
+            status: latestAccreditedPayment.expiresAt >= new Date() ? "ACTIVE" : "EXPIRED",
+            paymentId: latestAccreditedPayment.id,
+            expiresAt: latestAccreditedPayment.expiresAt,
+          }
+        : null,
+      payments,
+      medicalCertificates: user.medicalCertificates,
+      trainerBranches: user.trainerBranches.map(({ branch }) => branch),
+      classes: user.taughtClasses,
+    };
+  }
+
+  async findConflictForUpdate(
+    email: string | undefined,
+    documentNumber: string | undefined,
+    excludedUserId: string,
+  ): Promise<UserConflictField | null> {
+    const values = [
+      email === undefined ? null : { email },
+      documentNumber === undefined ? null : { documentNumber },
+    ].filter((value): value is { email: string } | { documentNumber: string } => value !== null);
+    if (values.length === 0) return null;
+    const user = await this.database.user.findFirst({
+      where: { id: { not: excludedUserId }, OR: values },
+      select: { email: true, documentNumber: true },
+    });
+    if (!user) return null;
+    if (email !== undefined && user.email === email) return "email";
+    return "documentNumber";
+  }
+
+  async createAdminUser(
+    data: CreateAdminUserData,
+    performedById: string,
+  ): Promise<AdminUserDetail> {
+    try {
+      const userId = await this.database.$transaction(async (transaction) => {
+        const user = await transaction.user.create({
+          data: {
+            firstName: data.firstName,
+            lastName: data.lastName,
+            documentNumber: data.documentNumber,
+            birthDate: data.birthDate,
+            email: data.email,
+            phone: data.phone,
+            passwordHash: data.passwordHash,
+            role: data.role,
+            status: "ACTIVE",
+            isPasswordChangeRequired: true,
+            ...(data.memberProfile
+              ? { memberProfile: { create: data.memberProfile } }
+              : {}),
+            ...(data.trainerProfile
+              ? { trainerProfile: { create: data.trainerProfile } }
+              : {}),
+          },
+          select: { id: true },
+        });
+        await transaction.userAuditLog.create({
+          data: {
+            userId: user.id,
+            performedById,
+            action: "CREATED",
+          },
+        });
+        return user.id;
+      });
+      const created = await this.findAdminUserDetailById(userId);
+      if (!created) throw new UserNotFoundError();
+      return created;
+    } catch (error: unknown) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new DuplicateUserError(this.duplicateFieldFromError(error));
+      }
+      throw error;
+    }
+  }
+
+  async updateAdminUser(
+    id: string,
+    performedById: string,
+    data: UpdateAdminUserData,
+  ): Promise<AdminUserDetail> {
+    try {
+      await this.database.$transaction(async (transaction) => {
+        const userData: Prisma.UserUpdateInput = {};
+        if (data.firstName !== undefined) userData.firstName = data.firstName;
+        if (data.lastName !== undefined) userData.lastName = data.lastName;
+        if (data.documentNumber !== undefined) userData.documentNumber = data.documentNumber;
+        if (data.birthDate !== undefined) userData.birthDate = data.birthDate;
+        if (data.email !== undefined) userData.email = data.email;
+        if (data.phone !== undefined) userData.phone = data.phone;
+
+        const current = await transaction.user.findUnique({
+          where: { id },
+          select: { role: true },
+        });
+        if (!current) throw new UserNotFoundError();
+
+        if (current.role === "MEMBER" &&
+            (data.emergencyContactName !== undefined || data.emergencyContactPhone !== undefined)) {
+          userData.memberProfile = {
+            upsert: {
+              create: {
+                emergencyContactName: data.emergencyContactName ?? "",
+                emergencyContactPhone: data.emergencyContactPhone ?? "",
+              },
+              update: {
+                ...(data.emergencyContactName === undefined
+                  ? {}
+                  : { emergencyContactName: data.emergencyContactName }),
+                ...(data.emergencyContactPhone === undefined
+                  ? {}
+                  : { emergencyContactPhone: data.emergencyContactPhone }),
+              },
+            },
+          };
+        }
+        if (current.role === "TRAINER" &&
+            (data.specialty !== undefined || data.description !== undefined)) {
+          userData.trainerProfile = {
+            upsert: {
+              create: {
+                specialty: data.specialty ?? "",
+                description: data.description ?? "",
+              },
+              update: {
+                ...(data.specialty === undefined ? {} : { specialty: data.specialty }),
+                ...(data.description === undefined ? {} : { description: data.description }),
+              },
+            },
+          };
+        }
+
+        await transaction.user.update({ where: { id }, data: userData });
+        await transaction.userAuditLog.create({
+          data: {
+            userId: id,
+            performedById,
+            action: "UPDATED",
+            reason: data.reason ?? null,
+          },
+        });
+      });
+      const updated = await this.findAdminUserDetailById(id);
+      if (!updated) throw new UserNotFoundError();
+      return updated;
+    } catch (error: unknown) {
+      if (error instanceof UserNotFoundError) throw error;
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new DuplicateUserError(this.duplicateFieldFromError(error));
+      }
+      throw error;
+    }
+  }
+
+  private duplicateFieldFromError(error: Prisma.PrismaClientKnownRequestError): UserConflictField {
+    const target = Array.isArray(error.meta?.target)
+      ? error.meta.target.join(" ")
+      : String(error.meta?.target ?? "");
+    return target.toLowerCase().includes("document") ? "documentNumber" : "email";
   }
 
   async updateUserStatus(

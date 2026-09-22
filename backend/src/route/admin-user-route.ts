@@ -16,6 +16,27 @@ export function createAdminUserRouter(
     authorize("ADMIN"),
     controller.listUsers,
   );
+  router.post(
+    "/users",
+    authenticate,
+    requireCompletedPasswordChange,
+    authorize("ADMIN"),
+    controller.createUser,
+  );
+  router.get(
+    "/users/:userId",
+    authenticate,
+    requireCompletedPasswordChange,
+    authorize("ADMIN"),
+    controller.getUser,
+  );
+  router.patch(
+    "/users/:userId",
+    authenticate,
+    requireCompletedPasswordChange,
+    authorize("ADMIN"),
+    controller.updateUser,
+  );
   router.patch(
     "/users/:userId/status",
     authenticate,

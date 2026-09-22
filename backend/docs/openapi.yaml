@@ -226,6 +226,8 @@ paths:
       tags: [Users]
       summary: Crear una cuenta desde administración
       operationId: createUser
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -233,7 +235,14 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateUserRequest"
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Cuenta creada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserDetail" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
 
   /users/me:
@@ -314,20 +323,40 @@ paths:
       tags: [Users]
       summary: Consultar el detalle administrativo de un usuario
       operationId: getUser
+      security:
+        - bearerAuth: []
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Detalle administrativo del usuario
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserDetail" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
     patch:
       tags: [Users]
       summary: Modificar un usuario desde administración
       operationId: updateUser
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: "#/components/schemas/UpdateUserRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Usuario modificado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserDetail" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /users/{userId}/status:
     parameters:
@@ -369,6 +398,8 @@ paths:
         un valor temporal y obliga al usuario a cambiarla antes de acceder a
         cualquier otra ruta privada.
       operationId: resetUserPassword
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -1260,6 +1291,98 @@ components:
         email: { type: string, format: email }
         role: { $ref: "#/components/schemas/UserRole" }
         status: { $ref: "#/components/schemas/UserStatus" }
+    AdminUserPayment:
+      type: object
+      additionalProperties: false
+      required: [id, amount, method, receiptNumber, status, createdAt, accreditedAt, expiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        amount: { type: string, description: Importe decimal representado sin pérdida de precisión }
+        method: { type: string }
+        receiptNumber: { type: [string, "null"] }
+        status: { $ref: "#/components/schemas/PaymentStatus" }
+        createdAt: { type: string, format: date-time }
+        accreditedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    AdminUserMedicalCertificate:
+      type: object
+      additionalProperties: false
+      required: [id, fileUrl, status, uploadedAt, reviewedAt, reviewComment]
+      properties:
+        id: { type: string, format: uuid }
+        fileUrl: { type: string, format: uri }
+        status: { $ref: "#/components/schemas/MedicalCertificateStatus" }
+        uploadedAt: { type: string, format: date-time }
+        reviewedAt: { type: [string, "null"], format: date-time }
+        reviewComment: { type: [string, "null"] }
+    AdminUserDetail:
+      type: object
+      additionalProperties: false
+      required: [id, firstName, lastName, documentNumber, birthDate, email, phone, photoUrl, role, status, createdAt, isPasswordChangeRequired, memberProfile, trainerProfile, membership, payments, medicalCertificates, trainerBranches, classes]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        documentNumber: { type: string }
+        birthDate: { type: string, format: date }
+        email: { type: string, format: email }
+        phone: { type: string }
+        photoUrl: { type: [string, "null"], format: uri }
+        role: { $ref: "#/components/schemas/UserRole" }
+        status: { $ref: "#/components/schemas/UserStatus" }
+        createdAt: { type: string, format: date-time }
+        isPasswordChangeRequired: { type: boolean }
+        memberProfile:
+          oneOf:
+            - $ref: "#/components/schemas/MemberProfile"
+            - type: "null"
+        trainerProfile:
+          oneOf:
+            - $ref: "#/components/schemas/TrainerProfile"
+            - type: "null"
+        membership:
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [status, paymentId, expiresAt]
+              properties:
+                status: { type: string, enum: [ACTIVE, EXPIRED] }
+                paymentId: { type: string, format: uuid }
+                expiresAt: { type: string, format: date-time }
+            - type: "null"
+        payments:
+          type: array
+          items: { $ref: "#/components/schemas/AdminUserPayment" }
+        medicalCertificates:
+          type: array
+          items: { $ref: "#/components/schemas/AdminUserMedicalCertificate" }
+        trainerBranches:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, address]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              address: { type: string }
+        classes:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, activity, startsAt, branch]
+            properties:
+              id: { type: string, format: uuid }
+              activity: { type: string }
+              startsAt: { type: string, format: date-time }
+              branch:
+                type: object
+                additionalProperties: false
+                required: [id, name]
+                properties:
+                  id: { type: string, format: uuid }
+                  name: { type: string }
     UserListResponse:
       type: object
       additionalProperties: false
@@ -1396,23 +1519,37 @@ components:
         emergencyContactPhone: { type: string }
       minProperties: 1
     CreateUserRequest:
-      allOf:
-        - $ref: "#/components/schemas/RegisterRequest"
-        - type: object
-          required: [role]
-          properties:
-            role: { $ref: "#/components/schemas/UserRole" }
-            specialty: { type: string }
-            description: { type: string }
+      type: object
+      additionalProperties: false
+      required: [firstName, lastName, documentNumber, birthDate, email, phone, password, role]
+      properties:
+        firstName: { type: string, minLength: 1 }
+        lastName: { type: string, minLength: 1 }
+        documentNumber: { type: string, minLength: 1 }
+        birthDate: { type: string, format: date }
+        email: { type: string, format: email }
+        phone: { type: string, minLength: 1 }
+        password: { type: string, format: password, minLength: 8, maxLength: 72 }
+        role: { $ref: "#/components/schemas/UserRole" }
+        emergencyContactName: { type: string }
+        emergencyContactPhone: { type: string }
+        specialty: { type: string }
+        description: { type: string }
     UpdateUserRequest:
       type: object
+      additionalProperties: false
       properties:
         firstName: { type: string }
         lastName: { type: string }
+        documentNumber: { type: string }
+        birthDate: { type: string, format: date }
         email: { type: string, format: email }
         phone: { type: string }
+        emergencyContactName: { type: string }
+        emergencyContactPhone: { type: string }
         specialty: { type: string }
         description: { type: string }
+        reason: { type: string }
       minProperties: 1
     UpdateUserStatusRequest:
       type: object
