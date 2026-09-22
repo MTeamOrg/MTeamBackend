@@ -1,5 +1,6 @@
 import type {
   PrismaClient,
+  UserAuditAction,
   UserRole,
   UserStatus,
 } from "../generated/prisma/client.js";
@@ -104,10 +105,84 @@ export interface TemporaryPasswordRepositoryPort {
   ): Promise<void>;
 }
 
+export interface UserListQuery {
+  search?: string | undefined;
+  role?: UserRole | undefined;
+  status?: UserStatus | undefined;
+  page: number;
+  limit: number;
+}
+
+export interface UserListItem {
+  id: string;
+  firstName: string;
+  lastName: string;
+  documentNumber: string;
+  email: string;
+  role: UserRole;
+  status: UserStatus;
+}
+
+export interface UserListResult {
+  items: UserListItem[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
+export interface UpdateUserStatusData {
+  status: UserStatus;
+  reason?: string;
+}
+
+export interface UserAuditLogItem {
+  id: string;
+  userId: string;
+  action: UserAuditAction;
+  reason: string | null;
+  occurredAt: Date;
+  performedBy: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    role: UserRole;
+  };
+}
+
+export interface UserAuditLogListResult {
+  items: UserAuditLogItem[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
+export interface AdminUserRepositoryPort {
+  listUsers(query: UserListQuery): Promise<UserListResult>;
+  findUserById(id: string): Promise<UserListItem | null>;
+  updateUserStatus(
+    id: string,
+    performedById: string,
+    data: UpdateUserStatusData,
+  ): Promise<UserListItem>;
+  listUserAuditLogs(
+    userId: string,
+    page: number,
+    limit: number,
+  ): Promise<UserAuditLogListResult>;
+}
+
 export class DuplicateUserError extends Error {
   constructor(readonly field: UserConflictField) {
     super(`Duplicate user field: ${field}`);
     this.name = "DuplicateUserError";
+  }
+}
+
+export class UserNotFoundError extends Error {
+  constructor() {
+    super("User not found");
+    this.name = "UserNotFoundError";
   }
 }
 
@@ -131,9 +206,134 @@ export class UserRepository
     UserAccessRepositoryPort,
     OwnProfileRepositoryPort,
     PasswordRepositoryPort,
-    TemporaryPasswordRepositoryPort
+    TemporaryPasswordRepositoryPort,
+    AdminUserRepositoryPort
 {
   constructor(private readonly database: PrismaClient) {}
+
+  async listUsers(query: UserListQuery): Promise<UserListResult> {
+    const where: Prisma.UserWhereInput = {};
+    if (query.search) {
+      where.OR = [
+        { firstName: { contains: query.search, mode: "insensitive" } },
+        { lastName: { contains: query.search, mode: "insensitive" } },
+        { documentNumber: { contains: query.search, mode: "insensitive" } },
+        { email: { contains: query.search, mode: "insensitive" } },
+      ];
+    }
+    if (query.role) where.role = query.role;
+    if (query.status) where.status = query.status;
+
+    const skip = (query.page - 1) * query.limit;
+    const [total, items] = await this.database.$transaction([
+      this.database.user.count({ where }),
+      this.database.user.findMany({
+        where,
+        orderBy: [{ lastName: "asc" }, { firstName: "asc" }, { id: "asc" }],
+        skip,
+        take: query.limit,
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          documentNumber: true,
+          email: true,
+          role: true,
+          status: true,
+        },
+      }),
+    ]);
+    return { items, page: query.page, limit: query.limit, total };
+  }
+
+  async findUserById(id: string): Promise<UserListItem | null> {
+    return this.database.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        documentNumber: true,
+        email: true,
+        role: true,
+        status: true,
+      },
+    });
+  }
+
+  async updateUserStatus(
+    id: string,
+    performedById: string,
+    data: UpdateUserStatusData,
+  ): Promise<UserListItem> {
+    return this.database.$transaction(async (transaction) => {
+      const current = await transaction.user.findUnique({
+        where: { id },
+        select: { status: true },
+      });
+      if (!current) throw new UserNotFoundError();
+
+      const user = await transaction.user.update({
+        where: { id },
+        data: { status: data.status },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          documentNumber: true,
+          email: true,
+          role: true,
+          status: true,
+        },
+      });
+
+      if (current.status !== data.status) {
+        await transaction.userAuditLog.create({
+          data: {
+            userId: id,
+            performedById,
+            action: data.status === "ACTIVE" ? "ACTIVATED" : "DEACTIVATED",
+            reason: data.reason ?? null,
+          },
+        });
+      }
+      return user;
+    });
+  }
+
+  async listUserAuditLogs(
+    userId: string,
+    page: number,
+    limit: number,
+  ): Promise<UserAuditLogListResult> {
+    const skip = (page - 1) * limit;
+    const [total, items] = await this.database.$transaction([
+      this.database.userAuditLog.count({ where: { userId } }),
+      this.database.userAuditLog.findMany({
+        where: { userId },
+        orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          userId: true,
+          action: true,
+          reason: true,
+          occurredAt: true,
+          performedBy: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              role: true,
+            },
+          },
+        },
+      }),
+    ]);
+    return { items, page, limit, total };
+  }
 
   async findAccessControlUserById(id: string): Promise<AccessControlUser | null> {
     return this.database.user.findUnique({
