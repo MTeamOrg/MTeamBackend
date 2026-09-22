@@ -197,7 +197,12 @@ paths:
     get:
       tags: [Users]
       summary: Listar y filtrar usuarios
+      description: >-
+        Operación exclusiva de administradores. Permite buscar por nombre,
+        apellido, documento o correo, y filtrar por rol o estado.
       operationId: listUsers
+      security:
+        - bearerAuth: []
       parameters:
         - $ref: "#/components/parameters/Search"
         - $ref: "#/components/parameters/Page"
@@ -209,7 +214,13 @@ paths:
           in: query
           schema: { $ref: "#/components/schemas/UserStatus" }
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Listado paginado de usuarios
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserListResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
     post:
       tags: [Users]
@@ -324,14 +335,28 @@ paths:
     patch:
       tags: [Users]
       summary: Activar, desactivar o reactivar una cuenta
+      description: >-
+        Operación exclusiva de administradores. Sólo modifica el estado de la
+        cuenta y conserva pagos, aptos, accesos, clases y demás historial. La
+        interfaz debe solicitar confirmación antes de enviar la operación.
       operationId: updateUserStatus
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: "#/components/schemas/UpdateUserStatusRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Usuario con el nuevo estado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserListItem" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /users/{userId}/password-resets:
     parameters:
@@ -363,8 +388,22 @@ paths:
       tags: [Users]
       summary: Consultar el historial administrativo de una cuenta
       operationId: listUserAuditLogs
+      description: Sólo lectura. Incluye la acción, el motivo, la fecha y el administrador responsable.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Historial paginado de la cuenta
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserAuditLogResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /members:
     get:
@@ -1209,6 +1248,62 @@ components:
         role: { $ref: "#/components/schemas/UserRole" }
         status: { $ref: "#/components/schemas/UserStatus" }
         isPasswordChangeRequired: { type: boolean }
+    AdminUserListItem:
+      type: object
+      additionalProperties: false
+      required: [id, firstName, lastName, documentNumber, email, role, status]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        documentNumber: { type: string }
+        email: { type: string, format: email }
+        role: { $ref: "#/components/schemas/UserRole" }
+        status: { $ref: "#/components/schemas/UserStatus" }
+    UserListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminUserListItem" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    UserAuditLog:
+      type: object
+      additionalProperties: false
+      required: [id, userId, action, reason, occurredAt, performedBy]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        action:
+          type: string
+          enum: [CREATED, UPDATED, ACTIVATED, DEACTIVATED, PASSWORD_RESET]
+        reason: { type: [string, "null"] }
+        occurredAt: { type: string, format: date-time }
+        performedBy:
+          type: object
+          additionalProperties: false
+          required: [id, firstName, lastName, email, role]
+          properties:
+            id: { type: string, format: uuid }
+            firstName: { type: string }
+            lastName: { type: string }
+            email: { type: string, format: email }
+            role: { $ref: "#/components/schemas/UserRole" }
+    UserAuditLogResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/UserAuditLog" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
     MemberProfile:
       type: object
       required: [emergencyContactName, emergencyContactPhone]
@@ -1321,6 +1416,7 @@ components:
       minProperties: 1
     UpdateUserStatusRequest:
       type: object
+      additionalProperties: false
       required: [status]
       properties:
         status: { $ref: "#/components/schemas/UserStatus" }

@@ -9,6 +9,27 @@ export function createAdminUserRouter(
   requireCompletedPasswordChange: RequestHandler,
 ): Router {
   const router = Router();
+  router.get(
+    "/users",
+    authenticate,
+    requireCompletedPasswordChange,
+    authorize("ADMIN"),
+    controller.listUsers,
+  );
+  router.patch(
+    "/users/:userId/status",
+    authenticate,
+    requireCompletedPasswordChange,
+    authorize("ADMIN"),
+    controller.updateUserStatus,
+  );
+  router.get(
+    "/users/:userId/audit-logs",
+    authenticate,
+    requireCompletedPasswordChange,
+    authorize("ADMIN"),
+    controller.listUserAuditLogs,
+  );
   router.post(
     "/users/:userId/password-resets",
     authenticate,

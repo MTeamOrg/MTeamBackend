@@ -38,6 +38,9 @@ Registro, login y health son públicos. Las rutas privadas actuales son:
 - `PATCH /api/auth/password`
 - `POST /api/auth/logout`
 - `PUT /api/users/me/photo`
+- `GET /api/users` (solo `ADMIN`)
+- `PATCH /api/users/{userId}/status` (solo `ADMIN`)
+- `GET /api/users/{userId}/audit-logs` (solo `ADMIN`)
 - `POST /api/users/{userId}/password-resets` (solo `ADMIN`)
 
 `PATCH /api/auth/password` y `POST /api/auth/logout` son las excepciones al
@@ -54,6 +57,18 @@ activa `isPasswordChangeRequired` y registra en `UserAuditLog` el usuario
 afectado, el administrador que realizó la acción, la fecha y la acción
 `PASSWORD_RESET`. La actualización y la auditoría se ejecutan en una misma
 transacción.
+
+El listado administrativo permite buscar por nombre, apellido, documento o
+correo, y filtrar por rol o estado con paginación. El cambio de estado sólo
+actualiza `User.status`; activar, desactivar o reactivar una cuenta no elimina
+relaciones ni historial. Cuando el estado cambia, se registra `ACTIVATED` o
+`DEACTIVATED` junto con el motivo opcional y el administrador responsable en la
+misma transacción. Si se solicita el mismo estado, la operación es idempotente
+y no crea un evento de auditoría falso.
+
+El historial administrativo es de sólo lectura, paginado y devuelve la acción,
+el motivo, la fecha y la identidad básica del administrador responsable. No
+incluye `passwordHash` ni otros secretos.
 
 Los futuros endpoints privados deben aplicar autenticación y el bloqueo por
 contraseña temporal, además de `authorize(...)` cuando correspondan roles
