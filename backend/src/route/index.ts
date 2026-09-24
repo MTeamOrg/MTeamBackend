@@ -7,6 +7,7 @@ import { AuthController } from "../controller/auth-controller.js";
 import { BranchController } from "../controller/branch-controller.js";
 import { MembershipPriceController } from "../controller/membership-price-controller.js";
 import { PaymentController } from "../controller/payment-controller.js";
+import { TrainerController } from "../controller/trainer-controller.js";
 import { UserController } from "../controller/user-controller.js";
 import { createAuthenticationMiddleware } from "../middleware/authentication-middleware.js";
 import { requirePasswordChangeCompleted } from "../middleware/password-change-middleware.js";
@@ -14,12 +15,14 @@ import { uploadProfilePhoto } from "../middleware/profile-photo-upload-middlewar
 import { BranchRepository } from "../repository/branch-repository.js";
 import { MembershipPriceRepository } from "../repository/membership-price-repository.js";
 import { PaymentRepository } from "../repository/payment-repository.js";
+import { TrainerRepository } from "../repository/trainer-repository.js";
 import { UserRepository } from "../repository/user-repository.js";
 import { AdminUserService } from "../service/admin-user-service.js";
 import { AuthService } from "../service/auth-service.js";
 import { BranchService } from "../service/branch-service.js";
 import { MembershipPriceService } from "../service/membership-price-service.js";
 import { PaymentService } from "../service/payment-service.js";
+import { TrainerService } from "../service/trainer-service.js";
 import { PasswordService } from "../service/password-service.js";
 import { SupabaseProfilePhotoStorage } from "../service/profile-photo-storage.js";
 import { TokenService } from "../service/token-service.js";
@@ -30,6 +33,7 @@ import { createBranchRouter } from "./branch-route.js";
 import { healthRouter } from "./health-route.js";
 import { createMembershipPriceRouter } from "./membership-price-route.js";
 import { createPaymentRouter } from "./payment-route.js";
+import { createTrainerRouter } from "./trainer-route.js";
 import { createUserRouter } from "./user-route.js";
 
 export const apiRouter = Router();
@@ -54,8 +58,10 @@ const membershipPriceController = new MembershipPriceController(
   new MembershipPriceService(new MembershipPriceRepository(database)),
 );
 const paymentController = new PaymentController(new PaymentService(new PaymentRepository(database)));
+const trainerController = new TrainerController(new TrainerService(new TrainerRepository(database)));
 
 apiRouter.use(healthRouter);
+apiRouter.use(createTrainerRouter(trainerController));
 apiRouter.use(createAuthRouter(authController));
 apiRouter.use(createProtectedAuthRouter(authController, authenticate));
 apiRouter.use(createUserRouter(
