@@ -2,25 +2,37 @@ import { Router } from "express";
 
 import { database } from "../config/database.js";
 import { environment } from "../config/environment.js";
-import { AuthController } from "../controller/auth-controller.js";
 import { AdminUserController } from "../controller/admin-user-controller.js";
+import { AuthController } from "../controller/auth-controller.js";
+import { BranchController } from "../controller/branch-controller.js";
+import { MembershipPriceController } from "../controller/membership-price-controller.js";
+import { PaymentController } from "../controller/payment-controller.js";
 import { TrainerController } from "../controller/trainer-controller.js";
 import { UserController } from "../controller/user-controller.js";
 import { createAuthenticationMiddleware } from "../middleware/authentication-middleware.js";
 import { requirePasswordChangeCompleted } from "../middleware/password-change-middleware.js";
 import { uploadProfilePhoto } from "../middleware/profile-photo-upload-middleware.js";
-import { UserRepository } from "../repository/user-repository.js";
+import { BranchRepository } from "../repository/branch-repository.js";
+import { MembershipPriceRepository } from "../repository/membership-price-repository.js";
+import { PaymentRepository } from "../repository/payment-repository.js";
 import { TrainerRepository } from "../repository/trainer-repository.js";
-import { AuthService } from "../service/auth-service.js";
+import { UserRepository } from "../repository/user-repository.js";
 import { AdminUserService } from "../service/admin-user-service.js";
+import { AuthService } from "../service/auth-service.js";
+import { BranchService } from "../service/branch-service.js";
+import { MembershipPriceService } from "../service/membership-price-service.js";
+import { PaymentService } from "../service/payment-service.js";
 import { TrainerService } from "../service/trainer-service.js";
 import { PasswordService } from "../service/password-service.js";
 import { SupabaseProfilePhotoStorage } from "../service/profile-photo-storage.js";
 import { TokenService } from "../service/token-service.js";
 import { UserService } from "../service/user-service.js";
-import { createAuthRouter, createProtectedAuthRouter } from "./auth-route.js";
 import { createAdminUserRouter } from "./admin-user-route.js";
+import { createAuthRouter, createProtectedAuthRouter } from "./auth-route.js";
+import { createBranchRouter } from "./branch-route.js";
 import { healthRouter } from "./health-route.js";
+import { createMembershipPriceRouter } from "./membership-price-route.js";
+import { createPaymentRouter } from "./payment-route.js";
 import { createTrainerRouter } from "./trainer-route.js";
 import { createUserRouter } from "./user-route.js";
 
@@ -41,6 +53,11 @@ const profilePhotoStorage = new SupabaseProfilePhotoStorage({
 const userService = new UserService(userRepository, profilePhotoStorage);
 const userController = new UserController(userService);
 const authenticate = createAuthenticationMiddleware(tokenService, userRepository);
+const branchController = new BranchController(new BranchService(new BranchRepository(database)));
+const membershipPriceController = new MembershipPriceController(
+  new MembershipPriceService(new MembershipPriceRepository(database)),
+);
+const paymentController = new PaymentController(new PaymentService(new PaymentRepository(database)));
 const trainerController = new TrainerController(new TrainerService(new TrainerRepository(database)));
 
 apiRouter.use(healthRouter);
@@ -60,3 +77,10 @@ apiRouter.use(
     requirePasswordChangeCompleted,
   ),
 );
+apiRouter.use(createBranchRouter(branchController, authenticate, requirePasswordChangeCompleted));
+apiRouter.use(createMembershipPriceRouter(
+  membershipPriceController,
+  authenticate,
+  requirePasswordChangeCompleted,
+));
+apiRouter.use(createPaymentRouter(paymentController, authenticate, requirePasswordChangeCompleted));
