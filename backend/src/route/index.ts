@@ -2,22 +2,26 @@ import { Router } from "express";
 
 import { database } from "../config/database.js";
 import { environment } from "../config/environment.js";
-import { AuthController } from "../controller/auth-controller.js";
 import { AdminUserController } from "../controller/admin-user-controller.js";
+import { AuthController } from "../controller/auth-controller.js";
+import { PaymentController } from "../controller/payment-controller.js";
 import { UserController } from "../controller/user-controller.js";
 import { createAuthenticationMiddleware } from "../middleware/authentication-middleware.js";
 import { requirePasswordChangeCompleted } from "../middleware/password-change-middleware.js";
 import { uploadProfilePhoto } from "../middleware/profile-photo-upload-middleware.js";
+import { PaymentRepository } from "../repository/payment-repository.js";
 import { UserRepository } from "../repository/user-repository.js";
-import { AuthService } from "../service/auth-service.js";
 import { AdminUserService } from "../service/admin-user-service.js";
+import { AuthService } from "../service/auth-service.js";
+import { PaymentService } from "../service/payment-service.js";
 import { PasswordService } from "../service/password-service.js";
 import { SupabaseProfilePhotoStorage } from "../service/profile-photo-storage.js";
 import { TokenService } from "../service/token-service.js";
 import { UserService } from "../service/user-service.js";
-import { createAuthRouter, createProtectedAuthRouter } from "./auth-route.js";
 import { createAdminUserRouter } from "./admin-user-route.js";
+import { createAuthRouter, createProtectedAuthRouter } from "./auth-route.js";
 import { healthRouter } from "./health-route.js";
+import { createPaymentRouter } from "./payment-route.js";
 import { createUserRouter } from "./user-route.js";
 
 export const apiRouter = Router();
@@ -37,6 +41,7 @@ const profilePhotoStorage = new SupabaseProfilePhotoStorage({
 const userService = new UserService(userRepository, profilePhotoStorage);
 const userController = new UserController(userService);
 const authenticate = createAuthenticationMiddleware(tokenService, userRepository);
+const paymentController = new PaymentController(new PaymentService(new PaymentRepository(database)));
 
 apiRouter.use(healthRouter);
 apiRouter.use(createAuthRouter(authController));
@@ -54,3 +59,4 @@ apiRouter.use(
     requirePasswordChangeCompleted,
   ),
 );
+apiRouter.use(createPaymentRouter(paymentController, authenticate, requirePasswordChangeCompleted));

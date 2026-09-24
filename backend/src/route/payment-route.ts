@@ -1,0 +1,20 @@
+import { Router, type RequestHandler } from "express";
+
+import type { PaymentController } from "../controller/payment-controller.js";
+import { authorize } from "../middleware/authorization-middleware.js";
+
+export function createPaymentRouter(
+  controller: PaymentController,
+  authenticate: RequestHandler,
+  requireCompletedPasswordChange: RequestHandler,
+): Router {
+  const router = Router();
+  router.post(
+    "/payments",
+    authenticate,
+    requireCompletedPasswordChange,
+    authorize("ADMIN"),
+    controller.createPayment,
+  );
+  return router;
+}
