@@ -9,6 +9,20 @@ export function createPaymentRouter(
   requireCompletedPasswordChange: RequestHandler,
 ): Router {
   const router = Router();
+  router.get(
+    "/members/me/payments",
+    authenticate,
+    requireCompletedPasswordChange,
+    authorize("MEMBER"),
+    controller.listOwnPayments,
+  );
+  router.get(
+    "/members/:memberId/payments",
+    authenticate,
+    requireCompletedPasswordChange,
+    authorize("ADMIN"),
+    controller.listMemberPayments,
+  );
   router.post(
     "/payments",
     authenticate,

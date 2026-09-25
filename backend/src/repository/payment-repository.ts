@@ -1,5 +1,5 @@
 import type { Payment, PrismaClient } from "../generated/prisma/client.js";
-import type { CreatePaymentInput } from "../validator/payment-validator.js";
+import type { CreatePaymentInput, PaymentHistoryQuery } from "../validator/payment-validator.js";
 
 const MEMBERSHIP_VALIDITY_DAYS = 30;
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -9,16 +9,63 @@ export class UserIsNotMemberError extends Error {}
 export class PaymentNotFoundError extends Error {}
 export class PaymentAlreadyVoidedError extends Error {}
 
+export type PaymentHistoryItem = Pick<Payment,
+  "id" | "amount" | "method" | "receiptNumber" | "status" |
+  "accreditedAt" | "expiresAt" | "voidedAt" | "voidReason"
+>;
+
+export interface PaymentHistory {
+  items: PaymentHistoryItem[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
 export interface PaymentRepositoryPort {
   createAccreditedPayment(
     input: CreatePaymentInput,
     administratorId: string,
   ): Promise<Payment>;
   voidAccreditedPayment(paymentId: string, reason: string, administratorId: string): Promise<Payment>;
+  isMember(memberId: string): Promise<boolean>;
+  listMemberPayments(memberId: string, query: PaymentHistoryQuery): Promise<PaymentHistory>;
 }
 
 export class PaymentRepository implements PaymentRepositoryPort {
   constructor(private readonly database: PrismaClient) {}
+
+  async isMember(memberId: string): Promise<boolean> {
+    const member = await this.database.user.findFirst({
+      where: { id: memberId, role: "MEMBER" },
+      select: { id: true },
+    });
+    return member !== null;
+  }
+
+  async listMemberPayments(memberId: string, query: PaymentHistoryQuery): Promise<PaymentHistory> {
+    const where = { memberId };
+    const [total, items] = await this.database.$transaction([
+      this.database.payment.count({ where }),
+      this.database.payment.findMany({
+        where,
+        orderBy: [{ accreditedAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+        select: {
+          id: true,
+          accreditedAt: true,
+          amount: true,
+          method: true,
+          receiptNumber: true,
+          status: true,
+          expiresAt: true,
+          voidedAt: true,
+          voidReason: true,
+        },
+      }),
+    ]);
+    return { items, page: query.page, limit: query.limit, total };
+  }
 
   createAccreditedPayment(
     input: CreatePaymentInput,

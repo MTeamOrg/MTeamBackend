@@ -618,9 +618,21 @@ paths:
     get:
       tags: [Payments]
       summary: Consultar el historial de pagos propio
+      description: Exclusivo de socios autenticados; incluye pagos acreditados y anulados.
       operationId: listOwnPayments
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Historial paginado de pagos propios
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentHistoryResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /members/{memberId}/payments:
     parameters:
@@ -628,9 +640,21 @@ paths:
     get:
       tags: [Payments]
       summary: Consultar los pagos de un socio
+      description: Exclusivo de administradores; incluye pagos acreditados y anulados.
       operationId: listMemberPayments
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Historial paginado de pagos del socio
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentHistoryResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /members/me/medical-certificates:
     get:
@@ -1321,6 +1345,31 @@ components:
     PaymentStatus:
       type: string
       enum: [ACCREDITED, VOIDED]
+    PaymentHistoryItem:
+      type: object
+      additionalProperties: false
+      required: [id, accreditedAt, amount, method, receiptNumber, status, expiresAt, voidedAt, voidReason]
+      properties:
+        id: { type: string, format: uuid }
+        accreditedAt: { type: string, format: date-time }
+        amount: { type: string, description: Importe decimal representado sin pérdida de precisión }
+        method: { type: string }
+        receiptNumber: { type: [string, "null"] }
+        status: { $ref: "#/components/schemas/PaymentStatus" }
+        expiresAt: { type: string, format: date-time }
+        voidedAt: { type: [string, "null"], format: date-time }
+        voidReason: { type: [string, "null"] }
+    PaymentHistoryResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentHistoryItem" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
     MedicalCertificateStatus:
       type: string
       enum: [PENDING, APPROVED, REJECTED]
