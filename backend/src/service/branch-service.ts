@@ -5,12 +5,28 @@ import {
   BranchNotFoundError,
   DuplicateBranchError,
   type BranchConflictField,
+  type PublicBranchDetail,
+  type PublicBranchList,
   type BranchRepositoryPort,
 } from "../repository/branch-repository.js";
-import type { CreateBranchInput, UpdateBranchInput } from "../validator/branch-validator.js";
+import type {
+  CreateBranchInput,
+  PublicBranchListQuery,
+  UpdateBranchInput,
+} from "../validator/branch-validator.js";
 
 export class BranchService {
   constructor(private readonly branchRepository: BranchRepositoryPort) {}
+
+  listPublicBranches(query: PublicBranchListQuery): Promise<PublicBranchList> {
+    return this.branchRepository.listPublicBranches(query);
+  }
+
+  async getPublicBranch(id: string): Promise<PublicBranchDetail> {
+    const branch = await this.branchRepository.findPublicBranchById(id);
+    if (!branch) throw this.notFoundError();
+    return branch;
+  }
 
   async createBranch(input: CreateBranchInput): Promise<Branch> {
     const conflict = await this.branchRepository.findConflict(input.name, input.address);

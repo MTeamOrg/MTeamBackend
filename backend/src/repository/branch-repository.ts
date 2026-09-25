@@ -1,6 +1,10 @@
-import type { Branch, PrismaClient } from "../generated/prisma/client.js";
+import type { Branch, PrismaClient, User } from "../generated/prisma/client.js";
 import { Prisma } from "../generated/prisma/client.js";
-import type { CreateBranchInput, UpdateBranchInput } from "../validator/branch-validator.js";
+import type {
+  CreateBranchInput,
+  PublicBranchListQuery,
+  UpdateBranchInput,
+} from "../validator/branch-validator.js";
 
 export type BranchConflictField = "name" | "address";
 
@@ -18,7 +22,41 @@ export class BranchNotFoundError extends Error {
   }
 }
 
+type BranchCard = Pick<Branch,
+  "id" | "name" | "imageUrl" | "address" | "openingHours" | "phone" | "description"
+>;
+
+export interface PublicBranchList {
+  items: BranchCard[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
+export interface PublicBranchDetail extends BranchCard {
+  latitude: Branch["latitude"];
+  longitude: Branch["longitude"];
+  scheduledClasses: Array<{
+    id: string;
+    activity: string;
+    startsAt: Date;
+    trainer: Pick<User, "id" | "firstName" | "lastName"> | null;
+  }>;
+}
+
+const branchCardSelect = {
+  id: true,
+  name: true,
+  imageUrl: true,
+  address: true,
+  openingHours: true,
+  phone: true,
+  description: true,
+} as const;
+
 export interface BranchRepositoryPort {
+  listPublicBranches(query: PublicBranchListQuery): Promise<PublicBranchList>;
+  findPublicBranchById(id: string): Promise<PublicBranchDetail | null>;
   findById(id: string): Promise<Branch | null>;
   findConflict(
     name: string | undefined,
@@ -31,6 +69,48 @@ export interface BranchRepositoryPort {
 
 export class BranchRepository implements BranchRepositoryPort {
   constructor(private readonly database: PrismaClient) {}
+
+  async listPublicBranches(query: PublicBranchListQuery): Promise<PublicBranchList> {
+    const where: Prisma.BranchWhereInput = { isActive: true };
+    if (query.search) {
+      where.OR = [
+        { name: { contains: query.search, mode: "insensitive" } },
+        { address: { contains: query.search, mode: "insensitive" } },
+        { description: { contains: query.search, mode: "insensitive" } },
+      ];
+    }
+    const [total, items] = await this.database.$transaction([
+      this.database.branch.count({ where }),
+      this.database.branch.findMany({
+        where,
+        orderBy: [{ name: "asc" }, { id: "asc" }],
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+        select: branchCardSelect,
+      }),
+    ]);
+    return { items, page: query.page, limit: query.limit, total };
+  }
+
+  findPublicBranchById(id: string): Promise<PublicBranchDetail | null> {
+    return this.database.branch.findFirst({
+      where: { id, isActive: true },
+      select: {
+        ...branchCardSelect,
+        latitude: true,
+        longitude: true,
+        scheduledClasses: {
+          orderBy: [{ startsAt: "asc" }, { id: "asc" }],
+          select: {
+            id: true,
+            activity: true,
+            startsAt: true,
+            trainer: { select: { id: true, firstName: true, lastName: true } },
+          },
+        },
+      },
+    });
+  }
 
   findById(id: string): Promise<Branch | null> {
     return this.database.branch.findUnique({ where: { id } });

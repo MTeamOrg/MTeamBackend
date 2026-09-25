@@ -25,6 +25,14 @@ const longitudeSchema = coordinateSchema.min(-180).max(180);
 
 export const branchIdParamsSchema = z.strictObject({ branchId: z.uuid() });
 
+export const publicBranchListQuerySchema = z.strictObject({
+  search: z.string().trim().min(1).max(100).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+export type PublicBranchListQuery = z.infer<typeof publicBranchListQuerySchema>;
+
 export const createBranchSchema = z.strictObject({
   ...branchFields,
   latitude: latitudeSchema.optional(),

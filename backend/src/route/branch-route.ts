@@ -9,6 +9,8 @@ export function createBranchRouter(
   requireCompletedPasswordChange: RequestHandler,
 ): Router {
   const router = Router();
+  router.get("/branches", controller.listPublicBranches);
+  router.get("/branches/:branchId", controller.getPublicBranch);
   router.post(
     "/branches",
     authenticate,
