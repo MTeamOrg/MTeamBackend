@@ -138,15 +138,19 @@ Requisitos: Node.js, npm y una base PostgreSQL disponible.
 
 ```powershell
 cd backend
-npm install
-Copy-Item .env.example .env.development.local
-npm run prisma:generate
-npm run prisma:migrate:dev
+npm ci
+Copy-Item .env.example .env
+npm run local:ensure-jwt-secret
+npm run prisma:validate
+npm run prisma:migrate:deploy
+npm run build
 npm run dev
 ```
 
-Antes de iniciar, completá en `.env.development.local` las URLs y credenciales
-del ambiente de desarrollo. Los archivos `.env` locales no deben versionarse.
+Antes de iniciar, completá localmente las URLs y credenciales del ambiente. Los
+archivos `.env` locales no deben versionarse. Para Supabase, seguridad de Data
+API, bootstrap del primer administrador y smoke real, seguí
+[`backend/docs/supabase-setup.md`](./backend/docs/supabase-setup.md).
 Swagger UI quedará disponible en `http://localhost:3000/api/docs`.
 
 Para las fotografías de perfil se debe crear en Supabase Storage un bucket
