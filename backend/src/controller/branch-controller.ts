@@ -7,6 +7,7 @@ import type { BranchService } from "../service/branch-service.js";
 import {
   branchIdParamsSchema,
   createBranchSchema,
+  publicBranchListQuerySchema,
   updateBranchSchema,
 } from "../validator/branch-validator.js";
 
@@ -20,6 +21,33 @@ function serializeBranch(branch: Branch) {
 
 export class BranchController {
   constructor(private readonly branchService: BranchService) {}
+
+  listPublicBranches: RequestHandler = async (request, response) => {
+    const validation = publicBranchListQuerySchema.safeParse(request.query);
+    if (!validation.success) {
+      throw new ApplicationError(400, ERROR_CODE.VALIDATION_ERROR,
+        "Los filtros de sedes no son válidos", validation.error.flatten());
+    }
+    response.status(200).json(await this.branchService.listPublicBranches(validation.data));
+  };
+
+  getPublicBranch: RequestHandler = async (request, response) => {
+    const validation = branchIdParamsSchema.safeParse(request.params);
+    if (!validation.success) {
+      throw new ApplicationError(400, ERROR_CODE.VALIDATION_ERROR,
+        "El identificador de la sede no es válido", validation.error.flatten());
+    }
+    const branch = await this.branchService.getPublicBranch(validation.data.branchId);
+    response.status(200).json({
+      ...branch,
+      latitude: branch.latitude?.toString() ?? null,
+      longitude: branch.longitude?.toString() ?? null,
+      scheduledClasses: branch.scheduledClasses.map((scheduledClass) => ({
+        ...scheduledClass,
+        startsAt: scheduledClass.startsAt.toISOString(),
+      })),
+    });
+  };
 
   createBranch: RequestHandler = async (request, response) => {
     const validation = createBranchSchema.safeParse(request.body);

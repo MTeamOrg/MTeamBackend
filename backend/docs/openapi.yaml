@@ -853,13 +853,21 @@ paths:
   /branches:
     get:
       tags: [Branches]
-      summary: Listar sedes
+      summary: Listar sedes activas públicamente
+      description: Busca en nombre, dirección y descripción sin distinguir mayúsculas. Filtra antes de paginar.
       operationId: listBranches
       security: []
       parameters:
         - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Sedes activas ordenadas por nombre e identificador
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicBranchListResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
     post:
       tags: [Branches]
       summary: Crear una sede
@@ -874,11 +882,17 @@ paths:
       - $ref: "#/components/parameters/BranchId"
     get:
       tags: [Branches]
-      summary: Consultar una sede
+      summary: Consultar una sede activa públicamente
       operationId: getBranch
       security: []
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Datos de la sede y sus clases programadas, ordenadas por fecha e identificador
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicBranchDetail" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
     patch:
       tags: [Branches]
       summary: Modificar una sede
@@ -1454,6 +1468,64 @@ components:
         to: { type: string, format: date-time, description: Límite exclusivo de accreditedAt }
         paymentCount: { type: integer, minimum: 0 }
         totalAmount: { type: string, description: Suma decimal exacta de pagos ACCREDITED }
+    PublicBranchCard:
+      type: object
+      additionalProperties: false
+      required: [id, name, imageUrl, address, openingHours, phone, description]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        imageUrl: { type: string, format: uri }
+        address: { type: string }
+        openingHours: { type: string }
+        phone: { type: string }
+        description: { type: string }
+    PublicBranchListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PublicBranchCard" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    PublicBranchScheduledClass:
+      type: object
+      additionalProperties: false
+      required: [id, activity, startsAt, trainer]
+      properties:
+        id: { type: string, format: uuid }
+        activity: { type: string }
+        startsAt: { type: string, format: date-time }
+        trainer:
+          oneOf:
+            - type: 'null'
+            - type: object
+              additionalProperties: false
+              required: [id, firstName, lastName]
+              properties:
+                id: { type: string, format: uuid }
+                firstName: { type: string }
+                lastName: { type: string }
+    PublicBranchDetail:
+      type: object
+      additionalProperties: false
+      required: [id, name, imageUrl, address, openingHours, phone, description, latitude, longitude, scheduledClasses]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        imageUrl: { type: string, format: uri }
+        address: { type: string }
+        openingHours: { type: string }
+        phone: { type: string }
+        description: { type: string }
+        latitude: { type: [string, 'null'], description: Coordenada decimal disponible }
+        longitude: { type: [string, 'null'], description: Coordenada decimal disponible }
+        scheduledClasses:
+          type: array
+          items: { $ref: "#/components/schemas/PublicBranchScheduledClass" }
     MedicalCertificateStatus:
       type: string
       enum: [PENDING, APPROVED, REJECTED]
