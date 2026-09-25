@@ -5,6 +5,7 @@ import {
   atLocalGymTime,
   currentGymWeekStartsOn,
   daysFromWeekStart,
+  gymWeekRange,
   localGymTime,
 } from "../model/scheduled-class-week.js";
 import {
@@ -48,6 +49,32 @@ function toView(record: WeeklyScheduleRecord): WeeklyScheduleView {
   return record;
 }
 
+function publicWeeklyScheduleSelect(weekStartsOn: string) {
+  const range = gymWeekRange(weekStartsOn);
+  return {
+    id: true,
+    weekStartsOn: true,
+    classes: {
+      where: {
+        startsAt: { gte: range.startsAt, lt: range.endsAt },
+        branch: { is: { isActive: true } },
+      },
+      orderBy: [
+        { startsAt: "asc" as const },
+        { branch: { name: "asc" as const } },
+        { id: "asc" as const },
+      ],
+      select: {
+        id: true,
+        activity: true,
+        startsAt: true,
+        branch: { select: { id: true, name: true } },
+        trainer: { select: { id: true, firstName: true, lastName: true } },
+      },
+    },
+  } satisfies Prisma.WeeklyScheduleSelect;
+}
+
 export interface WeeklyScheduleRepositoryPort {
   findByWeekStartsOn(weekStartsOn: string): Promise<WeeklyScheduleView>;
   findById(id: string): Promise<WeeklyScheduleView | null>;
@@ -64,7 +91,7 @@ export class WeeklyScheduleRepository implements WeeklyScheduleRepositoryPort {
   async findByWeekStartsOn(weekStartsOn: string): Promise<WeeklyScheduleView> {
     const schedule = await this.database.weeklySchedule.findUnique({
       where: { weekStartsOn: new Date(`${weekStartsOn}T00:00:00.000Z`) },
-      select: weeklyScheduleSelect,
+      select: publicWeeklyScheduleSelect(weekStartsOn),
     });
     return schedule
       ? toView(schedule)
@@ -74,9 +101,11 @@ export class WeeklyScheduleRepository implements WeeklyScheduleRepositoryPort {
   async findById(id: string): Promise<WeeklyScheduleView | null> {
     const schedule = await this.database.weeklySchedule.findUnique({
       where: { id },
-      select: weeklyScheduleSelect,
+      select: { weekStartsOn: true },
     });
-    return schedule ? toView(schedule) : null;
+    return schedule
+      ? this.findByWeekStartsOn(schedule.weekStartsOn.toISOString().slice(0, 10))
+      : null;
   }
 
   async copySchedule(

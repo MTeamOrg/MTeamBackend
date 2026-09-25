@@ -5,7 +5,7 @@ import { isMonday } from "../model/scheduled-class-week.js";
 const weekStartsOnSchema = z.iso.date().refine(isMonday, "La semana debe comenzar un lunes");
 
 export const weeklyScheduleQuerySchema = z.strictObject({
-  weekStartsOn: weekStartsOnSchema,
+  weekStartsOn: weekStartsOnSchema.optional(),
 });
 
 export const weeklyScheduleIdParamsSchema = z.strictObject({ scheduleId: z.uuid() });

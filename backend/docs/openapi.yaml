@@ -990,22 +990,40 @@ paths:
       tags: [Weekly Schedules]
       summary: Consultar el cronograma de una semana
       description: >-
-        Consulta pública. weekStartsOn debe ser un lunes de
-        America/Argentina/Buenos_Aires. Si todavía no hay clases para esa
-        semana, devuelve el cronograma con classes vacío.
+        Consulta pública. Sin weekStartsOn devuelve la semana actual de
+        America/Argentina/Buenos_Aires; si se indica, debe ser un lunes. La
+        ventana comienza el lunes 00:00 inclusive y termina el lunes siguiente
+        00:00 sin incluirlo.
+        Solo incluye clases de sedes activas, ordenadas por inicio, sede e id.
+        El dominio vigente solo almacena startsAt: no registra una hora de
+        finalización y la API no infiere una duración inexistente.
       operationId: listWeeklySchedules
       security: []
       parameters:
         - name: weekStartsOn
           in: query
-          required: true
-          schema: { type: string, format: date }
+          required: false
+          description: Lunes local; si se omite se usa la semana actual de Buenos Aires.
+          schema: { type: string, format: date, example: "2030-09-02" }
       responses:
         "200":
           description: Cronograma semanal y sus clases ordenadas por fecha
           content:
             application/json:
               schema: { $ref: "#/components/schemas/WeeklySchedule" }
+              example:
+                id: f12101a5-e6ab-43f7-91b3-2b8fbfd67b84
+                weekStartsOn: "2030-09-02"
+                classes:
+                  - id: eb3bc849-5234-48a3-b54a-9f9e38608de2
+                    activity: Yoga
+                    day: "2030-09-02"
+                    startsAt: "2030-09-02T13:00:00.000Z"
+                    startTime: "10:00"
+                    branch:
+                      id: 83cd902e-0475-4c92-943c-129b751dacee
+                      name: Centro
+                    trainer: null
         "400": { $ref: "#/components/responses/ValidationError" }
 
   /weekly-schedules/{scheduleId}:
@@ -1737,11 +1755,22 @@ components:
     WeeklyScheduleClass:
       type: object
       additionalProperties: false
-      required: [id, activity, startsAt, branch, trainer]
+      required: [id, activity, day, startsAt, startTime, branch, trainer]
       properties:
         id: { type: string, format: uuid }
         activity: { type: string }
-        startsAt: { type: string, format: date-time }
+        day:
+          type: string
+          format: date
+          description: Día local en America/Argentina/Buenos_Aires.
+        startsAt:
+          type: string
+          format: date-time
+          description: Instante de inicio normalizado en ISO 8601.
+        startTime:
+          type: string
+          pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+          description: Hora local de inicio en formato HH:mm.
         branch:
           type: object
           additionalProperties: false

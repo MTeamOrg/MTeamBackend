@@ -1,5 +1,6 @@
 import { ApplicationError } from "../error/application-error.js";
 import { ERROR_CODE } from "../error/error-code.js";
+import { currentGymWeekStartsOn } from "../model/scheduled-class-week.js";
 import {
   BranchAssignmentError,
   HistoricalClassError,
@@ -16,8 +17,13 @@ import {
 export class WeeklyScheduleService {
   constructor(private readonly repository: WeeklyScheduleRepositoryPort) {}
 
-  getByWeekStartsOn(weekStartsOn: string): Promise<WeeklyScheduleView> {
-    return this.repository.findByWeekStartsOn(weekStartsOn);
+  getByWeekStartsOn(
+    weekStartsOn: string | undefined,
+    now = new Date(),
+  ): Promise<WeeklyScheduleView> {
+    return this.repository.findByWeekStartsOn(
+      weekStartsOn ?? currentGymWeekStartsOn(now),
+    );
   }
 
   async getById(id: string): Promise<WeeklyScheduleView> {

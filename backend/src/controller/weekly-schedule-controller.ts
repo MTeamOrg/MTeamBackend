@@ -2,6 +2,7 @@ import type { RequestHandler } from "express";
 
 import { ApplicationError } from "../error/application-error.js";
 import { ERROR_CODE } from "../error/error-code.js";
+import { localGymDate, localGymTime } from "../model/scheduled-class-week.js";
 import type { WeeklyScheduleView } from "../repository/weekly-schedule-repository.js";
 import type { WeeklyScheduleService } from "../service/weekly-schedule-service.js";
 import {
@@ -17,7 +18,9 @@ function serializeSchedule(schedule: WeeklyScheduleView) {
     classes: schedule.classes.map((scheduledClass) => ({
       id: scheduledClass.id,
       activity: scheduledClass.activity,
+      day: localGymDate(scheduledClass.startsAt),
       startsAt: scheduledClass.startsAt.toISOString(),
+      startTime: localGymTime(scheduledClass.startsAt).slice(0, 5),
       branch: scheduledClass.branch,
       trainer: scheduledClass.trainer,
     })),

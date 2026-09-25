@@ -33,6 +33,13 @@ export function belongsToWeek(weekStartsOn: string, startsAt: Date): boolean {
   return classDate >= weekStartsOn && classDate < nextWeekStartsOn;
 }
 
+export function gymWeekRange(weekStartsOn: string): { startsAt: Date; endsAt: Date } {
+  return {
+    startsAt: atLocalGymTime(weekStartsOn, "00:00:00.000"),
+    endsAt: atLocalGymTime(addDays(weekStartsOn, 7), "00:00:00.000"),
+  };
+}
+
 export function addDays(isoDate: string, days: number): string {
   return new Date(
     new Date(`${isoDate}T00:00:00.000Z`).getTime() + days * MILLISECONDS_PER_DAY,

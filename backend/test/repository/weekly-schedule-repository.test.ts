@@ -60,6 +60,53 @@ function setup() {
 }
 
 describe("CLA-01 weekly schedule repository", () => {
+  test("filters the exact local week and active branches with stable relational ordering", async () => {
+    const classes = [
+      source.classes[0],
+      source.classes[1],
+    ];
+    const findUnique = jest.fn().mockResolvedValue({
+      id: sourceScheduleId,
+      weekStartsOn: sourceWeek,
+      classes,
+    });
+    const database = { weeklySchedule: { findUnique } } as unknown as PrismaClient;
+
+    const result = await new WeeklyScheduleRepository(database)
+      .findByWeekStartsOn("2030-09-02");
+
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { weekStartsOn: sourceWeek },
+      select: {
+        id: true,
+        weekStartsOn: true,
+        classes: {
+          where: {
+            startsAt: {
+              gte: new Date("2030-09-02T03:00:00.000Z"),
+              lt: new Date("2030-09-09T03:00:00.000Z"),
+            },
+            branch: { is: { isActive: true } },
+          },
+          orderBy: [
+            { startsAt: "asc" },
+            { branch: { name: "asc" } },
+            { id: "asc" },
+          ],
+          select: {
+            id: true,
+            activity: true,
+            startsAt: true,
+            branch: { select: { id: true, name: true } },
+            trainer: { select: { id: true, firstName: true, lastName: true } },
+          },
+        },
+      },
+    });
+    expect(result.classes[0]!.trainer).toEqual(source.classes[0]!.trainer);
+    expect(result.classes[1]!.trainer).toBeNull();
+  });
+
   test("returns an empty schedule for a week that does not exist", async () => {
     const database = {
       weeklySchedule: { findUnique: jest.fn().mockResolvedValue(null) },
@@ -70,6 +117,21 @@ describe("CLA-01 weekly schedule repository", () => {
       weekStartsOn: new Date("2030-09-09T00:00:00.000Z"),
       classes: [],
     });
+  });
+
+  test("applies the same public visibility when consulting by schedule id", async () => {
+    const findUnique = jest.fn().mockResolvedValue({ weekStartsOn: sourceWeek });
+    const database = { weeklySchedule: { findUnique } } as unknown as PrismaClient;
+    const repository = new WeeklyScheduleRepository(database);
+    const findByWeekStartsOn = jest.spyOn(repository, "findByWeekStartsOn")
+      .mockResolvedValue(source);
+
+    await expect(repository.findById(sourceScheduleId)).resolves.toEqual(source);
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { id: sourceScheduleId },
+      select: { weekStartsOn: true },
+    });
+    expect(findByWeekStartsOn).toHaveBeenCalledWith("2030-09-02");
   });
 });
 
