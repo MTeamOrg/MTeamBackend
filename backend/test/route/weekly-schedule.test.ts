@@ -152,11 +152,30 @@ describe("CLA-04 weekly schedule copy permissions", () => {
     expect(service.copySchedule).not.toHaveBeenCalled();
   });
 
+  test("rejects an invalid source schedule identifier", async () => {
+    const { app, service } = setup();
+    const response = await request(app).post("/api/weekly-schedules/not-a-uuid/copies")
+      .send({ weekStartsOn: "2030-09-09" });
+    expect(response.status).toBe(400);
+    expect(service.copySchedule).not.toHaveBeenCalled();
+  });
+
   test("copies a schedule for an admin", async () => {
     const { app, service } = setup();
     const response = await request(app).post(`/api/weekly-schedules/${scheduleId}/copies`)
       .send({ weekStartsOn: "2030-09-09" });
     expect(response.status).toBe(201);
     expect(service.copySchedule).toHaveBeenCalledWith(scheduleId, "2030-09-09");
+  });
+
+  test("returns conflict on an idempotent retry without reporting a second creation", async () => {
+    const { app, service } = setup();
+    service.copySchedule.mockRejectedValue(new ApplicationError(
+      409, ERROR_CODE.CONFLICT, "Ya existe un cronograma para la semana de destino",
+    ));
+    const response = await request(app).post(`/api/weekly-schedules/${scheduleId}/copies`)
+      .send({ weekStartsOn: "2030-09-09" });
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe(ERROR_CODE.CONFLICT);
   });
 });

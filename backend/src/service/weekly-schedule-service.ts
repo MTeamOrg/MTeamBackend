@@ -8,6 +8,7 @@ import {
 } from "../repository/scheduled-class-repository.js";
 import {
   DestinationWeekAlreadyExistsError,
+  DestinationWeekMustFollowSourceError,
   PastDestinationWeekError,
   WeeklyScheduleNotFoundError,
   type WeeklyScheduleRepositoryPort,
@@ -34,9 +35,13 @@ export class WeeklyScheduleService {
     return schedule;
   }
 
-  async copySchedule(sourceScheduleId: string, destinationWeekStartsOn: string): Promise<WeeklyScheduleView> {
+  async copySchedule(
+    sourceScheduleId: string,
+    destinationWeekStartsOn: string,
+    now = new Date(),
+  ): Promise<WeeklyScheduleView> {
     try {
-      return await this.repository.copySchedule(sourceScheduleId, destinationWeekStartsOn, new Date());
+      return await this.repository.copySchedule(sourceScheduleId, destinationWeekStartsOn, now);
     } catch (error: unknown) {
       throw this.toApplicationError(error);
     }
@@ -49,6 +54,10 @@ export class WeeklyScheduleService {
     if (error instanceof DestinationWeekAlreadyExistsError) {
       return new ApplicationError(409, ERROR_CODE.CONFLICT,
         "Ya existe un cronograma para la semana de destino");
+    }
+    if (error instanceof DestinationWeekMustFollowSourceError) {
+      return new ApplicationError(400, ERROR_CODE.VALIDATION_ERROR,
+        "La semana de destino debe ser la semana inmediatamente siguiente");
     }
     if (error instanceof PastDestinationWeekError) {
       return new ApplicationError(409, ERROR_CODE.CONFLICT,

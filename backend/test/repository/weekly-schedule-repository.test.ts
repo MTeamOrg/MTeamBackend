@@ -1,10 +1,15 @@
 import type { PrismaClient } from "../../src/generated/prisma/client.js";
+import { Prisma } from "../../src/generated/prisma/client.js";
 import {
   DestinationWeekAlreadyExistsError,
+  DestinationWeekMustFollowSourceError,
   PastDestinationWeekError,
   WeeklyScheduleRepository,
 } from "../../src/repository/weekly-schedule-repository.js";
-import { BranchAssignmentError } from "../../src/repository/scheduled-class-repository.js";
+import {
+  BranchAssignmentError,
+  TrainerAssignmentError,
+} from "../../src/repository/scheduled-class-repository.js";
 
 const sourceScheduleId = "f12101a5-e6ab-43f7-91b3-2b8fbfd67b84";
 const branchId = "83cd902e-0475-4c92-943c-129b751dacee";
@@ -56,7 +61,7 @@ function setup() {
       callback(transaction)),
   } as unknown as PrismaClient;
   return { repository: new WeeklyScheduleRepository(database), findUnique, create,
-    queryRaw, userFindUnique };
+    queryRaw, branchFindUnique, userFindUnique, transaction, database };
 }
 
 describe("CLA-01 weekly schedule repository", () => {
@@ -136,7 +141,7 @@ describe("CLA-01 weekly schedule repository", () => {
 });
 
 describe("CLA-04 weekly schedule repository", () => {
-  test("copies classes, adjusts dates, preserves the source and keeps optional trainers", async () => {
+  test("copies only to the next week, shifts seven days and preserves all class data", async () => {
     const { repository, create, findUnique } = setup();
     const result = await repository.copySchedule(
       sourceScheduleId, "2030-09-09", new Date("2029-01-01T12:00:00.000Z"),
@@ -165,6 +170,19 @@ describe("CLA-04 weekly schedule repository", () => {
       }),
     );
     expect(findUnique).toHaveBeenCalledTimes(2);
+    expect(findUnique).not.toHaveBeenCalledWith(expect.objectContaining({ data: expect.anything() }));
+    expect(create.mock.calls[0]![0].select.classes.orderBy).toEqual([
+      { startsAt: "asc" }, { branch: { name: "asc" } }, { id: "asc" },
+    ]);
+  });
+
+  test("rejects a destination that is not exactly the following Monday", async () => {
+    const state = setup();
+    await expect(state.repository.copySchedule(
+      sourceScheduleId, "2030-09-16", new Date("2029-01-01T12:00:00.000Z"),
+    )).rejects.toBeInstanceOf(DestinationWeekMustFollowSourceError);
+    expect(state.findUnique).toHaveBeenCalledTimes(1);
+    expect(state.create).not.toHaveBeenCalled();
   });
 
   test("rejects an existing destination before creating anything", async () => {
@@ -194,5 +212,50 @@ describe("CLA-04 weekly schedule repository", () => {
       sourceScheduleId, "2030-09-09", new Date("2029-01-01T12:00:00.000Z"),
     )).rejects.toBeInstanceOf(BranchAssignmentError);
     expect(state.create).not.toHaveBeenCalled();
+  });
+
+  test("rejects an inactive branch and rolls back before creating the destination", async () => {
+    const state = setup();
+    state.branchFindUnique.mockResolvedValueOnce({ isActive: false });
+    await expect(state.repository.copySchedule(
+      sourceScheduleId, "2030-09-09", new Date("2029-01-01T12:00:00.000Z"),
+    )).rejects.toEqual(expect.objectContaining({ reason: "INACTIVE" }));
+    expect(state.create).not.toHaveBeenCalled();
+  });
+
+  test("rejects an inactive trainer and rolls back the complete copy", async () => {
+    const state = setup();
+    state.userFindUnique.mockResolvedValueOnce({
+      role: "TRAINER", status: "INACTIVE", trainerProfile: { id: "profile" },
+    });
+    await expect(state.repository.copySchedule(
+      sourceScheduleId, "2030-09-09", new Date("2029-01-01T12:00:00.000Z"),
+    )).rejects.toBeInstanceOf(TrainerAssignmentError);
+    expect(state.create).not.toHaveBeenCalled();
+  });
+
+  test("creates an empty destination when the source week has no classes", async () => {
+    const state = setup();
+    state.findUnique.mockReset()
+      .mockResolvedValueOnce({ ...source, classes: [] })
+      .mockResolvedValueOnce(null);
+    await state.repository.copySchedule(
+      sourceScheduleId, "2030-09-09", new Date("2029-01-01T12:00:00.000Z"),
+    );
+    expect(state.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ classes: { create: [] } }),
+    }));
+  });
+
+  test("maps the unique-week race to an idempotent conflict without a second copy", async () => {
+    const uniqueConflict = new Prisma.PrismaClientKnownRequestError("duplicate week", {
+      code: "P2002", clientVersion: "7.10.0",
+    });
+    const database = {
+      $transaction: jest.fn().mockRejectedValue(uniqueConflict),
+    } as unknown as PrismaClient;
+    await expect(new WeeklyScheduleRepository(database).copySchedule(
+      sourceScheduleId, "2030-09-09", new Date("2029-01-01T12:00:00.000Z"),
+    )).rejects.toBeInstanceOf(DestinationWeekAlreadyExistsError);
   });
 });
