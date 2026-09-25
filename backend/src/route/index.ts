@@ -10,6 +10,7 @@ import { MemberMembershipController } from "../controller/member-membership-cont
 import { MembershipPriceController } from "../controller/membership-price-controller.js";
 import { PaymentController } from "../controller/payment-controller.js";
 import { PaymentPreviewController } from "../controller/payment-preview-controller.js";
+import { ScheduledClassController } from "../controller/scheduled-class-controller.js";
 import { TrainerController } from "../controller/trainer-controller.js";
 import { UserController } from "../controller/user-controller.js";
 import { createAuthenticationMiddleware } from "../middleware/authentication-middleware.js";
@@ -21,6 +22,7 @@ import { MemberMembershipRepository } from "../repository/member-membership-repo
 import { MembershipPriceRepository } from "../repository/membership-price-repository.js";
 import { PaymentRepository } from "../repository/payment-repository.js";
 import { PaymentPreviewRepository } from "../repository/payment-preview-repository.js";
+import { ScheduledClassRepository } from "../repository/scheduled-class-repository.js";
 import { TrainerRepository } from "../repository/trainer-repository.js";
 import { UserRepository } from "../repository/user-repository.js";
 import { AdminUserService } from "../service/admin-user-service.js";
@@ -31,6 +33,7 @@ import { MemberMembershipService } from "../service/member-membership-service.js
 import { MembershipPriceService } from "../service/membership-price-service.js";
 import { PaymentService } from "../service/payment-service.js";
 import { PaymentPreviewService } from "../service/payment-preview-service.js";
+import { ScheduledClassService } from "../service/scheduled-class-service.js";
 import { TrainerService } from "../service/trainer-service.js";
 import { PasswordService } from "../service/password-service.js";
 import { SupabaseProfilePhotoStorage } from "../service/profile-photo-storage.js";
@@ -45,6 +48,7 @@ import { createMemberMembershipRouter } from "./member-membership-route.js";
 import { createMembershipPriceRouter } from "./membership-price-route.js";
 import { createPaymentRouter } from "./payment-route.js";
 import { createPaymentPreviewRouter } from "./payment-preview-route.js";
+import { createScheduledClassRouter } from "./scheduled-class-route.js";
 import { createTrainerRouter } from "./trainer-route.js";
 import { createUserRouter } from "./user-route.js";
 
@@ -79,6 +83,9 @@ const paymentPreviewController = new PaymentPreviewController(
   new PaymentPreviewService(new PaymentPreviewRepository(database), priceRepository),
 );
 const trainerController = new TrainerController(new TrainerService(new TrainerRepository(database)));
+const scheduledClassController = new ScheduledClassController(
+  new ScheduledClassService(new ScheduledClassRepository(database)),
+);
 
 apiRouter.use(healthRouter);
 apiRouter.use(createTrainerRouter(trainerController));
@@ -112,6 +119,11 @@ apiRouter.use(createMembershipPriceRouter(
 apiRouter.use(createPaymentRouter(paymentController, authenticate, requirePasswordChangeCompleted));
 apiRouter.use(createPaymentPreviewRouter(
   paymentPreviewController,
+  authenticate,
+  requirePasswordChangeCompleted,
+));
+apiRouter.use(createScheduledClassRouter(
+  scheduledClassController,
   authenticate,
   requirePasswordChangeCompleted,
 ));
