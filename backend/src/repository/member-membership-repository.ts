@@ -10,13 +10,26 @@ export interface MemberMembershipRepositoryPort {
   findLatestAccreditedPayment(memberId: string, now: Date): Promise<LastAccreditedPayment | null>;
 }
 
-export class MemberMembershipRepository implements MemberMembershipRepositoryPort {
+export interface InitialMedicalCertificatePeriodRepositoryPort {
+  findEarliestAccreditedPayment(memberId: string, now: Date): Promise<LastAccreditedPayment | null>;
+}
+
+export class MemberMembershipRepository implements
+  MemberMembershipRepositoryPort, InitialMedicalCertificatePeriodRepositoryPort {
   constructor(private readonly database: PrismaClient) {}
 
   findLatestAccreditedPayment(memberId: string, now: Date): Promise<LastAccreditedPayment | null> {
     return this.database.payment.findFirst({
       where: { memberId, status: "ACCREDITED", accreditedAt: { lte: now } },
       orderBy: [{ accreditedAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+      select: { id: true, accreditedAt: true, expiresAt: true },
+    });
+  }
+
+  findEarliestAccreditedPayment(memberId: string, now: Date): Promise<LastAccreditedPayment | null> {
+    return this.database.payment.findFirst({
+      where: { memberId, status: "ACCREDITED", accreditedAt: { lte: now } },
+      orderBy: [{ accreditedAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
       select: { id: true, accreditedAt: true, expiresAt: true },
     });
   }

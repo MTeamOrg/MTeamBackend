@@ -11,3 +11,11 @@ export const createPaymentSchema = z.strictObject({
 });
 
 export type CreatePaymentInput = z.infer<typeof createPaymentSchema>;
+
+export const voidPaymentParamsSchema = z.strictObject({ paymentId: z.uuid() });
+
+export const voidPaymentSchema = z.strictObject({
+  reason: z.string().trim().min(1).max(500),
+});
+
+export type VoidPaymentInput = z.infer<typeof voidPaymentSchema>;
