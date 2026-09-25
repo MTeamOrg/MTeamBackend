@@ -5,10 +5,12 @@ export const createMembershipPriceSchema = z.strictObject({
     (value) => /^\d+(?:\.\d{1,2})?$/.test(value.toString()),
     "El importe debe tener como máximo dos decimales",
   ),
-  effectiveFrom: z.iso.datetime({ offset: true }).refine(
-    (value) => new Date(value).getTime() <= Date.now(),
-    "La fecha de vigencia no puede ser futura",
-  ),
+  effectiveFrom: z.iso.datetime({ offset: true }),
+});
+
+export const membershipPriceListQuerySchema = z.strictObject({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 export type CreateMembershipPriceInput = z.infer<typeof createMembershipPriceSchema>;

@@ -470,10 +470,29 @@ paths:
   /membership-prices:
     get:
       tags: [Membership Prices]
-      summary: Consultar el historial de valores de cuota
+      summary: Consultar el historial de valores de cuota (administradores)
       operationId: listMembershipPrices
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Historial paginado de valores de cuota
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, page, limit, total]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/MembershipPriceHistoryItem" }
+                  page: { type: integer }
+                  limit: { type: integer }
+                  total: { type: integer }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
     post:
       tags: [Membership Prices]
       summary: Registrar un nuevo valor de cuota
@@ -484,7 +503,14 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/CreateMembershipPriceRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Nuevo valor de cuota registrado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MembershipPriceHistoryItem" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /payments:
     get:
@@ -1570,6 +1596,16 @@ components:
       properties:
         amount: { type: number, format: double, exclusiveMinimum: 0 }
         effectiveFrom: { type: string, format: date-time }
+    MembershipPriceHistoryItem:
+      type: object
+      required: [id, amount, previousAmount, effectiveFrom, createdAt, createdById]
+      properties:
+        id: { type: string, format: uuid }
+        amount: { type: string, description: Importe decimal del nuevo valor }
+        previousAmount: { type: [string, "null"], description: Importe anterior derivado del historial por fecha de vigencia }
+        effectiveFrom: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        createdById: { type: string, format: uuid }
     PaymentPreviewRequest:
       type: object
       required: [memberId, amount, method]
