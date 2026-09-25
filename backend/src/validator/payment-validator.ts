@@ -19,3 +19,12 @@ export const voidPaymentSchema = z.strictObject({
 });
 
 export type VoidPaymentInput = z.infer<typeof voidPaymentSchema>;
+
+export const paymentHistoryQuerySchema = z.strictObject({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+export const memberPaymentsParamsSchema = z.strictObject({ memberId: z.uuid() });
+
+export type PaymentHistoryQuery = z.infer<typeof paymentHistoryQuerySchema>;
