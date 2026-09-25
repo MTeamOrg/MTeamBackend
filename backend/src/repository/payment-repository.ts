@@ -1,8 +1,6 @@
 import type { Payment, PrismaClient } from "../generated/prisma/client.js";
+import { calculatePaymentExpiresAt } from "../model/payment-expiration.js";
 import type { CreatePaymentInput, PaymentHistoryQuery } from "../validator/payment-validator.js";
-
-const MEMBERSHIP_VALIDITY_DAYS = 30;
-const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export class MemberNotFoundError extends Error {}
 export class UserIsNotMemberError extends Error {}
@@ -80,9 +78,7 @@ export class PaymentRepository implements PaymentRepositoryPort {
       if (user.role !== "MEMBER") throw new UserIsNotMemberError();
 
       const accreditedAt = new Date();
-      const expiresAt = new Date(
-        accreditedAt.getTime() + MEMBERSHIP_VALIDITY_DAYS * MILLISECONDS_PER_DAY,
-      );
+      const expiresAt = calculatePaymentExpiresAt(accreditedAt);
 
       return transaction.payment.create({
         data: {
