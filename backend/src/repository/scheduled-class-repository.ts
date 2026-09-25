@@ -41,8 +41,8 @@ export class ScheduledClassRepository implements ScheduledClassRepositoryPort {
   createClass(input: CreateScheduledClassInput, now: Date): Promise<ManagedScheduledClass> {
     return this.database.$transaction(async (transaction) => {
       if (new Date(input.startsAt) <= now) throw new HistoricalClassError();
-      await this.requireActiveBranch(transaction, input.branchId);
-      if (input.trainerId) await this.requireActiveTrainer(transaction, input.trainerId);
+      await requireActiveBranch(transaction, input.branchId);
+      if (input.trainerId) await requireActiveTrainer(transaction, input.trainerId);
 
       const weekStartsOn = new Date(`${input.weekStartsOn}T00:00:00.000Z`);
       const schedule = await transaction.weeklySchedule.upsert({
@@ -81,10 +81,10 @@ export class ScheduledClassRepository implements ScheduledClassRepositoryPort {
         if (!belongsToWeek(weekStartsOn, startsAt)) throw new ClassOutsideWeekError();
       }
       if (input.branchId && input.branchId !== existing.branchId) {
-        await this.requireActiveBranch(transaction, input.branchId);
+        await requireActiveBranch(transaction, input.branchId);
       }
       if (input.trainerId && input.trainerId !== existing.trainerId) {
-        await this.requireActiveTrainer(transaction, input.trainerId);
+        await requireActiveTrainer(transaction, input.trainerId);
       }
 
       const data: Prisma.ScheduledClassUncheckedUpdateInput = {};
@@ -119,27 +119,36 @@ export class ScheduledClassRepository implements ScheduledClassRepositoryPort {
     if (rows.length === 0) throw new ScheduledClassNotFoundError();
   }
 
-  private async requireActiveBranch(transaction: Prisma.TransactionClient, id: string): Promise<void> {
-    const rows = await transaction.$queryRaw<Array<{ id: string }>>`
-      SELECT id FROM branch WHERE id = CAST(${id} AS uuid) FOR SHARE
-    `;
-    if (rows.length === 0) throw new BranchAssignmentError("MISSING");
-    const branch = await transaction.branch.findUnique({ where: { id }, select: { isActive: true } });
-    if (!branch?.isActive) throw new BranchAssignmentError("INACTIVE");
-  }
+}
 
-  private async requireActiveTrainer(transaction: Prisma.TransactionClient, id: string): Promise<void> {
-    const rows = await transaction.$queryRaw<Array<{ id: string }>>`
-      SELECT id FROM "user" WHERE id = CAST(${id} AS uuid) FOR SHARE
-    `;
-    if (rows.length === 0) throw new TrainerAssignmentError("MISSING");
-    const user = await transaction.user.findUnique({
-      where: { id },
-      select: { role: true, status: true, trainerProfile: { select: { id: true } } },
-    });
-    if (!user || user.role !== "TRAINER" || !user.trainerProfile) {
-      throw new TrainerAssignmentError("INVALID");
-    }
-    if (user.status !== "ACTIVE") throw new TrainerAssignmentError("INACTIVE");
+/** Shared by scheduled-class management and weekly-schedule copying. */
+export async function requireActiveBranch(
+  transaction: Prisma.TransactionClient,
+  id: string,
+): Promise<void> {
+  const rows = await transaction.$queryRaw<Array<{ id: string }>>`
+    SELECT id FROM branch WHERE id = CAST(${id} AS uuid) FOR SHARE
+  `;
+  if (rows.length === 0) throw new BranchAssignmentError("MISSING");
+  const branch = await transaction.branch.findUnique({ where: { id }, select: { isActive: true } });
+  if (!branch?.isActive) throw new BranchAssignmentError("INACTIVE");
+}
+
+/** Shared by scheduled-class management and weekly-schedule copying. */
+export async function requireActiveTrainer(
+  transaction: Prisma.TransactionClient,
+  id: string,
+): Promise<void> {
+  const rows = await transaction.$queryRaw<Array<{ id: string }>>`
+    SELECT id FROM "user" WHERE id = CAST(${id} AS uuid) FOR SHARE
+  `;
+  if (rows.length === 0) throw new TrainerAssignmentError("MISSING");
+  const user = await transaction.user.findUnique({
+    where: { id },
+    select: { role: true, status: true, trainerProfile: { select: { id: true } } },
+  });
+  if (!user || user.role !== "TRAINER" || !user.trainerProfile) {
+    throw new TrainerAssignmentError("INVALID");
   }
+  if (user.status !== "ACTIVE") throw new TrainerAssignmentError("INACTIVE");
 }
