@@ -83,22 +83,25 @@ describe("CLA-04 weekly schedule repository", () => {
     expect(findUnique).toHaveBeenNthCalledWith(1, expect.objectContaining({
       where: { id: sourceScheduleId },
     }));
-    expect(create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        copiedFromId: sourceScheduleId,
-        classes: {
-          create: [
-            expect.objectContaining({
-              activity: "Yoga", branchId, trainerId,
-              startsAt: new Date("2030-09-09T13:00:00.000Z"),
-            }),
-            expect.objectContaining({
-              activity: "Pilates", branchId, trainerId: null,
-              startsAt: new Date("2030-09-12T22:00:00.000Z"),
-            }),
-          ],
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          copiedFromId: sourceScheduleId,
+          classes: {
+            create: [
+              expect.objectContaining({
+                activity: "Yoga", branchId, trainerId,
+                startsAt: new Date("2030-09-09T13:00:00.000Z"),
+              }),
+              expect.objectContaining({
+                activity: "Pilates", branchId, trainerId: null,
+                startsAt: new Date("2030-09-12T22:00:00.000Z"),
+              }),
+            ],
+          },
         }),
-      }));
+      }),
+    );
     expect(findUnique).toHaveBeenCalledTimes(2);
   });
 
