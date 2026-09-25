@@ -5,6 +5,7 @@ import { environment } from "../config/environment.js";
 import { AdminUserController } from "../controller/admin-user-controller.js";
 import { AuthController } from "../controller/auth-controller.js";
 import { BranchController } from "../controller/branch-controller.js";
+import { MemberController } from "../controller/member-controller.js";
 import { MemberMembershipController } from "../controller/member-membership-controller.js";
 import { MembershipPriceController } from "../controller/membership-price-controller.js";
 import { PaymentController } from "../controller/payment-controller.js";
@@ -14,6 +15,7 @@ import { createAuthenticationMiddleware } from "../middleware/authentication-mid
 import { requirePasswordChangeCompleted } from "../middleware/password-change-middleware.js";
 import { uploadProfilePhoto } from "../middleware/profile-photo-upload-middleware.js";
 import { BranchRepository } from "../repository/branch-repository.js";
+import { MemberRepository } from "../repository/member-repository.js";
 import { MemberMembershipRepository } from "../repository/member-membership-repository.js";
 import { MembershipPriceRepository } from "../repository/membership-price-repository.js";
 import { PaymentRepository } from "../repository/payment-repository.js";
@@ -22,6 +24,7 @@ import { UserRepository } from "../repository/user-repository.js";
 import { AdminUserService } from "../service/admin-user-service.js";
 import { AuthService } from "../service/auth-service.js";
 import { BranchService } from "../service/branch-service.js";
+import { MemberService } from "../service/member-service.js";
 import { MemberMembershipService } from "../service/member-membership-service.js";
 import { MembershipPriceService } from "../service/membership-price-service.js";
 import { PaymentService } from "../service/payment-service.js";
@@ -33,6 +36,7 @@ import { UserService } from "../service/user-service.js";
 import { createAdminUserRouter } from "./admin-user-route.js";
 import { createAuthRouter, createProtectedAuthRouter } from "./auth-route.js";
 import { createBranchRouter } from "./branch-route.js";
+import { createMemberRouter } from "./member-route.js";
 import { healthRouter } from "./health-route.js";
 import { createMemberMembershipRouter } from "./member-membership-route.js";
 import { createMembershipPriceRouter } from "./membership-price-route.js";
@@ -58,6 +62,7 @@ const userService = new UserService(userRepository, profilePhotoStorage);
 const userController = new UserController(userService);
 const authenticate = createAuthenticationMiddleware(tokenService, userRepository);
 const branchController = new BranchController(new BranchService(new BranchRepository(database)));
+const memberController = new MemberController(new MemberService(new MemberRepository(database)));
 const priceRepository = new MembershipPriceRepository(database);
 const memberMembershipController = new MemberMembershipController(
   new MemberMembershipService(new MemberMembershipRepository(database), priceRepository),
@@ -86,6 +91,7 @@ apiRouter.use(
   ),
 );
 apiRouter.use(createBranchRouter(branchController, authenticate, requirePasswordChangeCompleted));
+apiRouter.use(createMemberRouter(memberController, authenticate, requirePasswordChangeCompleted));
 apiRouter.use(createMemberMembershipRouter(
   memberMembershipController,
   authenticate,

@@ -1,7 +1,7 @@
 export type MembershipStatus = "CURRENT" | "EXPIRING_SOON" | "EXPIRED";
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
-const EXPIRING_SOON_DAYS = 5;
+export const EXPIRING_SOON_DAYS = 5;
 
 export function calculateMembershipStatus(expiresAt: Date | null, now: Date): MembershipStatus {
   if (!expiresAt || expiresAt.getTime() <= now.getTime()) return "EXPIRED";
