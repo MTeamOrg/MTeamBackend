@@ -1,8 +1,10 @@
 import type { Branch, PrismaClient, User } from "../generated/prisma/client.js";
 import { Prisma } from "../generated/prisma/client.js";
 import type {
+  AdminBranchListQuery,
   CreateBranchInput,
   PublicBranchListQuery,
+  UpdateBranchStatusInput,
   UpdateBranchInput,
 } from "../validator/branch-validator.js";
 
@@ -44,6 +46,17 @@ export interface PublicBranchDetail extends BranchCard {
   }>;
 }
 
+export interface AdminBranchList {
+  items: Branch[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
+export interface AdminBranchDetail extends PublicBranchDetail {
+  isActive: boolean;
+}
+
 const branchCardSelect = {
   id: true,
   name: true,
@@ -54,9 +67,38 @@ const branchCardSelect = {
   description: true,
 } as const;
 
+const branchDetailSelect = {
+  ...branchCardSelect,
+  latitude: true,
+  longitude: true,
+  scheduledClasses: {
+    orderBy: [{ startsAt: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      activity: true,
+      startsAt: true,
+      trainer: { select: { id: true, firstName: true, lastName: true } },
+    },
+  },
+} satisfies Prisma.BranchSelect;
+
+function branchSearchWhere(search?: string): Prisma.BranchWhereInput {
+  if (!search) return {};
+  return {
+    OR: [
+      { name: { contains: search, mode: "insensitive" } },
+      { address: { contains: search, mode: "insensitive" } },
+      { description: { contains: search, mode: "insensitive" } },
+    ],
+  };
+}
+
 export interface BranchRepositoryPort {
   listPublicBranches(query: PublicBranchListQuery): Promise<PublicBranchList>;
   findPublicBranchById(id: string): Promise<PublicBranchDetail | null>;
+  listAdminBranches(query: AdminBranchListQuery): Promise<AdminBranchList>;
+  findAdminBranchById(id: string): Promise<AdminBranchDetail | null>;
+  updateBranchStatus(id: string, input: UpdateBranchStatusInput): Promise<Branch>;
   findById(id: string): Promise<Branch | null>;
   findConflict(
     name: string | undefined,
@@ -71,14 +113,7 @@ export class BranchRepository implements BranchRepositoryPort {
   constructor(private readonly database: PrismaClient) {}
 
   async listPublicBranches(query: PublicBranchListQuery): Promise<PublicBranchList> {
-    const where: Prisma.BranchWhereInput = { isActive: true };
-    if (query.search) {
-      where.OR = [
-        { name: { contains: query.search, mode: "insensitive" } },
-        { address: { contains: query.search, mode: "insensitive" } },
-        { description: { contains: query.search, mode: "insensitive" } },
-      ];
-    }
+    const where: Prisma.BranchWhereInput = { isActive: true, ...branchSearchWhere(query.search) };
     const [total, items] = await this.database.$transaction([
       this.database.branch.count({ where }),
       this.database.branch.findMany({
@@ -95,21 +130,46 @@ export class BranchRepository implements BranchRepositoryPort {
   findPublicBranchById(id: string): Promise<PublicBranchDetail | null> {
     return this.database.branch.findFirst({
       where: { id, isActive: true },
-      select: {
-        ...branchCardSelect,
-        latitude: true,
-        longitude: true,
-        scheduledClasses: {
-          orderBy: [{ startsAt: "asc" }, { id: "asc" }],
-          select: {
-            id: true,
-            activity: true,
-            startsAt: true,
-            trainer: { select: { id: true, firstName: true, lastName: true } },
-          },
-        },
-      },
+      select: branchDetailSelect,
     });
+  }
+
+  async listAdminBranches(query: AdminBranchListQuery): Promise<AdminBranchList> {
+    const where: Prisma.BranchWhereInput = {
+      ...branchSearchWhere(query.search),
+      ...(query.isActive === undefined ? {} : { isActive: query.isActive }),
+    };
+    const [total, items] = await this.database.$transaction([
+      this.database.branch.count({ where }),
+      this.database.branch.findMany({
+        where,
+        orderBy: [{ name: "asc" }, { id: "asc" }],
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+    ]);
+    return { items, page: query.page, limit: query.limit, total };
+  }
+
+  findAdminBranchById(id: string): Promise<AdminBranchDetail | null> {
+    return this.database.branch.findUnique({
+      where: { id },
+      select: { ...branchDetailSelect, isActive: true },
+    });
+  }
+
+  async updateBranchStatus(id: string, input: UpdateBranchStatusInput): Promise<Branch> {
+    try {
+      return await this.database.branch.update({
+        where: { id },
+        data: { isActive: input.isActive },
+      });
+    } catch (error: unknown) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+        throw new BranchNotFoundError();
+      }
+      throw error;
+    }
   }
 
   findById(id: string): Promise<Branch | null> {

@@ -33,6 +33,15 @@ export const publicBranchListQuerySchema = z.strictObject({
 
 export type PublicBranchListQuery = z.infer<typeof publicBranchListQuerySchema>;
 
+export const adminBranchListQuerySchema = publicBranchListQuerySchema.extend({
+  isActive: z.enum(["true", "false"]).transform((value) => value === "true").optional(),
+});
+
+export type AdminBranchListQuery = z.infer<typeof adminBranchListQuerySchema>;
+
+export const updateBranchStatusSchema = z.strictObject({ isActive: z.boolean() });
+export type UpdateBranchStatusInput = z.infer<typeof updateBranchStatusSchema>;
+
 export const createBranchSchema = z.strictObject({
   ...branchFields,
   latitude: latitudeSchema.optional(),

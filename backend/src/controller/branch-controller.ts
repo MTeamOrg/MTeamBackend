@@ -3,11 +3,14 @@ import type { RequestHandler } from "express";
 import { ApplicationError } from "../error/application-error.js";
 import { ERROR_CODE } from "../error/error-code.js";
 import type { Branch } from "../generated/prisma/client.js";
+import type { PublicBranchDetail } from "../repository/branch-repository.js";
 import type { BranchService } from "../service/branch-service.js";
 import {
+  adminBranchListQuerySchema,
   branchIdParamsSchema,
   createBranchSchema,
   publicBranchListQuerySchema,
+  updateBranchStatusSchema,
   updateBranchSchema,
 } from "../validator/branch-validator.js";
 
@@ -16,6 +19,18 @@ function serializeBranch(branch: Branch) {
     ...branch,
     latitude: branch.latitude?.toString() ?? null,
     longitude: branch.longitude?.toString() ?? null,
+  };
+}
+
+function serializeBranchDetail(branch: PublicBranchDetail) {
+  return {
+    ...branch,
+    latitude: branch.latitude?.toString() ?? null,
+    longitude: branch.longitude?.toString() ?? null,
+    scheduledClasses: branch.scheduledClasses.map((scheduledClass) => ({
+      ...scheduledClass,
+      startsAt: scheduledClass.startsAt.toISOString(),
+    })),
   };
 }
 
@@ -38,15 +53,47 @@ export class BranchController {
         "El identificador de la sede no es válido", validation.error.flatten());
     }
     const branch = await this.branchService.getPublicBranch(validation.data.branchId);
+    response.status(200).json(serializeBranchDetail(branch));
+  };
+
+  listAdminBranches: RequestHandler = async (request, response) => {
+    const validation = adminBranchListQuerySchema.safeParse(request.query);
+    if (!validation.success) {
+      throw new ApplicationError(400, ERROR_CODE.VALIDATION_ERROR,
+        "Los filtros de sedes no son válidos", validation.error.flatten());
+    }
+    const result = await this.branchService.listAdminBranches(validation.data);
     response.status(200).json({
-      ...branch,
-      latitude: branch.latitude?.toString() ?? null,
-      longitude: branch.longitude?.toString() ?? null,
-      scheduledClasses: branch.scheduledClasses.map((scheduledClass) => ({
-        ...scheduledClass,
-        startsAt: scheduledClass.startsAt.toISOString(),
-      })),
+      ...result,
+      items: result.items.map(serializeBranch),
     });
+  };
+
+  getAdminBranch: RequestHandler = async (request, response) => {
+    const validation = branchIdParamsSchema.safeParse(request.params);
+    if (!validation.success) {
+      throw new ApplicationError(400, ERROR_CODE.VALIDATION_ERROR,
+        "El identificador de la sede no es válido", validation.error.flatten());
+    }
+    const branch = await this.branchService.getAdminBranch(validation.data.branchId);
+    response.status(200).json(serializeBranchDetail(branch));
+  };
+
+  updateBranchStatus: RequestHandler = async (request, response) => {
+    const paramsValidation = branchIdParamsSchema.safeParse(request.params);
+    const bodyValidation = updateBranchStatusSchema.safeParse(request.body);
+    if (!paramsValidation.success || !bodyValidation.success) {
+      throw new ApplicationError(400, ERROR_CODE.VALIDATION_ERROR,
+        "Los datos para cambiar el estado de la sede no son válidos", {
+          params: paramsValidation.success ? null : paramsValidation.error.flatten(),
+          body: bodyValidation.success ? null : bodyValidation.error.flatten(),
+        });
+    }
+    const branch = await this.branchService.updateBranchStatus(
+      paramsValidation.data.branchId,
+      bodyValidation.data,
+    );
+    response.status(200).json(serializeBranch(branch));
   };
 
   createBranch: RequestHandler = async (request, response) => {
