@@ -28,3 +28,26 @@ export const paymentHistoryQuerySchema = z.strictObject({
 export const memberPaymentsParamsSchema = z.strictObject({ memberId: z.uuid() });
 
 export type PaymentHistoryQuery = z.infer<typeof paymentHistoryQuerySchema>;
+
+const dateTimeSchema = z.iso.datetime({ offset: true });
+
+export const paymentListQuerySchema = paymentHistoryQuerySchema.extend({
+  memberId: z.uuid().optional(),
+  documentNumber: z.string().trim().min(1).max(30).optional(),
+  from: dateTimeSchema.optional(),
+  to: dateTimeSchema.optional(),
+  method: z.string().trim().min(1).max(50).optional(),
+  status: z.enum(["ACCREDITED", "VOIDED"]).optional(),
+}).refine((value) => !value.from || !value.to || new Date(value.from) < new Date(value.to), {
+  path: ["to"], message: "La fecha final debe ser posterior a la inicial",
+});
+
+export const paymentSummaryQuerySchema = z.strictObject({
+  from: dateTimeSchema,
+  to: dateTimeSchema,
+}).refine((value) => new Date(value.from) < new Date(value.to), {
+  path: ["to"], message: "La fecha final debe ser posterior a la inicial",
+});
+
+export type PaymentListQuery = z.infer<typeof paymentListQuerySchema>;
+export type PaymentSummaryQuery = z.infer<typeof paymentSummaryQuerySchema>;

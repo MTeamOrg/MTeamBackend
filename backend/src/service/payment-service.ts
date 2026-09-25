@@ -8,8 +8,15 @@ import {
   UserIsNotMemberError,
   type PaymentRepositoryPort,
   type PaymentHistory,
+  type PaymentReport,
+  type PaymentSummary,
 } from "../repository/payment-repository.js";
-import type { CreatePaymentInput, PaymentHistoryQuery } from "../validator/payment-validator.js";
+import type {
+  CreatePaymentInput,
+  PaymentHistoryQuery,
+  PaymentListQuery,
+  PaymentSummaryQuery,
+} from "../validator/payment-validator.js";
 
 export class PaymentService {
   constructor(private readonly paymentRepository: PaymentRepositoryPort) {}
@@ -19,6 +26,14 @@ export class PaymentService {
       throw new ApplicationError(404, ERROR_CODE.NOT_FOUND, "El socio no existe");
     }
     return this.paymentRepository.listMemberPayments(memberId, query);
+  }
+
+  listPayments(query: PaymentListQuery): Promise<PaymentReport> {
+    return this.paymentRepository.listPayments(query);
+  }
+
+  getPaymentsSummary(query: PaymentSummaryQuery): Promise<PaymentSummary> {
+    return this.paymentRepository.getPaymentsSummary(query);
   }
 
   async createPayment(input: CreatePaymentInput, administratorId: string): Promise<Payment> {

@@ -526,6 +526,11 @@ paths:
     get:
       tags: [Payments]
       summary: Buscar y filtrar pagos
+      description: >-
+        Exclusivo de administradores. Los filtros se combinan y se aplican antes
+        de paginar. El documento admite coincidencias parciales y el medio es exacto.
+        Las fechas corresponden a accreditedAt, con from inclusivo y to exclusivo.
+        Incluye pagos acreditados y anulados.
       operationId: listPayments
       parameters:
         - $ref: "#/components/parameters/Page"
@@ -545,7 +550,14 @@ paths:
           in: query
           schema: { $ref: "#/components/schemas/PaymentStatus" }
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Pagos filtrados y paginados
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentReportResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
     post:
       tags: [Payments]
       summary: Registrar y acreditar un pago
@@ -586,12 +598,29 @@ paths:
     get:
       tags: [Payments]
       summary: Calcular el total acreditado dentro de un período
+      description: >-
+        Exclusivo de administradores. Usa accreditedAt con from inclusivo y to
+        exclusivo. Suma todos los pagos que sigan ACCREDITED en el período,
+        independientemente de la paginación del listado.
       operationId: getPaymentsSummary
       parameters:
-        - $ref: "#/components/parameters/From"
-        - $ref: "#/components/parameters/To"
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Total de pagos acreditados del período
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentSummaryResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /payments/{paymentId}:
     parameters:
@@ -1381,6 +1410,50 @@ components:
         page: { type: integer, minimum: 1 }
         limit: { type: integer, minimum: 1, maximum: 100 }
         total: { type: integer, minimum: 0 }
+    PaymentReportItem:
+      type: object
+      additionalProperties: false
+      required: [id, accreditedAt, amount, method, receiptNumber, status, expiresAt, voidedAt, voidReason, member]
+      properties:
+        id: { type: string, format: uuid }
+        accreditedAt: { type: string, format: date-time }
+        amount: { type: string, description: Importe decimal sin pérdida de precisión }
+        method: { type: string }
+        receiptNumber: { type: [string, "null"] }
+        status: { $ref: "#/components/schemas/PaymentStatus" }
+        expiresAt: { type: string, format: date-time }
+        voidedAt: { type: [string, "null"], format: date-time }
+        voidReason: { type: [string, "null"] }
+        member:
+          type: object
+          additionalProperties: false
+          required: [id, firstName, lastName, documentNumber, email]
+          properties:
+            id: { type: string, format: uuid }
+            firstName: { type: string }
+            lastName: { type: string }
+            documentNumber: { type: string }
+            email: { type: string, format: email }
+    PaymentReportResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentReportItem" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    PaymentSummaryResponse:
+      type: object
+      additionalProperties: false
+      required: [from, to, paymentCount, totalAmount]
+      properties:
+        from: { type: string, format: date-time, description: Límite inclusivo de accreditedAt }
+        to: { type: string, format: date-time, description: Límite exclusivo de accreditedAt }
+        paymentCount: { type: integer, minimum: 0 }
+        totalAmount: { type: string, description: Suma decimal exacta de pagos ACCREDITED }
     MedicalCertificateStatus:
       type: string
       enum: [PENDING, APPROVED, REJECTED]
