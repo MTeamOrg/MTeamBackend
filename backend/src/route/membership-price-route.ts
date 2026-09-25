@@ -15,12 +15,19 @@ export function createMembershipPriceRouter(
     requireCompletedPasswordChange,
     controller.getCurrentPrice,
   );
+  router.get(
+    "/membership-prices",
+    authenticate,
+    requireCompletedPasswordChange,
+    authorize("ADMIN"),
+    controller.listPrices,
+  );
   router.post(
     "/membership-prices",
     authenticate,
     requireCompletedPasswordChange,
     authorize("ADMIN"),
-    controller.createInitialPrice,
+    controller.createPrice,
   );
   return router;
 }
