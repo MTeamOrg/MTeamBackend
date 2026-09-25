@@ -16,13 +16,18 @@ import {
 
 export class WeeklyScheduleNotFoundError extends Error {}
 export class DestinationWeekAlreadyExistsError extends Error {}
+export class DestinationWeekMustFollowSourceError extends Error {}
 export class PastDestinationWeekError extends Error {}
 
 const weeklyScheduleSelect = {
   id: true,
   weekStartsOn: true,
   classes: {
-    orderBy: [{ startsAt: "asc" }, { id: "asc" }],
+    orderBy: [
+      { startsAt: "asc" },
+      { branch: { name: "asc" } },
+      { id: "asc" },
+    ],
     select: {
       id: true,
       activity: true,
@@ -126,13 +131,17 @@ export class WeeklyScheduleRepository implements WeeklyScheduleRepositoryPort {
         });
         if (!source) throw new WeeklyScheduleNotFoundError();
 
+        const sourceWeekStartsOn = source.weekStartsOn.toISOString().slice(0, 10);
+        if (destinationWeekStartsOn !== addDays(sourceWeekStartsOn, 7)) {
+          throw new DestinationWeekMustFollowSourceError();
+        }
+
         const destination = await transaction.weeklySchedule.findUnique({
           where: { weekStartsOn: destinationDate },
           select: { id: true },
         });
         if (destination) throw new DestinationWeekAlreadyExistsError();
 
-        const sourceWeekStartsOn = source.weekStartsOn.toISOString().slice(0, 10);
         const classes = source.classes.map((scheduledClass) => {
           const dayOffset = daysFromWeekStart(sourceWeekStartsOn, scheduledClass.startsAt);
           const startsAt = atLocalGymTime(

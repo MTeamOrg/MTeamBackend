@@ -894,6 +894,7 @@ describe("real Supabase requirements verification", () => {
     state.sourceWeek = await availableFutureMonday();
     state.destinationWeek = addUtcDays(state.sourceWeek, 7);
     const sourceClassDate = addUtcDays(state.sourceWeek, 1);
+    state.sourceClassDate = sourceClassDate;
     const initialStartsAt = `${sourceClassDate}T18:45:00-03:00`;
 
     await api(`/branches/${state.branchId}/status`, {
@@ -997,41 +998,81 @@ describe("real Supabase requirements verification", () => {
       expected: [204],
     });
 
+    const classWithoutTrainer = await api("/scheduled-classes", {
+      method: "POST",
+      token: state.adminToken,
+      body: {
+        weekStartsOn: state.sourceWeek,
+        activity: `${runId} CLASS WITHOUT TRAINER`,
+        startsAt: `${addUtcDays(state.sourceWeek, 3)}T20:00:00-03:00`,
+        branchId: state.branchId,
+        trainerId: null,
+      },
+      expected: [201],
+    });
+    state.classWithoutTrainerId = classWithoutTrainer.payload.id;
+
     const sourceSchedule = await api(`/weekly-schedules?weekStartsOn=${state.sourceWeek}`);
     state.sourceScheduleId = sourceSchedule.payload.id;
     expect(sourceSchedule.payload.classes.map((item: any) => item.id))
-      .toEqual([state.classId]);
-    const sourceBeforeCopy = JSON.stringify(sourceSchedule.payload);
-    const copied = await api(`/weekly-schedules/${state.sourceScheduleId}/copies`, {
-      method: "POST",
-      token: state.adminToken,
-      body: { weekStartsOn: state.destinationWeek },
-      expected: [201],
-    });
+      .toEqual([state.classId, state.classWithoutTrainerId]);
+    state.sourceBeforeCopy = JSON.stringify(sourceSchedule.payload);
+  });
+
+  test("CLA-04 copies the marked week once under concurrent requests", async () => {
+    if (!state.sourceScheduleId || !state.destinationWeek || !state.sourceClassDate) {
+      throw new Error("CLA-04 prerequisites were not created by the preceding integration stage");
+    }
+
+    const copies = await Promise.all([
+      api(`/weekly-schedules/${state.sourceScheduleId}/copies`, {
+        method: "POST", token: state.adminToken,
+        body: { weekStartsOn: state.destinationWeek }, expected: [201, 409],
+      }),
+      api(`/weekly-schedules/${state.sourceScheduleId}/copies`, {
+        method: "POST", token: state.adminToken,
+        body: { weekStartsOn: state.destinationWeek }, expected: [201, 409],
+      }),
+    ]);
+    expect(copies.map((result) => result.status).sort()).toEqual([201, 409]);
+
+    const copied = copies.find((result) => result.status === 201)!;
     state.destinationScheduleId = copied.payload.id;
     state.copiedClassId = copied.payload.classes[0].id;
-    expect(copied.payload.classes).toHaveLength(1);
-    expect(copied.payload.classes[0].id).not.toBe(state.classId);
-    expect(copied.payload.classes[0].activity).toBe(`${runId} CLASS UPDATED`);
+    expect(copied.payload.classes).toHaveLength(2);
+    expect(copied.payload.classes[0]).toMatchObject({
+      activity: `${runId} CLASS UPDATED`,
+      branch: { id: state.branchId },
+      trainer: { id: state.trainerId },
+    });
     expect(buenosAiresParts(copied.payload.classes[0].startsAt))
-      .toBe(`${addUtcDays(sourceClassDate, 7)}T19:15`);
-    expect(JSON.stringify((await api(`/weekly-schedules/${state.sourceScheduleId}`)).payload))
-      .toBe(sourceBeforeCopy);
-    expect((await api(`/weekly-schedules/${state.sourceScheduleId}/copies`, {
-      method: "POST",
-      token: state.adminToken,
-      body: { weekStartsOn: state.destinationWeek },
-      expected: [409],
-    })).status).toBe(409);
+      .toBe(`${addUtcDays(state.sourceClassDate, 7)}T19:15`);
+    expect(copied.payload.classes[1]).toMatchObject({
+      activity: `${runId} CLASS WITHOUT TRAINER`,
+      branch: { id: state.branchId },
+      trainer: null,
+    });
 
-    const detailWithClass = await api(`/branches/${state.branchId}`);
-    expect(detailWithClass.payload.scheduledClasses.some((item: any) =>
-      item.id === state.classId || item.id === state.copiedClassId)).toBe(true);
+    expect((await api(`/weekly-schedules/${state.sourceScheduleId}/copies`, {
+      method: "POST", token: state.adminToken,
+      body: { weekStartsOn: state.destinationWeek }, expected: [409],
+    })).status).toBe(409);
+    expect(JSON.stringify((await api(`/weekly-schedules/${state.sourceScheduleId}`)).payload))
+      .toBe(state.sourceBeforeCopy);
+
     const copiedDatabase = await databasePool.query(
-      `SELECT copied_from_id FROM public.weekly_schedule WHERE id = $1`,
-      [state.destinationScheduleId],
+      `SELECT ws.copied_from_id, COUNT(sc.id)::int AS class_count
+         FROM public.weekly_schedule ws
+         LEFT JOIN public.scheduled_class sc ON sc.schedule_id = ws.id
+        WHERE ws.week_starts_on = $1::date
+        GROUP BY ws.id, ws.copied_from_id`,
+      [state.destinationWeek],
     );
-    expect(copiedDatabase.rows[0].copied_from_id).toBe(state.sourceScheduleId);
+    expect(copiedDatabase.rows).toHaveLength(1);
+    expect(copiedDatabase.rows[0]).toMatchObject({
+      copied_from_id: state.sourceScheduleId,
+      class_count: 2,
+    });
   });
 
   test("CLA-01 exposes the marked weekly schedule without authentication", async () => {

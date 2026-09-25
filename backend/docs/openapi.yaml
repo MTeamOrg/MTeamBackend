@@ -1051,9 +1051,12 @@ paths:
       summary: Copiar el cronograma a otra semana
       description: >-
         Exclusivo de administradores autenticados que ya cambiaron su
-        contraseña temporal. La fecha de destino debe ser un lunes no pasado;
-        la semana de destino no puede existir. La operación copia actividad,
-        día, horario, sede y entrenador opcional sin modificar el origen.
+        contraseña temporal. La fecha de destino debe ser exactamente el lunes
+        siguiente al cronograma de origen y no puede ser pasada. La operación
+        transaccional copia actividad, día, horario de inicio, sede y entrenador
+        opcional sin modificar el origen. La restricción única de semana hace
+        que los reintentos y solicitudes concurrentes no dupliquen clases: la
+        primera creación responde 201 y una semana ya existente responde 409.
       operationId: copyWeeklySchedule
       security:
         - bearerAuth: []
@@ -1065,18 +1068,60 @@ paths:
               type: object
               required: [weekStartsOn]
               properties:
-                weekStartsOn: { type: string, format: date }
+                weekStartsOn: { type: string, format: date, example: "2030-09-09" }
       responses:
         "201":
           description: Cronograma semanal copiado
           content:
             application/json:
               schema: { $ref: "#/components/schemas/WeeklySchedule" }
-        "400": { $ref: "#/components/responses/ValidationError" }
+              example:
+                id: 8e75fbd7-22cf-4e18-8e72-6ee20e0f00ad
+                weekStartsOn: "2030-09-09"
+                classes:
+                  - id: 47baa66b-2574-4e63-bbd1-7b21421ed273
+                    activity: Yoga
+                    day: "2030-09-09"
+                    startsAt: "2030-09-09T13:00:00.000Z"
+                    startTime: "10:00"
+                    branch:
+                      id: 83cd902e-0475-4c92-943c-129b751dacee
+                      name: Centro
+                    trainer: null
+        "400":
+          description: Identificadores inválidos, destino no lunes o destino que no es la semana siguiente
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              example:
+                code: VALIDATION_ERROR
+                message: La semana de destino debe ser la semana inmediatamente siguiente
+                details: null
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/Conflict" }
+        "404":
+          description: Cronograma, sede o entrenador inexistente
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "409":
+          description: Semana ya existente, destino pasado, sede desactivada o entrenador inactivo
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              examples:
+                existingWeek:
+                  summary: Reintento o solicitud concurrente
+                  value:
+                    code: CONFLICT
+                    message: Ya existe un cronograma para la semana de destino
+                    details: null
+                inactiveAssignment:
+                  summary: Una asignación dejó de ser válida
+                  value:
+                    code: CONFLICT
+                    message: La sede está desactivada
+                    details: null
 
   /scheduled-classes:
     post:
