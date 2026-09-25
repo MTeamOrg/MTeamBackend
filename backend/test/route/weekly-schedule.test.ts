@@ -66,7 +66,9 @@ describe("CLA-01 weekly schedule consultation", () => {
       classes: [{
         id: classId,
         activity: "Yoga",
+        day: "2030-09-02",
         startsAt: "2030-09-02T13:00:00.000Z",
+        startTime: "10:00",
         branch: { id: branchId, name: "Centro" },
         trainer: { id: trainerId, firstName: "Ana", lastName: "García" },
       }],
@@ -85,13 +87,39 @@ describe("CLA-01 weekly schedule consultation", () => {
     expect(response.body).toEqual({ id: null, weekStartsOn, classes: [] });
   });
 
-  test("rejects invalid dates, non-Mondays and missing query dates", async () => {
+  test("uses the current Buenos Aires week when the query date is omitted", async () => {
+    const { app, service } = setup(null);
+    const response = await request(app).get("/api/weekly-schedules");
+
+    expect(response.status).toBe(200);
+    expect(service.getByWeekStartsOn).toHaveBeenCalledWith(undefined);
+  });
+
+  test("rejects invalid dates, non-Mondays and arbitrary query parameters", async () => {
     const { app, service } = setup();
-    for (const query of ["2030-09-03", "2030-02-30", undefined]) {
-      const url = query ? `/api/weekly-schedules?weekStartsOn=${query}` : "/api/weekly-schedules";
+    for (const query of [
+      "weekStartsOn=2030-09-03",
+      "weekStartsOn=2030-02-30",
+      "from=2030-09-02&to=2030-09-09",
+    ]) {
+      const url = `/api/weekly-schedules?${query}`;
       expect((await request(app).get(url)).status).toBe(400);
     }
     expect(service.getByWeekStartsOn).not.toHaveBeenCalled();
+  });
+
+  test("keeps a class without an assigned trainer as null", async () => {
+    const { app, service } = setup(null);
+    service.getByWeekStartsOn.mockResolvedValue({
+      ...schedule,
+      classes: [{ ...schedule.classes[0], trainer: null }],
+    });
+
+    const response = await request(app)
+      .get(`/api/weekly-schedules?weekStartsOn=${weekStartsOn}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.classes[0].trainer).toBeNull();
   });
 
   test("gets a schedule by identifier", async () => {

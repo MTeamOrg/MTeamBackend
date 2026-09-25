@@ -1034,6 +1034,26 @@ describe("real Supabase requirements verification", () => {
     expect(copiedDatabase.rows[0].copied_from_id).toBe(state.sourceScheduleId);
   });
 
+  test("CLA-01 exposes the marked weekly schedule without authentication", async () => {
+    if (!state.sourceWeek || !state.classId || !state.branchId || !state.trainerId) {
+      throw new Error("CLA-01 prerequisites were not created by the preceding integration stage");
+    }
+
+    const schedule = await api(`/weekly-schedules?weekStartsOn=${state.sourceWeek}`);
+    const scheduledClass = schedule.payload.classes.find(
+      (item: any) => item.id === state.classId,
+    );
+
+    expect(scheduledClass).toMatchObject({
+      id: state.classId,
+      activity: `${runId} CLASS UPDATED`,
+      day: addUtcDays(state.sourceWeek, 1),
+      startTime: "19:15",
+      branch: { id: state.branchId },
+      trainer: { id: state.trainerId },
+    });
+  });
+
   test("records remain available after a real backend restart", async () => {
     if (!state.paymentOne || !state.paymentTwo || !state.destinationScheduleId) {
       throw new Error("Persistence prerequisites were not created by the preceding integration stages");
