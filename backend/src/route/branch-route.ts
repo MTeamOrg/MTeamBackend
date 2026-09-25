@@ -11,6 +11,20 @@ export function createBranchRouter(
   const router = Router();
   router.get("/branches", controller.listPublicBranches);
   router.get("/branches/:branchId", controller.getPublicBranch);
+  router.get(
+    "/admin/branches",
+    authenticate,
+    requireCompletedPasswordChange,
+    authorize("ADMIN"),
+    controller.listAdminBranches,
+  );
+  router.get(
+    "/admin/branches/:branchId",
+    authenticate,
+    requireCompletedPasswordChange,
+    authorize("ADMIN"),
+    controller.getAdminBranch,
+  );
   router.post(
     "/branches",
     authenticate,
@@ -24,6 +38,13 @@ export function createBranchRouter(
     requireCompletedPasswordChange,
     authorize("ADMIN"),
     controller.updateBranch,
+  );
+  router.patch(
+    "/branches/:branchId/status",
+    authenticate,
+    requireCompletedPasswordChange,
+    authorize("ADMIN"),
+    controller.updateBranchStatus,
   );
   return router;
 }

@@ -908,11 +908,64 @@ paths:
     patch:
       tags: [Branches]
       summary: Activar o desactivar una sede
+      description: Conserva la sede y sus relaciones históricas; las consultas públicas solo muestran sedes activas.
       operationId: updateBranchStatus
       requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateBranchStatusRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Sede con el estado actualizado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminBranch" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /admin/branches:
+    get:
+      tags: [Branches]
+      summary: Buscar y filtrar sedes para administración
+      description: Incluye sedes activas y desactivadas; combina búsqueda y estado antes de paginar.
+      operationId: listAdminBranches
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - name: isActive
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Sedes filtradas ordenadas por nombre e identificador
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminBranchListResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /admin/branches/{branchId}:
+    parameters:
+      - $ref: "#/components/parameters/BranchId"
+    get:
+      tags: [Branches]
+      summary: Consultar una sede activa o desactivada para administración
+      operationId: getAdminBranch
+      responses:
+        "200":
+          description: Datos de la sede y sus clases históricas y programadas
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminBranchDetail" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /branches/{branchId}/access-points:
     parameters:
@@ -1523,6 +1576,56 @@ components:
         description: { type: string }
         latitude: { type: [string, 'null'], description: Coordenada decimal disponible }
         longitude: { type: [string, 'null'], description: Coordenada decimal disponible }
+        scheduledClasses:
+          type: array
+          items: { $ref: "#/components/schemas/PublicBranchScheduledClass" }
+    UpdateBranchStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [isActive]
+      properties:
+        isActive: { type: boolean }
+    AdminBranch:
+      type: object
+      additionalProperties: false
+      required: [id, name, imageUrl, address, openingHours, phone, description, latitude, longitude, isActive]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        imageUrl: { type: string, format: uri }
+        address: { type: string }
+        openingHours: { type: string }
+        phone: { type: string }
+        description: { type: string }
+        latitude: { type: [string, 'null'] }
+        longitude: { type: [string, 'null'] }
+        isActive: { type: boolean }
+    AdminBranchListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminBranch" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    AdminBranchDetail:
+      type: object
+      additionalProperties: false
+      required: [id, name, imageUrl, address, openingHours, phone, description, latitude, longitude, isActive, scheduledClasses]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        imageUrl: { type: string, format: uri }
+        address: { type: string }
+        openingHours: { type: string }
+        phone: { type: string }
+        description: { type: string }
+        latitude: { type: [string, 'null'] }
+        longitude: { type: [string, 'null'] }
+        isActive: { type: boolean }
         scheduledClasses:
           type: array
           items: { $ref: "#/components/schemas/PublicBranchScheduledClass" }
