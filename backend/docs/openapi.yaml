@@ -440,6 +440,9 @@ paths:
     get:
       tags: [Members]
       summary: Listar socios y filtrar por estado de cuota
+      description: >-
+        Exclusivo de administradores. El estado de cuota se calcula desde el
+        último pago acreditado válido; el filtro se aplica antes de paginar.
       operationId: listMembers
       parameters:
         - $ref: "#/components/parameters/Search"
@@ -449,7 +452,14 @@ paths:
           in: query
           schema: { $ref: "#/components/schemas/MembershipStatus" }
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Listado paginado de socios
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemberListResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /members/me/membership:
     get:
@@ -1252,6 +1262,31 @@ components:
       type: string
       description: Estado calculado; no se almacena en la base de datos.
       enum: [CURRENT, EXPIRING_SOON, EXPIRED]
+    MemberListItem:
+      type: object
+      additionalProperties: false
+      required: [id, firstName, lastName, documentNumber, email, status, membershipStatus, lastPaymentAt, expiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        documentNumber: { type: string }
+        email: { type: string, format: email }
+        status: { $ref: "#/components/schemas/UserStatus" }
+        membershipStatus: { $ref: "#/components/schemas/MembershipStatus" }
+        lastPaymentAt: { type: [string, "null"], format: date-time }
+        expiresAt: { type: [string, "null"], format: date-time }
+    MemberListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MemberListItem" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
     PaymentStatus:
       type: string
       enum: [ACCREDITED, VOIDED]
