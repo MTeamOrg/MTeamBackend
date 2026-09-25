@@ -97,9 +97,8 @@ describe("CLA-04 weekly schedule repository", () => {
               startsAt: new Date("2030-09-12T22:00:00.000Z"),
             }),
           ],
-        },
-      },
-    }));
+        }),
+      }));
     expect(findUnique).toHaveBeenCalledTimes(2);
   });
 
