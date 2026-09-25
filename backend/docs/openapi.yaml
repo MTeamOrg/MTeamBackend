@@ -562,6 +562,9 @@ paths:
     post:
       tags: [Payments]
       summary: Calcular un resumen previo sin crear el pago
+      description: >-
+        Operación exclusiva de administradores. El vencimiento estimado se calcula
+        al solicitar la vista previa; la acreditación vuelve a calcular su fecha efectiva.
       operationId: previewPayment
       requestBody:
         required: true
@@ -569,7 +572,15 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/PaymentPreviewRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Resumen estimado sin registrar el pago
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentPreviewResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /payments/summary:
     get:
@@ -1703,6 +1714,27 @@ components:
         amount: { type: number, format: double, exclusiveMinimum: 0 }
         method: { type: string }
         receiptNumber: { type: string }
+    PaymentPreviewResponse:
+      type: object
+      additionalProperties: false
+      required: [member, currentPrice, amount, method, receiptNumber, estimatedAccreditedAt, estimatedExpiresAt]
+      properties:
+        member:
+          type: object
+          additionalProperties: false
+          required: [id, firstName, lastName, documentNumber, email]
+          properties:
+            id: { type: string, format: uuid }
+            firstName: { type: string }
+            lastName: { type: string }
+            documentNumber: { type: string }
+            email: { type: string, format: email }
+        currentPrice: { type: string, description: Precio vigente de cuota expresado como decimal exacto }
+        amount: { type: string, description: Importe ingresado expresado como decimal exacto }
+        method: { type: string }
+        receiptNumber: { type: [string, "null"] }
+        estimatedAccreditedAt: { type: string, format: date-time }
+        estimatedExpiresAt: { type: string, format: date-time }
     CreatePaymentRequest:
       allOf:
         - $ref: "#/components/schemas/PaymentPreviewRequest"
