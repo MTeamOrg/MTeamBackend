@@ -16,5 +16,12 @@ export function createPaymentRouter(
     authorize("ADMIN"),
     controller.createPayment,
   );
+  router.post(
+    "/payments/:paymentId/voids",
+    authenticate,
+    requireCompletedPasswordChange,
+    authorize("ADMIN"),
+    controller.voidPayment,
+  );
   return router;
 }

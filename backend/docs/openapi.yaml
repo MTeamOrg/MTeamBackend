@@ -599,6 +599,7 @@ paths:
     post:
       tags: [Payments]
       summary: Anular un pago acreditado
+      description: Operación exclusiva de administradores. Conserva el pago y registra la anulación.
       operationId: voidPayment
       requestBody:
         required: true
@@ -607,6 +608,10 @@ paths:
             schema: { $ref: "#/components/schemas/VoidPaymentRequest" }
       responses:
         "200": { $ref: "#/components/responses/Success" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
 
   /members/me/payments:
@@ -1654,9 +1659,10 @@ components:
         - $ref: "#/components/schemas/PaymentPreviewRequest"
     VoidPaymentRequest:
       type: object
+      additionalProperties: false
       required: [reason]
       properties:
-        reason: { type: string, minLength: 1 }
+        reason: { type: string, minLength: 1, maxLength: 500 }
     MedicalReviewRequest:
       type: object
       required: [status]
