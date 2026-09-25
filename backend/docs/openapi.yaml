@@ -989,14 +989,24 @@ paths:
     get:
       tags: [Weekly Schedules]
       summary: Consultar el cronograma de una semana
+      description: >-
+        Consulta pública. weekStartsOn debe ser un lunes de
+        America/Argentina/Buenos_Aires. Si todavía no hay clases para esa
+        semana, devuelve el cronograma con classes vacío.
       operationId: listWeeklySchedules
       security: []
       parameters:
         - name: weekStartsOn
           in: query
+          required: true
           schema: { type: string, format: date }
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Cronograma semanal y sus clases ordenadas por fecha
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeeklySchedule" }
+        "400": { $ref: "#/components/responses/ValidationError" }
 
   /weekly-schedules/{scheduleId}:
     parameters:
@@ -1007,7 +1017,13 @@ paths:
       operationId: getWeeklySchedule
       security: []
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Cronograma semanal y sus clases ordenadas por fecha
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeeklySchedule" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /weekly-schedules/{scheduleId}/copies:
     parameters:
@@ -1015,7 +1031,14 @@ paths:
     post:
       tags: [Weekly Schedules]
       summary: Copiar el cronograma a otra semana
+      description: >-
+        Exclusivo de administradores autenticados que ya cambiaron su
+        contraseña temporal. La fecha de destino debe ser un lunes no pasado;
+        la semana de destino no puede existir. La operación copia actividad,
+        día, horario, sede y entrenador opcional sin modificar el origen.
       operationId: copyWeeklySchedule
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -1026,7 +1049,15 @@ paths:
               properties:
                 weekStartsOn: { type: string, format: date }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Cronograma semanal copiado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeeklySchedule" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
 
   /scheduled-classes:
@@ -1703,6 +1734,41 @@ components:
         startsAt: { type: string, format: date-time }
         branchId: { type: string, format: uuid }
         trainerId: { type: [string, 'null'], format: uuid }
+    WeeklyScheduleClass:
+      type: object
+      additionalProperties: false
+      required: [id, activity, startsAt, branch, trainer]
+      properties:
+        id: { type: string, format: uuid }
+        activity: { type: string }
+        startsAt: { type: string, format: date-time }
+        branch:
+          type: object
+          additionalProperties: false
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+        trainer:
+          oneOf:
+            - type: 'null'
+            - type: object
+              additionalProperties: false
+              required: [id, firstName, lastName]
+              properties:
+                id: { type: string, format: uuid }
+                firstName: { type: string }
+                lastName: { type: string }
+    WeeklySchedule:
+      type: object
+      additionalProperties: false
+      required: [id, weekStartsOn, classes]
+      properties:
+        id: { type: [string, 'null'], format: uuid }
+        weekStartsOn: { type: string, format: date }
+        classes:
+          type: array
+          items: { $ref: "#/components/schemas/WeeklyScheduleClass" }
     MedicalCertificateStatus:
       type: string
       enum: [PENDING, APPROVED, REJECTED]
