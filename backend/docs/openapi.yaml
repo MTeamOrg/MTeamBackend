@@ -1033,11 +1033,30 @@ paths:
     post:
       tags: [Scheduled Classes]
       summary: Crear una clase en un cronograma
+      description: >-
+        Exclusivo de administradores. Crea automáticamente el cronograma si es la
+        primera clase de esa semana. weekStartsOn es el lunes del calendario de
+        America/Argentina/Buenos_Aires; startsAt debe tener zona horaria y caer
+        entre ese lunes inclusive y el lunes siguiente exclusivo en ese calendario.
+        No se crean clases que ya comenzaron. La sede y el entrenador opcional
+        deben seguir activos al guardar la clase.
       operationId: createScheduledClass
       requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateScheduledClassRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Clase creada y cronograma semanal asociado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ManagedScheduledClass" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /scheduled-classes/{classId}:
     parameters:
@@ -1052,17 +1071,41 @@ paths:
     patch:
       tags: [Scheduled Classes]
       summary: Modificar una clase
+      description: >-
+        Exclusivo de administradores. La clase permanece en su semana original;
+        startsAt debe seguir dentro de ella. Se permite quitar el entrenador con
+        trainerId null. No se modifican clases que ya comenzaron.
       operationId: updateScheduledClass
       requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateScheduledClassRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Clase modificada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ManagedScheduledClass" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
     delete:
       tags: [Scheduled Classes]
       summary: Quitar una clase del cronograma
+      description: >-
+        Exclusivo de administradores. Quita una clase que todavía no comenzó;
+        conserva el cronograma semanal y las clases históricas.
       operationId: deleteScheduledClass
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /trainers:
     get:
@@ -1629,6 +1672,37 @@ components:
         scheduledClasses:
           type: array
           items: { $ref: "#/components/schemas/PublicBranchScheduledClass" }
+    CreateScheduledClassRequest:
+      type: object
+      additionalProperties: false
+      required: [weekStartsOn, activity, startsAt, branchId]
+      properties:
+        weekStartsOn: { type: string, format: date, description: Lunes local de la semana }
+        activity: { type: string, minLength: 1, maxLength: 150 }
+        startsAt: { type: string, format: date-time, description: Fecha y hora con zona horaria }
+        branchId: { type: string, format: uuid }
+        trainerId: { type: [string, 'null'], format: uuid, description: Opcional; null deja la clase sin entrenador }
+    UpdateScheduledClassRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        activity: { type: string, minLength: 1, maxLength: 150 }
+        startsAt: { type: string, format: date-time }
+        branchId: { type: string, format: uuid }
+        trainerId: { type: [string, 'null'], format: uuid }
+    ManagedScheduledClass:
+      type: object
+      additionalProperties: false
+      required: [id, scheduleId, weekStartsOn, activity, startsAt, branchId, trainerId]
+      properties:
+        id: { type: string, format: uuid }
+        scheduleId: { type: string, format: uuid }
+        weekStartsOn: { type: string, format: date }
+        activity: { type: string }
+        startsAt: { type: string, format: date-time }
+        branchId: { type: string, format: uuid }
+        trainerId: { type: [string, 'null'], format: uuid }
     MedicalCertificateStatus:
       type: string
       enum: [PENDING, APPROVED, REJECTED]
