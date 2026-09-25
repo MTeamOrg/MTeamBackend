@@ -124,11 +124,23 @@ try {
       );
       const localSql = await readFile(migrationPath);
       const localChecksum = createHash("sha256").update(localSql).digest("hex");
+      const normalizedSql = Buffer.from(
+        localSql.toString("utf8").replaceAll("\r\n", "\n"),
+        "utf8",
+      );
+      const normalizedChecksum = createHash("sha256")
+        .update(normalizedSql)
+        .digest("hex");
       migrations.push({
         migrationName: migration.migration_name,
         finished: migration.finished,
         rolledBack: migration.rolled_back,
-        checksumMatches: localChecksum === migration.checksum,
+        checksumMatches:
+          localChecksum === migration.checksum ||
+          normalizedChecksum === migration.checksum,
+        lineEndingNormalized:
+          localChecksum !== migration.checksum &&
+          normalizedChecksum === migration.checksum,
       });
     }
     console.log(`migrations=${JSON.stringify(migrations)}`);
@@ -146,6 +158,34 @@ try {
     rowCounts[table] = countResult.rows[0].count;
   }
   console.log(`app_row_counts=${JSON.stringify(rowCounts)}`);
+
+  const verificationMarkerResult = await client.query(
+    `SELECT
+       (SELECT COUNT(*)::int FROM public."user"
+         WHERE email LIKE 'mteam.verify.%@example.com') AS users,
+       (SELECT COUNT(*)::int FROM public.member_profile AS profile
+         JOIN public."user" AS app_user ON app_user.id = profile.user_id
+        WHERE app_user.email LIKE 'mteam.verify.%@example.com') AS member_profiles,
+       (SELECT COUNT(*)::int FROM public.trainer_profile AS profile
+         JOIN public."user" AS app_user ON app_user.id = profile.user_id
+        WHERE app_user.email LIKE 'mteam.verify.%@example.com') AS trainer_profiles,
+       (SELECT COUNT(*)::int FROM public.membership_price
+        WHERE amount IN (920925.11, 920925.12)) AS membership_prices,
+       (SELECT COUNT(*)::int FROM public.payment
+        WHERE receipt_number LIKE 'TEST-SUPABASE-VERIFY-20260925%') AS payments,
+       (SELECT COUNT(*)::int FROM public.branch
+        WHERE name LIKE 'TEST-SUPABASE-VERIFY-20260925%') AS branches,
+       (SELECT COUNT(DISTINCT schedule_id)::int FROM public.scheduled_class
+        WHERE activity LIKE 'TEST-SUPABASE-VERIFY-20260925%') AS weekly_schedules,
+       (SELECT COUNT(*)::int FROM public.scheduled_class
+        WHERE activity LIKE 'TEST-SUPABASE-VERIFY-20260925%') AS scheduled_classes,
+       (SELECT COUNT(*)::int FROM public.user_audit_log AS audit
+         JOIN public."user" AS app_user ON app_user.id = audit.user_id
+        WHERE app_user.email LIKE 'mteam.verify.%@example.com') AS user_audit_logs`,
+  );
+  console.log(
+    `verification_marker_counts=${JSON.stringify(verificationMarkerResult.rows[0])}`,
+  );
 
   const securityResult = await client.query(
     `SELECT c.relname AS table_name,

@@ -137,6 +137,11 @@ npm run prisma:validate
 
 Estas validaciones automatizadas no sustituyen el smoke real contra Supabase.
 
+La auditoría funcional reproducible y el estado requisito por requisito están en
+[`supabase-requirements-verification.md`](./supabase-requirements-verification.md). La
+suite real asociada se ejecuta únicamente de forma manual con
+`npm run test:integration:supabase` y deja datos identificados por marcador.
+
 ## 6. Frontend, CORS y Storage
 
 El frontend local debe usar:

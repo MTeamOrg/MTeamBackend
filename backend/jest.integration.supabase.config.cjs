@@ -4,8 +4,8 @@ module.exports = {
     "^(\\.{1,2}/.*)\\.js$": "$1",
   },
   testEnvironment: "node",
-  testMatch: ["<rootDir>/test/**/*.test.ts"],
-  testPathIgnorePatterns: ["<rootDir>/test/integration/supabase/"],
+  testMatch: ["<rootDir>/test/integration/supabase/**/*.integration.ts"],
+  testTimeout: 120000,
   transform: {
     "^.+\\.tsx?$": [
       "@swc/jest",
