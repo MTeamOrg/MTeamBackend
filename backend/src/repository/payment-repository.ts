@@ -1,6 +1,11 @@
-import type { Payment, PrismaClient } from "../generated/prisma/client.js";
+import type { Payment, Prisma, PrismaClient, User } from "../generated/prisma/client.js";
 import { calculatePaymentExpiresAt } from "../model/payment-expiration.js";
-import type { CreatePaymentInput, PaymentHistoryQuery } from "../validator/payment-validator.js";
+import type {
+  CreatePaymentInput,
+  PaymentHistoryQuery,
+  PaymentListQuery,
+  PaymentSummaryQuery,
+} from "../validator/payment-validator.js";
 
 export class MemberNotFoundError extends Error {}
 export class UserIsNotMemberError extends Error {}
@@ -19,6 +24,40 @@ export interface PaymentHistory {
   total: number;
 }
 
+export type PaymentReportMember = Pick<User,
+  "id" | "firstName" | "lastName" | "documentNumber" | "email"
+>;
+
+export interface PaymentReportItem extends PaymentHistoryItem {
+  member: PaymentReportMember;
+}
+
+export interface PaymentReport {
+  items: PaymentReportItem[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
+export interface PaymentSummary {
+  from: Date;
+  to: Date;
+  paymentCount: number;
+  totalAmount: string;
+}
+
+const paymentHistorySelect = {
+  id: true,
+  accreditedAt: true,
+  amount: true,
+  method: true,
+  receiptNumber: true,
+  status: true,
+  expiresAt: true,
+  voidedAt: true,
+  voidReason: true,
+} as const;
+
 export interface PaymentRepositoryPort {
   createAccreditedPayment(
     input: CreatePaymentInput,
@@ -27,6 +66,8 @@ export interface PaymentRepositoryPort {
   voidAccreditedPayment(paymentId: string, reason: string, administratorId: string): Promise<Payment>;
   isMember(memberId: string): Promise<boolean>;
   listMemberPayments(memberId: string, query: PaymentHistoryQuery): Promise<PaymentHistory>;
+  listPayments(query: PaymentListQuery): Promise<PaymentReport>;
+  getPaymentsSummary(query: PaymentSummaryQuery): Promise<PaymentSummary>;
 }
 
 export class PaymentRepository implements PaymentRepositoryPort {
@@ -49,20 +90,59 @@ export class PaymentRepository implements PaymentRepositoryPort {
         orderBy: [{ accreditedAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
         skip: (query.page - 1) * query.limit,
         take: query.limit,
+        select: paymentHistorySelect,
+      }),
+    ]);
+    return { items, page: query.page, limit: query.limit, total };
+  }
+
+  async listPayments(query: PaymentListQuery): Promise<PaymentReport> {
+    const where: Prisma.PaymentWhereInput = {};
+    if (query.memberId) where.memberId = query.memberId;
+    if (query.documentNumber) {
+      where.member = { is: { documentNumber: { contains: query.documentNumber } } };
+    }
+    if (query.method) where.method = query.method;
+    if (query.status) where.status = query.status;
+    if (query.from || query.to) {
+      where.accreditedAt = {
+        ...(query.from ? { gte: new Date(query.from) } : {}),
+        ...(query.to ? { lt: new Date(query.to) } : {}),
+      };
+    }
+
+    const [total, items] = await this.database.$transaction([
+      this.database.payment.count({ where }),
+      this.database.payment.findMany({
+        where,
+        orderBy: [{ accreditedAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
         select: {
-          id: true,
-          accreditedAt: true,
-          amount: true,
-          method: true,
-          receiptNumber: true,
-          status: true,
-          expiresAt: true,
-          voidedAt: true,
-          voidReason: true,
+          ...paymentHistorySelect,
+          member: { select: {
+            id: true, firstName: true, lastName: true, documentNumber: true, email: true,
+          } },
         },
       }),
     ]);
     return { items, page: query.page, limit: query.limit, total };
+  }
+
+  async getPaymentsSummary(query: PaymentSummaryQuery): Promise<PaymentSummary> {
+    const from = new Date(query.from);
+    const to = new Date(query.to);
+    const aggregate = await this.database.payment.aggregate({
+      where: { status: "ACCREDITED", accreditedAt: { gte: from, lt: to } },
+      _count: { id: true },
+      _sum: { amount: true },
+    });
+    return {
+      from,
+      to,
+      paymentCount: aggregate._count.id,
+      totalAmount: aggregate._sum.amount?.toString() ?? "0",
+    };
   }
 
   createAccreditedPayment(

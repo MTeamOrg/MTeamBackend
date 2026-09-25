@@ -10,6 +10,20 @@ export function createPaymentRouter(
 ): Router {
   const router = Router();
   router.get(
+    "/payments/summary",
+    authenticate,
+    requireCompletedPasswordChange,
+    authorize("ADMIN"),
+    controller.getPaymentsSummary,
+  );
+  router.get(
+    "/payments",
+    authenticate,
+    requireCompletedPasswordChange,
+    authorize("ADMIN"),
+    controller.listPayments,
+  );
+  router.get(
     "/members/me/payments",
     authenticate,
     requireCompletedPasswordChange,
