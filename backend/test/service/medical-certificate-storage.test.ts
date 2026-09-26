@@ -11,7 +11,7 @@ describe("private medical certificate storage", () => {
     const fetchMock = jest.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(new Response(null, { status: 200 }))
       .mockResolvedValueOnce(Response.json({
-        signedURL: "/storage/v1/object/sign/private/member/file.pdf?token=x",
+        signedURL: "/object/sign/private/member/file.pdf?token=x",
       }));
     const storage = new SupabaseMedicalCertificateStorage({
       url: "https://project.supabase.co", serviceRoleKey: "server-only", bucket: "private",

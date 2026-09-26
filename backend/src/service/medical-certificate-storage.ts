@@ -23,6 +23,14 @@ function encodedPath(path: string): string {
   return path.split("/").map((segment) => encodeURIComponent(segment)).join("/");
 }
 
+function resolveSignedUrl(signedPath: string, baseUrl: string): string {
+  const signedUrl = new URL(signedPath, baseUrl);
+  if (signedUrl.pathname.startsWith("/object/")) {
+    signedUrl.pathname = `/storage/v1${signedUrl.pathname}`;
+  }
+  return signedUrl.toString();
+}
+
 export function normalizeMedicalCertificateObjectPath(path: string, bucket: string): string {
   let normalized = path.trim();
 
@@ -101,7 +109,7 @@ export class SupabaseMedicalCertificateStorage implements MedicalCertificateStor
       throw new ApplicationError(502, ERROR_CODE.STORAGE_ERROR,
         "Supabase no devolvió un acceso temporal válido");
     }
-    return new URL(signedPath, configuration.url).toString();
+    return resolveSignedUrl(signedPath, configuration.url);
   }
 
   async remove(path: string): Promise<void> {
