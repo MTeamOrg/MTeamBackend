@@ -4,7 +4,7 @@ import multer from "multer";
 import { ApplicationError } from "../error/application-error.js";
 import { ERROR_CODE } from "../error/error-code.js";
 
-export const MAX_MEDICAL_CERTIFICATE_SIZE_BYTES = 10 * 1024 * 1024;
+export const MAX_MEDICAL_CERTIFICATE_SIZE_BYTES = 5 * 1024 * 1024;
 export const ALLOWED_MEDICAL_CERTIFICATE_TYPES = [
   "application/pdf",
   "image/jpeg",
@@ -43,7 +43,7 @@ export const uploadMedicalCertificate: RequestHandler = (request, response, next
       next(new ApplicationError(
         400,
         ERROR_CODE.VALIDATION_ERROR,
-        "El apto médico debe ser PDF, JPG o PNG y no superar los 10 MB",
+        "El apto médico debe ser PDF, JPG o PNG y no superar los 5 MB",
       ));
       return;
     }

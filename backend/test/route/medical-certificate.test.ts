@@ -6,6 +6,7 @@ import { ApplicationError } from "../../src/error/application-error.js";
 import { ERROR_CODE } from "../../src/error/error-code.js";
 import type { UserRole } from "../../src/generated/prisma/client.js";
 import { errorMiddleware } from "../../src/middleware/error-middleware.js";
+import { MAX_MEDICAL_CERTIFICATE_SIZE_BYTES } from "../../src/middleware/medical-certificate-upload-middleware.js";
 import { requirePasswordChangeCompleted } from "../../src/middleware/password-change-middleware.js";
 import { createMedicalCertificateRouter } from "../../src/route/medical-certificate-route.js";
 import type { MedicalCertificateService } from "../../src/service/medical-certificate-service.js";
@@ -75,6 +76,47 @@ describe("medical certificate routes", () => {
     expect(service.upload).toHaveBeenCalledWith(memberId, {
       buffer: expect.any(Buffer), mimeType: "application/pdf",
     });
+  });
+
+  test.each([
+    ["image/jpeg", "certificate.jpg", Buffer.from([0xff, 0xd8, 0xff, 0x00])],
+    ["image/png", "certificate.png", Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+  ])("accepts a valid %s signature", async (contentType, filename, content) => {
+    const { app, service } = setup();
+    const response = await request(app).post("/api/members/me/medical-certificates")
+      .attach("file", content, { filename, contentType });
+    expect(response.status).toBe(201);
+    expect(service.upload).toHaveBeenCalledWith(memberId, {
+      buffer: expect.any(Buffer), mimeType: contentType,
+    });
+  });
+
+  test("rejects a spoofed PDF signature before storage", async () => {
+    const { app, service } = setup();
+    const response = await request(app).post("/api/members/me/medical-certificates")
+      .attach("file", Buffer.from("not a PDF"), {
+        filename: "certificate.pdf", contentType: "application/pdf",
+      });
+    expect(response.status).toBe(400);
+    expect(service.upload).not.toHaveBeenCalled();
+  });
+
+  test("accepts 5 MB and rejects a larger file", async () => {
+    const { app, service } = setup();
+    const atLimit = Buffer.alloc(MAX_MEDICAL_CERTIFICATE_SIZE_BYTES);
+    atLimit.write("%PDF-");
+    const accepted = await request(app).post("/api/members/me/medical-certificates")
+      .attach("file", atLimit, { filename: "certificate.pdf", contentType: "application/pdf" });
+    expect(accepted.status).toBe(201);
+    expect(service.upload).toHaveBeenCalledTimes(1);
+
+    const tooLarge = Buffer.alloc(MAX_MEDICAL_CERTIFICATE_SIZE_BYTES + 1);
+    tooLarge.write("%PDF-");
+    const rejected = await request(app).post("/api/members/me/medical-certificates")
+      .attach("file", tooLarge, { filename: "certificate.pdf", contentType: "application/pdf" });
+    expect(rejected.status).toBe(400);
+    expect(rejected.body.message).toContain("5 MB");
+    expect(service.upload).toHaveBeenCalledTimes(1);
   });
 
   test.each([
