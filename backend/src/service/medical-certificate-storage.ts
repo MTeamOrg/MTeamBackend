@@ -23,6 +23,31 @@ function encodedPath(path: string): string {
   return path.split("/").map((segment) => encodeURIComponent(segment)).join("/");
 }
 
+export function normalizeMedicalCertificateObjectPath(path: string, bucket: string): string {
+  let normalized = path.trim();
+
+  if (/^https?:\/\//i.test(normalized)) {
+    normalized = new URL(normalized).pathname;
+  }
+
+  normalized = normalized.split(/[?#]/, 1)[0] ?? "";
+  normalized = decodeURIComponent(normalized).replace(/^\/+/, "");
+  normalized = normalized.replace(/^storage\/v1\/object\//, "");
+  normalized = normalized.replace(/^(?:sign|public)\//, "");
+
+  const bucketPrefix = `${bucket}/`;
+  if (normalized === bucket || normalized.startsWith(bucketPrefix)) {
+    normalized = normalized.slice(bucketPrefix.length);
+  }
+
+  normalized = normalized.split("/").filter(Boolean).join("/");
+  if (!normalized || normalized.split("/").some((segment) => segment === "." || segment === "..")) {
+    throw new ApplicationError(502, ERROR_CODE.STORAGE_ERROR,
+      "La ruta del apto m\u00e9dico no es v\u00e1lida");
+  }
+  return normalized;
+}
+
 export class SupabaseMedicalCertificateStorage implements MedicalCertificateStorage {
   private readonly signedUrlExpiresInSeconds: number;
 
@@ -81,6 +106,7 @@ export class SupabaseMedicalCertificateStorage implements MedicalCertificateStor
 
   async remove(path: string): Promise<void> {
     const configuration = this.requireConfiguration();
+    const objectPath = normalizeMedicalCertificateObjectPath(path, configuration.bucket);
     const response = await fetch(
       new URL(`/storage/v1/object/${encodeURIComponent(configuration.bucket)}`, configuration.url),
       {
@@ -90,7 +116,7 @@ export class SupabaseMedicalCertificateStorage implements MedicalCertificateStor
           authorization: `Bearer ${configuration.serviceRoleKey}`,
           "content-type": "application/json",
         },
-        body: JSON.stringify({ prefixes: [path] }),
+        body: JSON.stringify({ prefixes: [objectPath] }),
       },
     );
     if (!response.ok) {
@@ -127,8 +153,9 @@ export class SupabaseMedicalCertificateStorage implements MedicalCertificateStor
     },
     path: string,
   ): URL {
+    const objectPath = normalizeMedicalCertificateObjectPath(path, configuration.bucket);
     return new URL(
-      `/storage/v1/object/${encodeURIComponent(configuration.bucket)}/${encodedPath(path)}`,
+      `/storage/v1/object/${encodeURIComponent(configuration.bucket)}/${encodedPath(objectPath)}`,
       configuration.url,
     );
   }

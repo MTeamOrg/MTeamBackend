@@ -95,7 +95,7 @@ export class MedicalCertificateService {
   }
 
   async upload(memberId: string, file: MedicalCertificateStorageFile) {
-    const path = `medical-certificates/${memberId}/${randomUUID()}${extensionForMimeType(file.mimeType)}`;
+    const path = `${memberId}/${randomUUID()}${extensionForMimeType(file.mimeType)}`;
     await this.storage.upload(path, file);
     try {
       return await this.repository.createPending(memberId, path);

@@ -81,9 +81,19 @@ describe("medical certificate service", () => {
     await expect(service.upload(memberId, { buffer: Buffer.from("%PDF-1.7"), mimeType: "application/pdf" }))
       .rejects.toEqual(expect.objectContaining<ApplicationError>({ statusCode: 409 }));
     expect(storage.upload).toHaveBeenCalledWith(
-      expect.stringMatching(new RegExp(`^medical-certificates/${memberId}/.*\\.pdf$`)),
+      expect.stringMatching(new RegExp(`^${memberId}/.*\\.pdf$`)),
       expect.anything(),
     );
-    expect(storage.remove).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`^medical-certificates/${memberId}/`)));
+    expect(storage.remove).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`^${memberId}/`)));
+  });
+
+  test("persists the same relative object path that was uploaded", async () => {
+    const { service, repository, storage } = setup();
+
+    await service.upload(memberId, { buffer: Buffer.from("%PDF-1.7"), mimeType: "application/pdf" });
+
+    const uploadedPath = storage.upload.mock.calls[0]?.[0];
+    expect(uploadedPath).toMatch(new RegExp(`^${memberId}/.*\\.pdf$`));
+    expect(repository.createPending).toHaveBeenCalledWith(memberId, uploadedPath);
   });
 });
