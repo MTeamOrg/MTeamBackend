@@ -7,6 +7,7 @@ import { AuthController } from "../controller/auth-controller.js";
 import { BranchController } from "../controller/branch-controller.js";
 import { MemberController } from "../controller/member-controller.js";
 import { MemberMembershipController } from "../controller/member-membership-controller.js";
+import { MedicalCertificateController } from "../controller/medical-certificate-controller.js";
 import { MembershipPriceController } from "../controller/membership-price-controller.js";
 import { PaymentController } from "../controller/payment-controller.js";
 import { PaymentPreviewController } from "../controller/payment-preview-controller.js";
@@ -20,6 +21,7 @@ import { uploadProfilePhoto } from "../middleware/profile-photo-upload-middlewar
 import { BranchRepository } from "../repository/branch-repository.js";
 import { MemberRepository } from "../repository/member-repository.js";
 import { MemberMembershipRepository } from "../repository/member-membership-repository.js";
+import { MedicalCertificateRepository } from "../repository/medical-certificate-repository.js";
 import { MembershipPriceRepository } from "../repository/membership-price-repository.js";
 import { PaymentRepository } from "../repository/payment-repository.js";
 import { PaymentPreviewRepository } from "../repository/payment-preview-repository.js";
@@ -32,6 +34,7 @@ import { AuthService } from "../service/auth-service.js";
 import { BranchService } from "../service/branch-service.js";
 import { MemberService } from "../service/member-service.js";
 import { MemberMembershipService } from "../service/member-membership-service.js";
+import { MedicalCertificateService } from "../service/medical-certificate-service.js";
 import { MembershipPriceService } from "../service/membership-price-service.js";
 import { PaymentService } from "../service/payment-service.js";
 import { PaymentPreviewService } from "../service/payment-preview-service.js";
@@ -40,6 +43,7 @@ import { WeeklyScheduleService } from "../service/weekly-schedule-service.js";
 import { TrainerService } from "../service/trainer-service.js";
 import { PasswordService } from "../service/password-service.js";
 import { SupabaseProfilePhotoStorage } from "../service/profile-photo-storage.js";
+import { SupabaseMedicalCertificateStorage } from "../service/medical-certificate-storage.js";
 import { TokenService } from "../service/token-service.js";
 import { UserService } from "../service/user-service.js";
 import { createAdminUserRouter } from "./admin-user-route.js";
@@ -48,6 +52,7 @@ import { createBranchRouter } from "./branch-route.js";
 import { createMemberRouter } from "./member-route.js";
 import { healthRouter } from "./health-route.js";
 import { createMemberMembershipRouter } from "./member-membership-route.js";
+import { createMedicalCertificateRouter } from "./medical-certificate-route.js";
 import { createMembershipPriceRouter } from "./membership-price-route.js";
 import { createPaymentRouter } from "./payment-route.js";
 import { createPaymentPreviewRouter } from "./payment-preview-route.js";
@@ -76,8 +81,9 @@ const authenticate = createAuthenticationMiddleware(tokenService, userRepository
 const branchController = new BranchController(new BranchService(new BranchRepository(database)));
 const memberController = new MemberController(new MemberService(new MemberRepository(database)));
 const priceRepository = new MembershipPriceRepository(database);
+const memberMembershipRepository = new MemberMembershipRepository(database);
 const memberMembershipController = new MemberMembershipController(
-  new MemberMembershipService(new MemberMembershipRepository(database), priceRepository),
+  new MemberMembershipService(memberMembershipRepository, priceRepository),
 );
 const membershipPriceController = new MembershipPriceController(
   new MembershipPriceService(priceRepository),
@@ -92,6 +98,17 @@ const scheduledClassController = new ScheduledClassController(
 );
 const weeklyScheduleController = new WeeklyScheduleController(
   new WeeklyScheduleService(new WeeklyScheduleRepository(database)),
+);
+const medicalCertificateController = new MedicalCertificateController(
+  new MedicalCertificateService(
+    new MedicalCertificateRepository(database),
+    memberMembershipRepository,
+    new SupabaseMedicalCertificateStorage({
+      url: environment.SUPABASE_URL,
+      serviceRoleKey: environment.SUPABASE_SERVICE_ROLE_KEY,
+      bucket: environment.SUPABASE_STORAGE_BUCKET,
+    }),
+  ),
 );
 
 apiRouter.use(healthRouter);
@@ -136,6 +153,11 @@ apiRouter.use(createScheduledClassRouter(
 ));
 apiRouter.use(createWeeklyScheduleRouter(
   weeklyScheduleController,
+  authenticate,
+  requirePasswordChangeCompleted,
+));
+apiRouter.use(createMedicalCertificateRouter(
+  medicalCertificateController,
   authenticate,
   requirePasswordChangeCompleted,
 ));

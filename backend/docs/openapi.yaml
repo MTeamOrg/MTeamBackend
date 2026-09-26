@@ -701,8 +701,18 @@ paths:
       tags: [Medical Certificates]
       summary: Consultar el historial propio de aptos médicos
       operationId: listOwnMedicalCertificates
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Historial propio de aptos médicos
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalCertificateOwnListResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
     post:
       tags: [Medical Certificates]
       summary: Cargar un apto médico
@@ -719,8 +729,15 @@ paths:
                   type: string
                   format: binary
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Documento recibido y pendiente de revisión
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalCertificate" }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /medical-certificates:
     get:
@@ -731,13 +748,23 @@ paths:
         - $ref: "#/components/parameters/Search"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/Limit"
+        - name: memberId
+          in: query
+          schema: { type: string, format: uuid }
         - name: status
           in: query
           schema: { $ref: "#/components/schemas/MedicalCertificateStatus" }
         - $ref: "#/components/parameters/From"
         - $ref: "#/components/parameters/To"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Lista paginada de aptos médicos
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalCertificateAdminListResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /medical-certificates/{certificateId}:
     parameters:
@@ -747,7 +774,14 @@ paths:
       summary: Consultar el detalle de un apto médico
       operationId: getMedicalCertificate
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Detalle del apto médico sin exponer una URL pública permanente
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalCertificate" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /medical-certificates/{certificateId}/file:
@@ -758,8 +792,15 @@ paths:
       summary: Obtener acceso temporal al archivo del apto
       operationId: getMedicalCertificateFile
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: URL firmada de corta duración para el archivo privado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalCertificateFileResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /medical-certificates/{certificateId}/review:
     parameters:
@@ -774,7 +815,16 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/MedicalReviewRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Apto médico revisado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalCertificate" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /access-attempts:
     get:
@@ -1846,6 +1896,82 @@ components:
     MedicalCertificateStatus:
       type: string
       enum: [PENDING, APPROVED, REJECTED]
+    MedicalCertificateMember:
+      type: object
+      additionalProperties: false
+      required: [id, firstName, lastName, documentNumber, email]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        documentNumber: { type: string }
+        email: { type: string, format: email }
+    MedicalCertificateReviewer:
+      type: object
+      additionalProperties: false
+      required: [id, firstName, lastName]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+    MedicalCertificate:
+      type: object
+      additionalProperties: false
+      required: [id, memberId, status, uploadedAt, reviewedAt, reviewComment, member, reviewedBy]
+      properties:
+        id: { type: string, format: uuid }
+        memberId: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/MedicalCertificateStatus" }
+        uploadedAt: { type: string, format: date-time }
+        reviewedAt: { type: [string, "null"], format: date-time }
+        reviewComment: { type: [string, "null"] }
+        member:
+          oneOf:
+            - $ref: "#/components/schemas/MedicalCertificateMember"
+            - type: "null"
+        reviewedBy:
+          oneOf:
+            - $ref: "#/components/schemas/MedicalCertificateReviewer"
+            - type: "null"
+    InitialMedicalCertificatePeriod:
+      type: object
+      additionalProperties: false
+      required: [startsAt, expiresAt, daysRemaining, isActive]
+      properties:
+        startsAt: { type: [string, "null"], format: date-time }
+        expiresAt: { type: [string, "null"], format: date-time }
+        daysRemaining: { type: integer, minimum: 0 }
+        isActive: { type: boolean }
+    MedicalCertificateOwnListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total, initialMedicalCertificatePeriod]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MedicalCertificate" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1 }
+        total: { type: integer, minimum: 0 }
+        initialMedicalCertificatePeriod: { $ref: "#/components/schemas/InitialMedicalCertificatePeriod" }
+    MedicalCertificateAdminListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MedicalCertificate" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1 }
+        total: { type: integer, minimum: 0 }
+    MedicalCertificateFileResponse:
+      type: object
+      additionalProperties: false
+      required: [signedUrl, expiresIn]
+      properties:
+        signedUrl: { type: string, format: uri }
+        expiresIn: { type: integer, minimum: 1, description: Duración de la URL firmada en segundos }
     AccessResult:
       type: string
       enum: [ALLOWED, DENIED]
