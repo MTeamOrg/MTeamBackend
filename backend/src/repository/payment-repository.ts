@@ -1,4 +1,4 @@
-import type { Payment, Prisma, PrismaClient, User } from "../generated/prisma/client.js";
+import { Prisma, type Payment, type PrismaClient, type User } from "../generated/prisma/client.js";
 import { calculatePaymentExpiresAt } from "../model/payment-expiration.js";
 import type {
   CreatePaymentInput,
@@ -44,6 +44,38 @@ export interface PaymentSummary {
   to: Date;
   paymentCount: number;
   totalAmount: string;
+  days: PaymentSummaryDay[];
+}
+
+export interface PaymentSummaryDay {
+  date: string;
+  amount: string;
+}
+
+const GYM_TIME_ZONE = "America/Argentina/Buenos_Aires";
+const gymDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: GYM_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function gymDate(instant: Date): string {
+  return gymDateFormatter.format(instant);
+}
+
+function addDays(date: string, days: number): string {
+  const instant = new Date(`${date}T00:00:00.000Z`);
+  instant.setUTCDate(instant.getUTCDate() + days);
+  return instant.toISOString().slice(0, 10);
+}
+
+function datesCoveredByRange(from: Date, to: Date): string[] {
+  const firstDate = gymDate(from);
+  const lastDate = gymDate(new Date(to.getTime() - 1));
+  const dates: string[] = [];
+  for (let date = firstDate; date <= lastDate; date = addDays(date, 1)) dates.push(date);
+  return dates;
 }
 
 const paymentHistorySelect = {
@@ -132,16 +164,33 @@ export class PaymentRepository implements PaymentRepositoryPort {
   async getPaymentsSummary(query: PaymentSummaryQuery): Promise<PaymentSummary> {
     const from = new Date(query.from);
     const to = new Date(query.to);
-    const aggregate = await this.database.payment.aggregate({
-      where: { status: "ACCREDITED", accreditedAt: { gte: from, lt: to } },
-      _count: { id: true },
-      _sum: { amount: true },
-    });
+    const where = { status: "ACCREDITED" as const, accreditedAt: { gte: from, lt: to } };
+    const [aggregate, payments] = await Promise.all([
+      this.database.payment.aggregate({
+        where,
+        _count: { id: true },
+        _sum: { amount: true },
+      }),
+      this.database.payment.findMany({
+        where,
+        select: { amount: true, accreditedAt: true, status: true },
+      }),
+    ]);
+    const dailyTotals = new Map<string, Prisma.Decimal>();
+    for (const payment of payments) {
+      if (payment.status !== "ACCREDITED") continue;
+      const date = gymDate(payment.accreditedAt);
+      dailyTotals.set(date, (dailyTotals.get(date) ?? new Prisma.Decimal("0")).plus(payment.amount));
+    }
     return {
       from,
       to,
       paymentCount: aggregate._count.id,
       totalAmount: aggregate._sum.amount?.toString() ?? "0",
+      days: datesCoveredByRange(from, to).map((date) => ({
+        date,
+        amount: dailyTotals.get(date)?.toString() ?? "0",
+      })),
     };
   }
 
