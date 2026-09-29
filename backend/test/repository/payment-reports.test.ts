@@ -74,14 +74,31 @@ describe("PAG-04 filtered payment listing", () => {
 
 describe("PAG-07 precise payment summary", () => {
   test("sums all accredited payments with inclusive from and exclusive to", async () => {
-    const { repository, aggregate } = setup([], 0, new Prisma.Decimal("12345678901.23"), 3);
-    expect(await repository.getPaymentsSummary({ from, to })).toEqual({
-      from: new Date(from), to: new Date(to), paymentCount: 3,
-      totalAmount: "12345678901.23",
+    const weekFrom = "2026-09-01T00:00:00-03:00";
+    const weekTo = "2026-09-08T00:00:00-03:00";
+    const payments = [
+      { status: "ACCREDITED", accreditedAt: new Date("2026-09-01T03:30:00.000Z"), amount: new Prisma.Decimal("100") },
+      { status: "ACCREDITED", accreditedAt: new Date("2026-09-03T15:00:00.000Z"), amount: new Prisma.Decimal("50.25") },
+      { status: "VOIDED", accreditedAt: new Date("2026-09-04T15:00:00.000Z"), amount: new Prisma.Decimal("999") },
+    ];
+    const { repository, aggregate, findMany } = setup(payments, 0, new Prisma.Decimal("150.25"), 2);
+    expect(await repository.getPaymentsSummary({ from: weekFrom, to: weekTo })).toEqual({
+      from: new Date(weekFrom), to: new Date(weekTo), paymentCount: 2,
+      totalAmount: "150.25",
+      days: [
+        { date: "2026-09-01", amount: "100" }, { date: "2026-09-02", amount: "0" },
+        { date: "2026-09-03", amount: "50.25" }, { date: "2026-09-04", amount: "0" },
+        { date: "2026-09-05", amount: "0" }, { date: "2026-09-06", amount: "0" },
+        { date: "2026-09-07", amount: "0" },
+      ],
     });
     expect(aggregate).toHaveBeenCalledWith({
-      where: { status: "ACCREDITED", accreditedAt: { gte: new Date(from), lt: new Date(to) } },
+      where: { status: "ACCREDITED", accreditedAt: { gte: new Date(weekFrom), lt: new Date(weekTo) } },
       _count: { id: true }, _sum: { amount: true },
+    });
+    expect(findMany).toHaveBeenCalledWith({
+      where: { status: "ACCREDITED", accreditedAt: { gte: new Date(weekFrom), lt: new Date(weekTo) } },
+      select: { amount: true, accreditedAt: true, status: true },
     });
   });
 

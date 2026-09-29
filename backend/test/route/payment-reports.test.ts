@@ -29,6 +29,7 @@ function setup(role: UserRole | null = "ADMIN", passwordChangeRequired = false) 
     listPayments: jest.fn().mockResolvedValue({ items: [payment], page: 2, limit: 1, total: 3 }),
     getPaymentsSummary: jest.fn().mockResolvedValue({
       from: new Date(from), to: new Date(to), paymentCount: 2, totalAmount: "30000.25",
+      days: [{ date: "2026-09-24", amount: "30000.25" }],
     }),
   };
   const authenticate: RequestHandler = (req, _res, next) => {
@@ -85,7 +86,10 @@ describe("PAG-07 payment summary", () => {
     expect(response.status).toBe(200);
     expect(service.getPaymentsSummary).toHaveBeenCalledWith({ from, to });
     expect(service.listPayments).not.toHaveBeenCalled();
-    expect(response.body).toEqual({ from, to, paymentCount: 2, totalAmount: "30000.25" });
+    expect(response.body).toEqual({
+      from, to, paymentCount: 2, totalAmount: "30000.25",
+      days: [{ date: "2026-09-24", amount: "30000.25" }],
+    });
   });
 
   test.each([

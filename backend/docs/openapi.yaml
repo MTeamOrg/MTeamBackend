@@ -597,11 +597,13 @@ paths:
   /payments/summary:
     get:
       tags: [Payments]
-      summary: Calcular el total acreditado dentro de un período
+      summary: Calcular la recaudación acreditada por día
       description: >-
         Exclusivo de administradores. Usa accreditedAt con from inclusivo y to
-        exclusivo. Suma todos los pagos que sigan ACCREDITED en el período,
-        independientemente de la paginación del listado.
+        exclusivo, interpreta las fechas en America/Argentina/Buenos_Aires y
+        devuelve una entrada por cada día calendario cubierto por el período,
+        incluyendo días sin pagos con importe cero. Solo considera pagos
+        ACCREDITED, independientemente de la paginación del listado.
       operationId: getPaymentsSummary
       parameters:
         - name: from
@@ -614,7 +616,7 @@ paths:
           schema: { type: string, format: date-time }
       responses:
         "200":
-          description: Total de pagos acreditados del período
+          description: Total y recaudación diaria de pagos acreditados del período
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PaymentSummaryResponse" }
@@ -1703,12 +1705,23 @@ components:
     PaymentSummaryResponse:
       type: object
       additionalProperties: false
-      required: [from, to, paymentCount, totalAmount]
+      required: [from, to, paymentCount, totalAmount, days]
       properties:
         from: { type: string, format: date-time, description: Límite inclusivo de accreditedAt }
         to: { type: string, format: date-time, description: Límite exclusivo de accreditedAt }
         paymentCount: { type: integer, minimum: 0 }
         totalAmount: { type: string, description: Suma decimal exacta de pagos ACCREDITED }
+        days:
+          type: array
+          description: Un valor por cada día calendario cubierto por el período, ordenado ascendentemente
+          items: { $ref: "#/components/schemas/PaymentSummaryDay" }
+    PaymentSummaryDay:
+      type: object
+      additionalProperties: false
+      required: [date, amount]
+      properties:
+        date: { type: string, format: date }
+        amount: { type: string, description: Suma decimal exacta de pagos ACCREDITED de la fecha }
     PublicBranchCard:
       type: object
       additionalProperties: false
