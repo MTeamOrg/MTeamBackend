@@ -4,6 +4,7 @@ import type {
   MedicalReviewInput,
   OwnMedicalCertificateListQuery,
 } from "../validator/medical-certificate-validator.js";
+import { createNotifications, type NotificationRecipient } from "./notification-repository.js";
 
 export class MedicalCertificateNotFoundError extends Error {}
 export class MedicalCertificateMemberNotFoundError extends Error {}
@@ -156,12 +157,12 @@ export class MedicalCertificateRepository implements MedicalCertificateRepositor
       `;
       const current = await transaction.medicalCertificate.findUnique({
         where: { id: certificateId },
-        select: { status: true },
+        select: { status: true, memberId: true },
       });
       if (!current) throw new MedicalCertificateNotFoundError();
       if (current.status !== "PENDING") throw new MedicalCertificateAlreadyReviewedError();
 
-      return transaction.medicalCertificate.update({
+      const updated = await transaction.medicalCertificate.update({
         where: { id: certificateId },
         data: {
           status: input.status,
@@ -171,6 +172,17 @@ export class MedicalCertificateRepository implements MedicalCertificateRepositor
         },
         select: medicalCertificateSelect,
       });
+      const notification: NotificationRecipient = {
+        userId: current.memberId,
+        title: input.status === "APPROVED" ? "Apto médico aprobado" : "Apto médico rechazado",
+        message: input.status === "APPROVED"
+          ? "Tu apto médico fue aprobado por un administrador."
+          : `Tu apto médico fue rechazado.${input.reviewComment ? ` Observación: ${input.reviewComment}` : ""}`,
+        type: "MEDICAL_CERTIFICATE_REVIEWED",
+        dedupeKey: `medical-certificate-reviewed:${certificateId}:${input.status}`,
+      };
+      await createNotifications(transaction, [notification]);
+      return updated;
     });
   }
 }

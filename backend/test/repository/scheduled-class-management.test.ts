@@ -40,6 +40,7 @@ function setup() {
     $queryRaw: queryRaw,
     branch: { findUnique: branchFindUnique },
     user: { findUnique: userFindUnique },
+    notification: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
     weeklySchedule: { upsert },
     scheduledClass: { create, findUnique, update, delete: deleteClass },
   };

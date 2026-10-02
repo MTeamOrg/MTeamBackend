@@ -5,6 +5,7 @@ import type {
   CreateScheduledClassInput,
   UpdateScheduledClassInput,
 } from "../validator/scheduled-class-validator.js";
+import { createNotifications, type NotificationRecipient } from "./notification-repository.js";
 
 export class ScheduledClassNotFoundError extends Error {}
 export class BranchAssignmentError extends Error {
@@ -61,6 +62,7 @@ export class ScheduledClassRepository implements ScheduledClassRepositoryPort {
         },
         include: scheduleInclude,
       });
+      await notifyClassChange(transaction, record.id, input.trainerId ?? [], "create", record.activity, record.startsAt, input.branchId);
       return withWeek(record);
     });
   }
@@ -95,6 +97,8 @@ export class ScheduledClassRepository implements ScheduledClassRepositoryPort {
       const updated = await transaction.scheduledClass.update({
         where: { id }, data, include: scheduleInclude,
       });
+      const recipients = new Set([existing.trainerId, updated.trainerId].filter((value): value is string => Boolean(value)));
+      await notifyClassChange(transaction, updated.id, [...recipients], "update", updated.activity, updated.startsAt, updated.branchId);
       return withWeek(updated);
     });
   }
@@ -103,11 +107,14 @@ export class ScheduledClassRepository implements ScheduledClassRepositoryPort {
     return this.database.$transaction(async (transaction) => {
       await this.lockClass(transaction, id);
       const existing = await transaction.scheduledClass.findUnique({
-        where: { id }, select: { startsAt: true },
+        where: { id }, select: { startsAt: true, trainerId: true },
       });
       if (!existing) throw new ScheduledClassNotFoundError();
       if (existing.startsAt <= now) throw new HistoricalClassError();
       await transaction.scheduledClass.delete({ where: { id } });
+      if (existing.trainerId) {
+        await notifyClassChange(transaction, id, existing.trainerId, "delete", null, existing.startsAt, null);
+      }
       // The weekly schedule and other classes remain in place.
     });
   }
@@ -119,6 +126,33 @@ export class ScheduledClassRepository implements ScheduledClassRepositoryPort {
     if (rows.length === 0) throw new ScheduledClassNotFoundError();
   }
 
+}
+
+async function notifyClassChange(
+  transaction: Prisma.TransactionClient,
+  classId: string,
+  trainerIds: string | string[],
+  action: "create" | "update" | "delete",
+  activity: string | null,
+  startsAt: Date,
+  branchId: string | null,
+): Promise<void> {
+  const recipients = Array.isArray(trainerIds) ? trainerIds : [trainerIds];
+  if (!recipients.length) return;
+  const branch = action === "create" && branchId
+    ? await transaction.branch.findUnique({ where: { id: branchId }, select: { name: true } })
+    : null;
+  const fingerprint = `${classId}:${action}:${activity ?? "deleted"}:${startsAt.toISOString()}:${branchId ?? "none"}`;
+  const notifications: NotificationRecipient[] = recipients.map((userId) => ({
+    userId,
+    title: "Cambio en tus clases",
+    message: action === "delete"
+      ? "Se canceló una clase que tenías asignada."
+      : `Se ${action === "create" ? "asignó" : "modificó"} la clase${activity ? ` de ${activity}` : ""} del ${startsAt.toLocaleDateString("es-AR")} a las ${startsAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}${branch ? ` en ${branch.name}` : ""}.`,
+    type: "CLASS_CHANGED",
+    dedupeKey: `class-changed:${fingerprint}:${userId}`,
+  }));
+  await createNotifications(transaction, notifications);
 }
 
 /** Shared by scheduled-class management and weekly-schedule copying. */

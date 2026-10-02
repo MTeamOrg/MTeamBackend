@@ -330,6 +330,7 @@ model NewsPost {
 model Notification {
   id        String           @id @default(uuid()) @db.Uuid
   userId    String           @map("user_id") @db.Uuid
+  dedupeKey String?          @unique @map("dedupe_key") @db.VarChar(255)
   title     String           @db.VarChar(200)
   message   String           @db.Text
   type      NotificationType
