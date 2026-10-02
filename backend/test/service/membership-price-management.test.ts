@@ -38,7 +38,11 @@ describe("membership price management", () => {
     const created = price("30000000-0000-0000-0000-000000000003", "20000.00", "2026-10-01T00:00:00.000Z", "2026-09-24T12:00:00.000Z");
     const create = jest.fn().mockResolvedValue(created);
     const findFirst = jest.fn().mockResolvedValue({ amount: { toString: () => "18000.00" } });
-    const transaction = { membershipPrice: { create, findFirst } };
+    const transaction = {
+      membershipPrice: { create, findFirst },
+      user: { findMany: jest.fn().mockResolvedValue([{ id: "member-id" }]) },
+      notification: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    };
     const database = {
       $transaction: (callback: (tx: typeof transaction) => Promise<unknown>) => callback(transaction),
     } as unknown as PrismaClient;

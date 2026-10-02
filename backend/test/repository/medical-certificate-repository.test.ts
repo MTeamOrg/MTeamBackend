@@ -18,12 +18,13 @@ function setup() {
   const queryRaw = jest.fn().mockResolvedValue([{ id: memberId }]);
   const userFindUnique = jest.fn().mockResolvedValue({ role: "MEMBER" });
   const certificateFindFirst = jest.fn().mockResolvedValue(null);
-  const certificateFindUnique = jest.fn().mockResolvedValue({ status: "PENDING" });
+  const certificateFindUnique = jest.fn().mockResolvedValue({ status: "PENDING", memberId });
   const create = jest.fn().mockResolvedValue(record);
   const update = jest.fn().mockResolvedValue(record);
   const transaction = {
     $queryRaw: queryRaw,
     user: { findUnique: userFindUnique },
+    notification: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
     medicalCertificate: { findFirst: certificateFindFirst, findUnique: certificateFindUnique, create, update },
   };
   const database = {

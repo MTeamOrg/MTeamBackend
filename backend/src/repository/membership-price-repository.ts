@@ -1,4 +1,5 @@
 import type { MembershipPrice, PrismaClient } from "../generated/prisma/client.js";
+import { createNotifications, type NotificationRecipient } from "./notification-repository.js";
 
 export interface NewMembershipPriceData {
   amount: string;
@@ -45,6 +46,20 @@ export class MembershipPriceRepository implements MembershipPriceRepositoryPort 
         orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }, { id: "desc" }],
         select: { amount: true },
       });
+      if (previous && Number(price.amount.toString()) > Number(previous.amount.toString())) {
+        const members = await transaction.user.findMany({
+          where: { role: "MEMBER", status: "ACTIVE" },
+          select: { id: true },
+        });
+        const notifications: NotificationRecipient[] = members.map((member) => ({
+          userId: member.id,
+          title: "Aumento de cuota",
+          message: `La cuota mensual será de $${price.amount.toString()} desde el ${price.effectiveFrom.toLocaleDateString("es-AR")}.`,
+          type: "MEMBERSHIP_PRICE_CHANGED",
+          dedupeKey: `membership-price-changed:${price.id}:${member.id}`,
+        }));
+        await createNotifications(transaction, notifications);
+      }
       return { ...price, previousAmount: previous?.amount.toString() ?? null };
     });
   }
