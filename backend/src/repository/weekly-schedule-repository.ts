@@ -54,7 +54,7 @@ function toView(record: WeeklyScheduleRecord): WeeklyScheduleView {
   return record;
 }
 
-function publicWeeklyScheduleSelect(weekStartsOn: string) {
+function publicWeeklyScheduleSelect(weekStartsOn: string, trainerId?: string) {
   const range = gymWeekRange(weekStartsOn);
   return {
     id: true,
@@ -63,6 +63,7 @@ function publicWeeklyScheduleSelect(weekStartsOn: string) {
       where: {
         startsAt: { gte: range.startsAt, lt: range.endsAt },
         branch: { is: { isActive: true } },
+        ...(trainerId ? { trainerId } : {}),
       },
       orderBy: [
         { startsAt: "asc" as const },
@@ -82,6 +83,10 @@ function publicWeeklyScheduleSelect(weekStartsOn: string) {
 
 export interface WeeklyScheduleRepositoryPort {
   findByWeekStartsOn(weekStartsOn: string): Promise<WeeklyScheduleView>;
+  findByWeekStartsOnForTrainer(
+    weekStartsOn: string,
+    trainerId: string,
+  ): Promise<WeeklyScheduleView>;
   findById(id: string): Promise<WeeklyScheduleView | null>;
   copySchedule(
     sourceScheduleId: string,
@@ -97,6 +102,19 @@ export class WeeklyScheduleRepository implements WeeklyScheduleRepositoryPort {
     const schedule = await this.database.weeklySchedule.findUnique({
       where: { weekStartsOn: new Date(`${weekStartsOn}T00:00:00.000Z`) },
       select: publicWeeklyScheduleSelect(weekStartsOn),
+    });
+    return schedule
+      ? toView(schedule)
+      : { id: null, weekStartsOn: new Date(`${weekStartsOn}T00:00:00.000Z`), classes: [] };
+  }
+
+  async findByWeekStartsOnForTrainer(
+    weekStartsOn: string,
+    trainerId: string,
+  ): Promise<WeeklyScheduleView> {
+    const schedule = await this.database.weeklySchedule.findUnique({
+      where: { weekStartsOn: new Date(`${weekStartsOn}T00:00:00.000Z`) },
+      select: publicWeeklyScheduleSelect(weekStartsOn, trainerId),
     });
     return schedule
       ? toView(schedule)

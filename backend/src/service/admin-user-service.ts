@@ -2,6 +2,7 @@ import { ApplicationError } from "../error/application-error.js";
 import { ERROR_CODE } from "../error/error-code.js";
 import {
   DuplicateUserError,
+  InvalidTrainerBranchAssignmentError,
   UserNotFoundError,
 } from "../repository/user-repository.js";
 import type {
@@ -21,6 +22,7 @@ import type {
   AdminUserListQueryInput,
   UpdateAdminUserInput,
   UpdateUserStatusInput,
+  UpdateTrainerBranchesInput,
 } from "../validator/admin-user-validator.js";
 import type { PasswordHasher } from "./password-service.js";
 
@@ -49,6 +51,11 @@ export interface AdminUserManagementService {
     performedById: string,
     input: UpdateUserStatusInput,
   ): Promise<UserListItem>;
+  updateTrainerBranches(
+    userId: string,
+    performedById: string,
+    input: UpdateTrainerBranchesInput,
+  ): Promise<AdminUserDetail>;
   listUserAuditLogs(
     userId: string,
     page: number,
@@ -208,6 +215,34 @@ export class AdminUserService
     } catch (error: unknown) {
       if (error instanceof UserNotFoundError) {
         throw new ApplicationError(404, ERROR_CODE.NOT_FOUND, "El usuario no existe");
+      }
+      throw error;
+    }
+  }
+
+  async updateTrainerBranches(
+    userId: string,
+    performedById: string,
+    input: UpdateTrainerBranchesInput,
+  ): Promise<AdminUserDetail> {
+    try {
+      return await this.userRepository.updateTrainerBranches(
+        userId,
+        performedById,
+        input.branchIds,
+      );
+    } catch (error: unknown) {
+      if (error instanceof UserNotFoundError) {
+        throw new ApplicationError(404, ERROR_CODE.NOT_FOUND, "El usuario no existe");
+      }
+      if (error instanceof InvalidTrainerBranchAssignmentError) {
+        throw new ApplicationError(
+          error.reason === "NOT_TRAINER" ? 400 : 409,
+          error.reason === "NOT_TRAINER" ? ERROR_CODE.VALIDATION_ERROR : ERROR_CODE.CONFLICT,
+          error.reason === "NOT_TRAINER"
+            ? "Las sedes solo pueden asignarse a entrenadores"
+            : "Una o mÃ¡s sedes no existen o estÃ¡n desactivadas",
+        );
       }
       throw error;
     }

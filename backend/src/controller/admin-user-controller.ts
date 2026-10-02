@@ -16,6 +16,7 @@ import {
   createAdminUserSchema,
   updateAdminUserSchema,
   updateUserStatusSchema,
+  updateTrainerBranchesSchema,
   userIdParamsSchema,
 } from "../validator/admin-user-validator.js";
 
@@ -137,6 +138,28 @@ export class AdminUserController {
       bodyValidation.data,
     );
     response.status(200).json(user);
+  };
+
+  updateTrainerBranches: RequestHandler = async (request, response) => {
+    const paramsValidation = userIdParamsSchema.safeParse(request.params);
+    const bodyValidation = updateTrainerBranchesSchema.safeParse(request.body);
+    if (!paramsValidation.success || !bodyValidation.success) {
+      throw new ApplicationError(
+        400,
+        ERROR_CODE.VALIDATION_ERROR,
+        "Las sedes asignadas no son vÃ¡lidas",
+        {
+          params: paramsValidation.success ? null : paramsValidation.error.flatten(),
+          body: bodyValidation.success ? null : bodyValidation.error.flatten(),
+        },
+      );
+    }
+    const user = await this.userService.updateTrainerBranches(
+      paramsValidation.data.userId,
+      request.authenticatedUser!.id,
+      bodyValidation.data,
+    );
+    response.status(200).json(serializeAdminUser(user));
   };
 
   listUserAuditLogs: RequestHandler = async (request, response) => {

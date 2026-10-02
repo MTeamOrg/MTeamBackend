@@ -6,6 +6,8 @@ export const adminUserListQuerySchema = z.strictObject({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   role: z.enum(["MEMBER", "TRAINER", "ADMIN"]).optional(),
   status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+  membershipStatus: z.enum(["CURRENT", "EXPIRING_SOON", "EXPIRED"]).optional(),
+  initialPeriod: z.enum(["true", "false"]).transform((value) => value === "true").optional(),
 });
 
 export const userIdParamsSchema = z.strictObject({
@@ -15,6 +17,13 @@ export const userIdParamsSchema = z.strictObject({
 export const updateUserStatusSchema = z.strictObject({
   status: z.enum(["ACTIVE", "INACTIVE"]),
   reason: z.string().trim().optional(),
+});
+
+export const updateTrainerBranchesSchema = z.strictObject({
+  branchIds: z.array(z.uuid()).max(50).refine(
+    (branchIds) => new Set(branchIds).size === branchIds.length,
+    "No se puede repetir una sede",
+  ),
 });
 
 const userDataFields = {
@@ -82,5 +91,6 @@ export const updateAdminUserSchema = z
 
 export type AdminUserListQueryInput = z.infer<typeof adminUserListQuerySchema>;
 export type UpdateUserStatusInput = z.infer<typeof updateUserStatusSchema>;
+export type UpdateTrainerBranchesInput = z.infer<typeof updateTrainerBranchesSchema>;
 export type CreateAdminUserInput = z.infer<typeof createAdminUserSchema>;
 export type UpdateAdminUserInput = z.infer<typeof updateAdminUserSchema>;

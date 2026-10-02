@@ -5,6 +5,7 @@ import type {
   UserStatus,
 } from "../generated/prisma/client.js";
 import { Prisma } from "../generated/prisma/client.js";
+import type { MembershipStatus } from "../model/membership-status.js";
 
 export type UserConflictField = "documentNumber" | "email";
 
@@ -109,6 +110,8 @@ export interface UserListQuery {
   search?: string | undefined;
   role?: UserRole | undefined;
   status?: UserStatus | undefined;
+  membershipStatus?: MembershipStatus | undefined;
+  initialPeriod?: boolean | undefined;
   page: number;
   limit: number;
 }
@@ -247,6 +250,11 @@ export interface AdminUserRepositoryPort {
     performedById: string,
     data: UpdateAdminUserData,
   ): Promise<AdminUserDetail>;
+  updateTrainerBranches(
+    id: string,
+    performedById: string,
+    branchIds: string[],
+  ): Promise<AdminUserDetail>;
   updateUserStatus(
     id: string,
     performedById: string,
@@ -270,6 +278,13 @@ export class UserNotFoundError extends Error {
   constructor() {
     super("User not found");
     this.name = "UserNotFoundError";
+  }
+}
+
+export class InvalidTrainerBranchAssignmentError extends Error {
+  constructor(readonly reason: "NOT_TRAINER" | "INVALID_BRANCHES") {
+    super(reason);
+    this.name = "InvalidTrainerBranchAssignmentError";
   }
 }
 
@@ -310,6 +325,42 @@ export class UserRepository
     }
     if (query.role) where.role = query.role;
     if (query.status) where.status = query.status;
+    if (query.membershipStatus) {
+      where.role = "MEMBER";
+      const validPayment: Prisma.PaymentWhereInput = {
+        status: "ACCREDITED",
+        accreditedAt: { lte: new Date() },
+      };
+      const now = new Date();
+      const soonBoundary = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
+      const paymentAfter = (date: Date): Prisma.PaymentWhereInput => ({
+        ...validPayment,
+        expiresAt: { gt: date },
+      });
+      if (query.membershipStatus === "CURRENT") {
+        where.memberPayments = { some: paymentAfter(soonBoundary) };
+      } else if (query.membershipStatus === "EXPIRING_SOON") {
+        where.AND = [
+          { memberPayments: { some: paymentAfter(now) } },
+          { memberPayments: { none: paymentAfter(soonBoundary) } },
+        ];
+      } else {
+        where.memberPayments = { none: paymentAfter(now) };
+      }
+    }
+    if (query.initialPeriod) {
+      const rows = await this.database.$queryRaw<Array<{ id: string }>>`
+        SELECT p.member_id AS id
+        FROM payment p
+        INNER JOIN "user" u ON u.id = p.member_id
+        WHERE p.status = 'ACCREDITED'
+          AND p.accredited_at <= NOW()
+          AND u.role = 'MEMBER'
+        GROUP BY p.member_id
+        HAVING MIN(p.accredited_at) + INTERVAL '20 days' > NOW()
+      `;
+      where.id = { in: rows.map((row) => row.id) };
+    }
 
     const skip = (query.page - 1) * query.limit;
     const [total, items] = await this.database.$transaction([
@@ -581,6 +632,51 @@ export class UserRepository
       }
       throw error;
     }
+  }
+
+  async updateTrainerBranches(
+    id: string,
+    performedById: string,
+    branchIds: string[],
+  ): Promise<AdminUserDetail> {
+    await this.database.$transaction(async (transaction) => {
+      const user = await transaction.user.findUnique({
+        where: { id },
+        select: { role: true },
+      });
+      if (!user) throw new UserNotFoundError();
+      if (user.role !== "TRAINER") {
+        throw new InvalidTrainerBranchAssignmentError("NOT_TRAINER");
+      }
+
+      const uniqueBranchIds = [...new Set(branchIds)];
+      if (uniqueBranchIds.length > 0) {
+        const activeBranches = await transaction.branch.count({
+          where: { id: { in: uniqueBranchIds }, isActive: true },
+        });
+        if (activeBranches !== uniqueBranchIds.length) {
+          throw new InvalidTrainerBranchAssignmentError("INVALID_BRANCHES");
+        }
+      }
+
+      await transaction.trainerBranch.deleteMany({ where: { trainerId: id } });
+      if (uniqueBranchIds.length > 0) {
+        await transaction.trainerBranch.createMany({
+          data: uniqueBranchIds.map((branchId) => ({ trainerId: id, branchId })),
+        });
+      }
+      await transaction.userAuditLog.create({
+        data: {
+          userId: id,
+          performedById,
+          action: "UPDATED",
+          reason: "TRAINER_BRANCHES_UPDATED",
+        },
+      });
+    });
+    const updated = await this.findAdminUserDetailById(id);
+    if (!updated) throw new UserNotFoundError();
+    return updated;
   }
 
   private duplicateFieldFromError(error: Prisma.PrismaClientKnownRequestError): UserConflictField {

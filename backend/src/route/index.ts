@@ -3,6 +3,7 @@ import { Router } from "express";
 import { database } from "../config/database.js";
 import { environment } from "../config/environment.js";
 import { AdminUserController } from "../controller/admin-user-controller.js";
+import { AdminDashboardController } from "../controller/admin-dashboard-controller.js";
 import { AuthController } from "../controller/auth-controller.js";
 import { BranchController } from "../controller/branch-controller.js";
 import { MemberController } from "../controller/member-controller.js";
@@ -19,6 +20,7 @@ import { createAuthenticationMiddleware } from "../middleware/authentication-mid
 import { requirePasswordChangeCompleted } from "../middleware/password-change-middleware.js";
 import { uploadProfilePhoto } from "../middleware/profile-photo-upload-middleware.js";
 import { BranchRepository } from "../repository/branch-repository.js";
+import { AdminDashboardRepository } from "../repository/admin-dashboard-repository.js";
 import { MemberRepository } from "../repository/member-repository.js";
 import { MemberMembershipRepository } from "../repository/member-membership-repository.js";
 import { MedicalCertificateRepository } from "../repository/medical-certificate-repository.js";
@@ -30,6 +32,7 @@ import { WeeklyScheduleRepository } from "../repository/weekly-schedule-reposito
 import { TrainerRepository } from "../repository/trainer-repository.js";
 import { UserRepository } from "../repository/user-repository.js";
 import { AdminUserService } from "../service/admin-user-service.js";
+import { AdminDashboardService } from "../service/admin-dashboard-service.js";
 import { AuthService } from "../service/auth-service.js";
 import { BranchService } from "../service/branch-service.js";
 import { MemberService } from "../service/member-service.js";
@@ -47,6 +50,7 @@ import { SupabaseMedicalCertificateStorage } from "../service/medical-certificat
 import { TokenService } from "../service/token-service.js";
 import { UserService } from "../service/user-service.js";
 import { createAdminUserRouter } from "./admin-user-route.js";
+import { createAdminDashboardRouter } from "./admin-dashboard-route.js";
 import { createAuthRouter, createProtectedAuthRouter } from "./auth-route.js";
 import { createBranchRouter } from "./branch-route.js";
 import { createMemberRouter } from "./member-route.js";
@@ -70,6 +74,9 @@ const authService = new AuthService(userRepository, passwordService, tokenServic
 const authController = new AuthController(authService);
 const adminUserService = new AdminUserService(userRepository, passwordService);
 const adminUserController = new AdminUserController(adminUserService);
+const adminDashboardController = new AdminDashboardController(
+  new AdminDashboardService(new AdminDashboardRepository(database)),
+);
 const profilePhotoStorage = new SupabaseProfilePhotoStorage({
   url: environment.SUPABASE_URL,
   serviceRoleKey: environment.SUPABASE_SERVICE_ROLE_KEY,
@@ -128,6 +135,11 @@ apiRouter.use(
     requirePasswordChangeCompleted,
   ),
 );
+apiRouter.use(createAdminDashboardRouter(
+  adminDashboardController,
+  authenticate,
+  requirePasswordChangeCompleted,
+));
 apiRouter.use(createBranchRouter(branchController, authenticate, requirePasswordChangeCompleted));
 apiRouter.use(createMemberRouter(memberController, authenticate, requirePasswordChangeCompleted));
 apiRouter.use(createMemberMembershipRouter(

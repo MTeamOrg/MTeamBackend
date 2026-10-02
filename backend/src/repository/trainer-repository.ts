@@ -8,6 +8,7 @@ export interface PublicTrainer {
   photoUrl: string | null;
   specialty: string;
   description: string;
+  branches: Array<{ id: string; name: string; address: string }>;
 }
 
 export interface TrainerListResult {
@@ -39,6 +40,11 @@ export class TrainerRepository implements TrainerRepositoryPort {
           lastName: true,
           photoUrl: true,
           trainerProfile: { select: { specialty: true, description: true } },
+          trainerBranches: {
+            where: { branch: { isActive: true } },
+            orderBy: { branch: { name: "asc" } },
+            select: { branch: { select: { id: true, name: true, address: true } } },
+          },
         },
       }),
     ]);
@@ -51,6 +57,7 @@ export class TrainerRepository implements TrainerRepositoryPort {
         photoUrl: user.photoUrl,
         specialty: user.trainerProfile!.specialty,
         description: user.trainerProfile!.description,
+        branches: user.trainerBranches.map(({ branch }) => branch),
       })),
       page: query.page,
       limit: query.limit,
