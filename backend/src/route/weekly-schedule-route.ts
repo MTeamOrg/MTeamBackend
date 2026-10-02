@@ -10,6 +10,13 @@ export function createWeeklyScheduleRouter(
 ): Router {
   const router = Router();
   router.get("/weekly-schedules", controller.getByWeek);
+  router.get(
+    "/trainer/classes",
+    authenticate,
+    requireCompletedPasswordChange,
+    authorize("TRAINER"),
+    controller.getOwnTrainerClasses,
+  );
   router.get("/weekly-schedules/:scheduleId", controller.getById);
   router.post(
     "/weekly-schedules/:scheduleId/copies",

@@ -40,6 +40,19 @@ export class WeeklyScheduleController {
     response.status(200).json(serializeSchedule(schedule));
   };
 
+  getOwnTrainerClasses: RequestHandler = async (request, response) => {
+    const validation = weeklyScheduleQuerySchema.safeParse(request.query);
+    if (!validation.success) {
+      throw new ApplicationError(400, ERROR_CODE.VALIDATION_ERROR,
+        "La semana solicitada no es vÃ¡lida", validation.error.flatten());
+    }
+    const schedule = await this.service.getByWeekStartsOnForTrainer(
+      request.authenticatedUser!.id,
+      validation.data.weekStartsOn,
+    );
+    response.status(200).json(serializeSchedule(schedule));
+  };
+
   getById: RequestHandler = async (request, response) => {
     const validation = weeklyScheduleIdParamsSchema.safeParse(request.params);
     if (!validation.success) {

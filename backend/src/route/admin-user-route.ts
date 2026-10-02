@@ -44,6 +44,13 @@ export function createAdminUserRouter(
     authorize("ADMIN"),
     controller.updateUserStatus,
   );
+  router.put(
+    "/users/:userId/trainer-branches",
+    authenticate,
+    requireCompletedPasswordChange,
+    authorize("ADMIN"),
+    controller.updateTrainerBranches,
+  );
   router.get(
     "/users/:userId/audit-logs",
     authenticate,

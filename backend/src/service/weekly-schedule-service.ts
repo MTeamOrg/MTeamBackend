@@ -27,6 +27,17 @@ export class WeeklyScheduleService {
     );
   }
 
+  getByWeekStartsOnForTrainer(
+    trainerId: string,
+    weekStartsOn: string | undefined,
+    now = new Date(),
+  ): Promise<WeeklyScheduleView> {
+    return this.repository.findByWeekStartsOnForTrainer(
+      weekStartsOn ?? currentGymWeekStartsOn(now),
+      trainerId,
+    );
+  }
+
   async getById(id: string): Promise<WeeklyScheduleView> {
     const schedule = await this.repository.findById(id);
     if (!schedule) {
