@@ -45,6 +45,14 @@ describe("AccessAttemptService", () => {
     });
   });
 
+  it("records scanned QR content longer than the persisted token limit as invalid", async () => {
+    const { repository, service } = setup();
+    await expect(service.create("member-id", "x".repeat(256), now)).resolves.toMatchObject({
+      result: "DENIED", denialReason: "INVALID_QR", branchId: null, accessPointId: null,
+    });
+    expect(repository.findAccessPoint).not.toHaveBeenCalled();
+  });
+
   it("denies inactive accounts and inactive points", async () => {
     const inactiveUser = setup({ findActor: jest.fn().mockResolvedValue({ id: "member-id", role: "MEMBER", status: "INACTIVE" }) });
     await expect(inactiveUser.service.create("member-id", "fixed-token", now)).resolves.toMatchObject({ denialReason: "INACTIVE_USER" });

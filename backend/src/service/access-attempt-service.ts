@@ -1,7 +1,6 @@
 import type { AccessAttemptRepository } from "../repository/access-attempt-repository.js";
 import type { ListAccessAttemptsQuery } from "../validator/access-attempt-validator.js";
-
-const INITIAL_CERTIFICATE_PERIOD_MS = 20 * 24 * 60 * 60 * 1000;
+import { calculateInitialMedicalCertificatePeriod } from "../model/initial-medical-certificate-period.js";
 
 export class AccessAttemptService {
   constructor(private readonly repository: AccessAttemptRepository) {}
@@ -11,7 +10,9 @@ export class AccessAttemptService {
     if (!actor || (actor.role !== "MEMBER" && actor.role !== "TRAINER")) {
       throw new Error("Authenticated access actor is unavailable");
     }
-    const point = await this.repository.findAccessPoint(qrToken);
+    // The persisted token is VARCHAR(255); longer scanned values cannot match it,
+    // but they are still invalid-QR attempts and must be recorded.
+    const point = qrToken.length <= 255 ? await this.repository.findAccessPoint(qrToken) : null;
     let reason: "INVALID_QR" | "INACTIVE_USER" | "INACTIVE_BRANCH" | "INACTIVE_ACCESS_POINT" | "EXPIRED_MEMBERSHIP" | "MEDICAL_CERTIFICATE_REQUIRED" | null = null;
     if (!point) reason = "INVALID_QR";
     else if (actor.status !== "ACTIVE") reason = "INACTIVE_USER";
@@ -26,8 +27,10 @@ export class AccessAttemptService {
           this.repository.findFirstAccreditedPayment(userId, now),
           this.repository.findApprovedMedicalCertificate(userId),
         ]);
-        const initialPeriodIsActive = firstPayment !== null
-          && now.getTime() < firstPayment.accreditedAt.getTime() + INITIAL_CERTIFICATE_PERIOD_MS;
+        const initialPeriodIsActive = calculateInitialMedicalCertificatePeriod(
+          firstPayment?.accreditedAt ?? null,
+          now,
+        ).isActive;
         if (!approvedCertificate && !initialPeriodIsActive) reason = "MEDICAL_CERTIFICATE_REQUIRED";
       }
     }

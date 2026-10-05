@@ -856,7 +856,21 @@ paths:
           in: query
           schema: { $ref: "#/components/schemas/AccessResult" }
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Intentos de ingreso con usuario, sede y punto de acceso cuando se identifican.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PaginatedResponse"
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: "#/components/schemas/AccessAttempt" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
     post:
       tags: [Access Attempts]
       summary: Validar un QR fijo y registrar el intento
@@ -868,7 +882,14 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/AccessAttemptRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Intento de ingreso evaluado y registrado, también cuando se rechaza.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccessAttempt" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /access-attempts/{attemptId}:
     parameters:
@@ -2008,6 +2029,44 @@ components:
     AccessResult:
       type: string
       enum: [ALLOWED, DENIED]
+    AccessDenialReason:
+      type: [string, "null"]
+      enum: [INVALID_QR, INACTIVE_USER, INACTIVE_BRANCH, INACTIVE_ACCESS_POINT, EXPIRED_MEMBERSHIP, MEDICAL_CERTIFICATE_REQUIRED, null]
+    AccessAttempt:
+      type: object
+      additionalProperties: false
+      required: [id, userId, roleAtAttempt, branchId, accessPointId, result, denialReason, attemptedAt, branch, accessPoint]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        roleAtAttempt: { $ref: "#/components/schemas/UserRole" }
+        branchId: { type: [string, "null"], format: uuid }
+        accessPointId: { type: [string, "null"], format: uuid }
+        result: { $ref: "#/components/schemas/AccessResult" }
+        denialReason: { $ref: "#/components/schemas/AccessDenialReason" }
+        attemptedAt: { type: string, format: date-time }
+        user:
+          type: object
+          additionalProperties: false
+          required: [id, firstName, lastName, documentNumber]
+          properties:
+            id: { type: string, format: uuid }
+            firstName: { type: string }
+            lastName: { type: string }
+            documentNumber: { type: string }
+        branch: { $ref: "#/components/schemas/EntityRefOrNull" }
+        accessPoint: { $ref: "#/components/schemas/EntityRefOrNull" }
+    EntityRefOrNull:
+      oneOf:
+        - $ref: "#/components/schemas/EntityRef"
+        - type: "null"
+    EntityRef:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
     EventStatus:
       type: string
       enum: [DRAFT, PUBLISHED, CANCELLED]
@@ -2478,6 +2537,7 @@ components:
         reviewComment: { type: string }
     AccessAttemptRequest:
       type: object
+      additionalProperties: false
       required: [qrToken]
       properties:
         qrToken: { type: string, minLength: 1 }

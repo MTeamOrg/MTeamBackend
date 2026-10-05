@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const createAccessAttemptSchema = z.strictObject({
-  qrToken: z.string().trim().min(1).max(255),
+  qrToken: z.string().min(1),
 });
 
 export const listAccessAttemptsSchema = z.strictObject({
