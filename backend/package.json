@@ -12,6 +12,7 @@
         "test:integration:supabase": "npm run build && jest --config jest.integration.supabase.config.cjs --runInBand",
         "openapi:validate": "node scripts/validate-openapi.mjs",
         "database:inspect": "node scripts/inspect-database.mjs",
+        "seed:development:access-point": "npm run build && node scripts/seed-development-access-point.mjs",
         "local:ensure-jwt-secret": "node scripts/ensure-local-jwt-secret.mjs",
         "bootstrap:admin:prepare": "node scripts/prepare-bootstrap-admin.mjs",
         "bootstrap:admin": "prisma generate && tsx scripts/bootstrap-admin.ts",
