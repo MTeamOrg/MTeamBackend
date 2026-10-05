@@ -842,6 +842,10 @@ paths:
         - name: userId
           in: query
           schema: { type: string, format: uuid }
+        - name: search
+          in: query
+          description: Busca por nombre, apellido o documento del usuario.
+          schema: { type: string, maxLength: 100 }
         - name: branchId
           in: query
           schema: { type: string, format: uuid }
@@ -856,6 +860,7 @@ paths:
     post:
       tags: [Access Attempts]
       summary: Validar un QR fijo y registrar el intento
+      description: Verifica la sesión y registra como rechazado un intento de una cuenta inactiva.
       operationId: createAccessAttempt
       requestBody:
         required: true

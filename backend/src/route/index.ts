@@ -3,6 +3,7 @@ import { Router } from "express";
 import { database } from "../config/database.js";
 import { environment } from "../config/environment.js";
 import { AdminUserController } from "../controller/admin-user-controller.js";
+import { AccessAttemptController } from "../controller/access-attempt-controller.js";
 import { AdminDashboardController } from "../controller/admin-dashboard-controller.js";
 import { AuthController } from "../controller/auth-controller.js";
 import { BranchController } from "../controller/branch-controller.js";
@@ -23,6 +24,7 @@ import { createAuthenticationMiddleware } from "../middleware/authentication-mid
 import { requirePasswordChangeCompleted } from "../middleware/password-change-middleware.js";
 import { uploadProfilePhoto } from "../middleware/profile-photo-upload-middleware.js";
 import { BranchRepository } from "../repository/branch-repository.js";
+import { AccessAttemptRepository } from "../repository/access-attempt-repository.js";
 import { EventRepository } from "../repository/event-repository.js";
 import { AdminDashboardRepository } from "../repository/admin-dashboard-repository.js";
 import { MemberRepository } from "../repository/member-repository.js";
@@ -38,6 +40,7 @@ import { WeeklyScheduleRepository } from "../repository/weekly-schedule-reposito
 import { TrainerRepository } from "../repository/trainer-repository.js";
 import { UserRepository } from "../repository/user-repository.js";
 import { AdminUserService } from "../service/admin-user-service.js";
+import { AccessAttemptService } from "../service/access-attempt-service.js";
 import { AdminDashboardService } from "../service/admin-dashboard-service.js";
 import { AuthService } from "../service/auth-service.js";
 import { BranchService } from "../service/branch-service.js";
@@ -59,6 +62,7 @@ import { SupabaseMedicalCertificateStorage } from "../service/medical-certificat
 import { TokenService } from "../service/token-service.js";
 import { UserService } from "../service/user-service.js";
 import { createAdminUserRouter } from "./admin-user-route.js";
+import { createAccessAttemptRouter } from "./access-attempt-route.js";
 import { createAdminDashboardRouter } from "./admin-dashboard-route.js";
 import { createAuthRouter, createProtectedAuthRouter } from "./auth-route.js";
 import { createBranchRouter } from "./branch-route.js";
@@ -97,6 +101,9 @@ const profilePhotoStorage = new SupabaseProfilePhotoStorage({
 const userService = new UserService(userRepository, profilePhotoStorage);
 const userController = new UserController(userService);
 const authenticate = createAuthenticationMiddleware(tokenService, userRepository);
+const accessAttemptController = new AccessAttemptController(
+  new AccessAttemptService(new AccessAttemptRepository(database)),
+);
 const branchController = new BranchController(new BranchService(new BranchRepository(database)));
 const eventController = new EventController(new EventService(new EventRepository(database)));
 const newsPostController = new NewsPostController(new NewsPostService(new NewsPostRepository(database)));
@@ -137,6 +144,13 @@ apiRouter.use(healthRouter);
 apiRouter.use(createTrainerRouter(trainerController));
 apiRouter.use(createAuthRouter(authController));
 apiRouter.use(createProtectedAuthRouter(authController, authenticate));
+apiRouter.use(createAccessAttemptRouter(
+  accessAttemptController,
+  authenticate,
+  requirePasswordChangeCompleted,
+  tokenService,
+  userRepository,
+));
 apiRouter.use(createUserRouter(
   userController,
   authenticate,
