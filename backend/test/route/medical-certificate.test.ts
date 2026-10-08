@@ -61,8 +61,15 @@ describe("medical certificate routes", () => {
     const { app } = setup();
     const response = await request(app).get("/api/members/me/medical-certificates");
     expect(response.status).toBe(200);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
     expect(response.body.items[0]).toEqual(expect.objectContaining({ status: "PENDING" }));
     expect(response.body.initialMedicalCertificatePeriod.isActive).toBe(true);
+
+    const conditionalResponse = await request(app)
+      .get("/api/members/me/medical-certificates")
+      .set("If-None-Match", response.headers.etag);
+    expect(conditionalResponse.status).toBe(200);
+    expect(conditionalResponse.body).toEqual(response.body);
   });
 
   test("accepts an allowed PDF and starts it as pending", async () => {

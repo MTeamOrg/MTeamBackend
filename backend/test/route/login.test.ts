@@ -50,6 +50,7 @@ describe("POST /api/auth/login", () => {
     const before = Math.floor(Date.now() / 1000);
     const response = await request(app).post("/api/auth/login").send({ email: " LARA@EXAMPLE.COM ", password });
     expect(response.status).toBe(200);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
     expect(repository.findByEmail).toHaveBeenCalledWith(user.email);
     const { passwordHash: _passwordHash, ...safeUser } = user;
     expect(response.body).toEqual({ accessToken: expect.any(String), tokenType: "Bearer", expiresIn: 3600, user: safeUser });
