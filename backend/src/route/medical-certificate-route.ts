@@ -1,6 +1,7 @@
 import { Router, type RequestHandler } from "express";
 
 import type { MedicalCertificateController } from "../controller/medical-certificate-controller.js";
+import { disablePrivateCaching } from "../middleware/api-cache-middleware.js";
 import { authorize } from "../middleware/authorization-middleware.js";
 import { uploadMedicalCertificate } from "../middleware/medical-certificate-upload-middleware.js";
 
@@ -10,6 +11,7 @@ export function createMedicalCertificateRouter(
   requireCompletedPasswordChange: RequestHandler,
 ): Router {
   const router = Router();
+  router.use(disablePrivateCaching);
   const memberAccess = [authenticate, requireCompletedPasswordChange, authorize("MEMBER")];
   const adminAccess = [authenticate, requireCompletedPasswordChange, authorize("ADMIN")];
   const memberOrAdminAccess = [authenticate, requireCompletedPasswordChange, authorize("MEMBER", "ADMIN")];

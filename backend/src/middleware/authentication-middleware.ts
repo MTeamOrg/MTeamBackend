@@ -2,6 +2,7 @@ import type { RequestHandler } from "express";
 
 import { ApplicationError } from "../error/application-error.js";
 import { ERROR_CODE } from "../error/error-code.js";
+import { disablePrivateCaching } from "./api-cache-middleware.js";
 import type { UserAccessRepositoryPort } from "../repository/user-repository.js";
 import type { TokenVerifier } from "../service/token-service.js";
 import type { AuthenticatedUser } from "../type/authenticated-request.js";
@@ -10,7 +11,8 @@ export function createAuthenticationMiddleware(
   tokenVerifier: TokenVerifier,
   userRepository: UserAccessRepositoryPort,
 ): RequestHandler {
-  return async (request, _response, next) => {
+  return async (request, response, next) => {
+    disablePrivateCaching(request, response, () => undefined);
     delete request.authenticatedUser;
     const authorization = request.get("Authorization");
     const token = authorization?.match(/^Bearer ([^\s,]+)$/i)?.[1];
