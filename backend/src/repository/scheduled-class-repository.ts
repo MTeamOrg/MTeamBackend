@@ -128,7 +128,7 @@ export class ScheduledClassRepository implements ScheduledClassRepositoryPort {
 
 }
 
-async function notifyClassChange(
+export async function notifyClassChange(
   transaction: Prisma.TransactionClient,
   classId: string,
   trainerIds: string | string[],

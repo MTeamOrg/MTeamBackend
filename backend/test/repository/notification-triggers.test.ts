@@ -22,13 +22,14 @@ describe("notification triggers", () => {
     const database = { $transaction: (callback: (value: typeof transaction) => Promise<unknown>) => callback(transaction) } as unknown as PrismaClient;
 
     await new MembershipPriceRepository(database).createPrice({ amount: "20000", effectiveFrom: new Date("2030-10-01T00:00:00.000Z"), createdById: adminId });
+    expect(transaction.user.findMany).toHaveBeenCalledWith({ where: { role: "MEMBER", status: "ACTIVE" }, select: { id: true } });
     expect(notificationCreateMany).toHaveBeenCalledWith(expect.objectContaining({
       skipDuplicates: true,
       data: [expect.objectContaining({ userId: memberId, type: "MEMBERSHIP_PRICE_CHANGED", message: expect.stringContaining("20000") })],
     }));
   });
 
-  test("APM-06 notifies the member with the rejection observation", async () => {
+  test.each(["APPROVED", "REJECTED"] as const)("APM-06 notifies only the owner for %s", async status => {
     const notificationCreateMany = jest.fn().mockResolvedValue({ count: 1 });
     const certificate = { id: certificateId, memberId, status: "REJECTED", uploadedAt: new Date(), reviewedById: adminId, reviewedAt: new Date(), reviewComment: "Falta firma", member: { id: memberId, firstName: "Ana", lastName: "Pérez", documentNumber: "123", email: "ana@example.com" }, reviewedBy: { id: adminId, firstName: "Admin", lastName: "M", } };
     const transaction = {
@@ -42,9 +43,9 @@ describe("notification triggers", () => {
     const database = { $transaction: (callback: (value: typeof transaction) => Promise<unknown>) => callback(transaction) } as unknown as PrismaClient;
     const repository = new MedicalCertificateRepository(database);
 
-    await repository.review(certificateId, adminId, { status: "REJECTED", reviewComment: "Falta firma" });
+    await repository.review(certificateId, adminId, { status, reviewComment: status === "REJECTED" ? "Falta firma" : undefined });
     expect(notificationCreateMany).toHaveBeenCalledWith(expect.objectContaining({
-      data: [expect.objectContaining({ userId: memberId, type: "MEDICAL_CERTIFICATE_REVIEWED", message: expect.stringContaining("Falta firma") })],
+      data: [expect.objectContaining({ userId: memberId, type: "MEDICAL_CERTIFICATE_REVIEWED", message: expect.stringContaining(status === "REJECTED" ? "Falta firma" : "aprobado") })],
     }));
   });
 
@@ -65,6 +66,7 @@ describe("notification triggers", () => {
     const database = { $transaction: (callback: (value: typeof transaction) => Promise<unknown>) => callback(transaction) } as unknown as PrismaClient;
 
     await new EventRepository(database).updateStatus(event.id, { status: "CANCELLED" });
+    expect(transaction.user.findMany).toHaveBeenCalledWith({ where: { role: { in: ["MEMBER", "TRAINER"] }, status: "ACTIVE" }, select: { id: true } });
     expect(notificationCreateMany).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.arrayContaining([
         expect.objectContaining({ userId: memberId, type: "EVENT_CANCELLED", dedupeKey: expect.stringContaining(event.id) }),

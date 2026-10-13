@@ -49,7 +49,7 @@ function setup() {
       callback(transaction)),
   } as unknown as PrismaClient;
   return { repository: new ScheduledClassRepository(database), queryRaw, branchFindUnique,
-    userFindUnique, upsert, create, findUnique, update, deleteClass };
+    userFindUnique, upsert, create, findUnique, update, deleteClass, notificationCreateMany: transaction.notification.createMany };
 }
 
 describe("CLA-02 weekly class persistence", () => {
@@ -234,5 +234,24 @@ describe("CLA-03 assignment guards", () => {
     await expect(pending).rejects.toMatchObject({ reason: "INACTIVE" });
     expect(upsert).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("ENT-04 class notification recipients", () => {
+  test("reassignment notifies the previous and new trainers only", async () => {
+    const { repository, update, notificationCreateMany } = setup();
+    const newTrainerId = "new-trainer";
+    update.mockResolvedValue({ ...record, trainerId: newTrainerId });
+    await repository.updateClass(classId, { trainerId: newTrainerId }, now);
+    expect(notificationCreateMany).toHaveBeenCalledWith({ skipDuplicates: true,
+      data: [expect.objectContaining({ userId: trainerId, type: "CLASS_CHANGED" }),
+        expect.objectContaining({ userId: newTrainerId, type: "CLASS_CHANGED" })] });
+  });
+  test("does not notify anyone when the class has no assigned trainer", async () => {
+    const { repository, create, notificationCreateMany } = setup();
+    create.mockResolvedValue({ ...record, trainerId: null });
+    await repository.createClass({ ...input, trainerId: null }, now);
+    expect(notificationCreateMany).not.toHaveBeenCalled();
   });
 });
