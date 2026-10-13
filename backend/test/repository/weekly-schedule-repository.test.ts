@@ -55,6 +55,7 @@ function setup() {
     branch: { findUnique: branchFindUnique },
     user: { findUnique: userFindUnique },
     weeklySchedule: { findUnique, create },
+    notification: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
   };
   const database = {
     $transaction: jest.fn().mockImplementation((callback: (tx: typeof transaction) => unknown) =>
@@ -257,5 +258,27 @@ describe("CLA-04 weekly schedule repository", () => {
     await expect(new WeeklyScheduleRepository(database).copySchedule(
       sourceScheduleId, "2030-09-09", new Date("2029-01-01T12:00:00.000Z"),
     )).rejects.toBeInstanceOf(DestinationWeekAlreadyExistsError);
+  });
+});
+
+
+describe("NOV-03 copied class assignments", () => {
+  test("notifies only assigned trainers, with the new date, within the copy transaction", async () => {
+    const { repository, create, transaction } = setup();
+    const copiedClasses = source.classes.map((item, index) => ({ ...item, id: `copied-${index}`,
+      startsAt: new Date(item.startsAt.getTime() + 7 * 24 * 60 * 60 * 1000) }));
+    create.mockResolvedValue({ id: "new-schedule", weekStartsOn: new Date("2030-09-09T00:00:00Z"), classes: copiedClasses });
+    await repository.copySchedule(sourceScheduleId, "2030-09-09", new Date("2030-09-01T00:00:00Z"));
+    expect(transaction.notification.createMany).toHaveBeenCalledTimes(1);
+    expect(transaction.notification.createMany).toHaveBeenCalledWith({ skipDuplicates: true,
+      data: [expect.objectContaining({ userId: trainerId, type: "CLASS_CHANGED",
+        dedupeKey: expect.stringContaining("copied-0"), message: expect.stringContaining("Yoga") })] });
+  });
+
+  test("does not notify anyone when an invalid trainer prevents the copy", async () => {
+    const { repository, transaction, userFindUnique } = setup();
+    userFindUnique.mockResolvedValue({ role: "MEMBER", status: "ACTIVE", trainerProfile: null });
+    await expect(repository.copySchedule(sourceScheduleId, "2030-09-09", new Date("2030-09-01T00:00:00Z"))).rejects.toBeInstanceOf(TrainerAssignmentError);
+    expect(transaction.notification.createMany).not.toHaveBeenCalled();
   });
 });

@@ -12,6 +12,7 @@ import {
   HistoricalClassError,
   requireActiveBranch,
   requireActiveTrainer,
+  notifyClassChange,
 } from "./scheduled-class-repository.js";
 
 export class WeeklyScheduleNotFoundError extends Error {}
@@ -194,6 +195,12 @@ export class WeeklyScheduleRepository implements WeeklyScheduleRepositoryPort {
           },
           select: weeklyScheduleSelect,
         });
+        for (const scheduledClass of created.classes) {
+          if (scheduledClass.trainer) {
+            await notifyClassChange(transaction, scheduledClass.id, scheduledClass.trainer.id,
+              "create", scheduledClass.activity, scheduledClass.startsAt, scheduledClass.branch.id);
+          }
+        }
         return toView(created);
       });
     } catch (error: unknown) {
