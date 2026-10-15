@@ -54,7 +54,7 @@ function setup(role: UserRole | null) {
     update: jest.fn().mockResolvedValue(post), updateStatus: jest.fn().mockResolvedValue(post),
   } as unknown as NewsPostService;
   const notificationService = {
-    listOwn: jest.fn().mockResolvedValue({ items: [notification], page: 1, limit: 20, total: 1 }),
+    listOwn: jest.fn().mockResolvedValue({ items: [notification], page: 1, limit: 20, total: 1, unreadCount: 1 }),
     getOwn: jest.fn().mockResolvedValue(notification), markOwnAsRead: jest.fn().mockResolvedValue(undefined),
     markAllOwnAsRead: jest.fn().mockResolvedValue(undefined),
   } as unknown as NotificationService;
@@ -72,7 +72,12 @@ describe("communications routes", () => {
     const { app, eventService, newsService, notificationService } = setup("MEMBER");
     expect((await request(app).get("/api/events")).status).toBe(200);
     expect((await request(app).get("/api/news-posts")).status).toBe(200);
-    expect((await request(app).get("/api/notifications")).status).toBe(200);
+    const inbox = await request(app).get("/api/notifications");
+    expect(inbox.status).toBe(200);
+    expect(inbox.body).toEqual({
+      items: [{ ...notification, createdAt: "2030-08-01T12:00:00.000Z", readAt: null }],
+      page: 1, limit: 20, total: 1, unreadCount: 1,
+    });
     expect(notificationService.listOwn).toHaveBeenCalledWith(memberId, { page: 1, limit: 20 });
     expect(eventService.list).toHaveBeenCalledWith({ page: 1, limit: 20 }, "MEMBER");
     expect(newsService.list).toHaveBeenCalledWith({ page: 1, limit: 20 }, "MEMBER");
@@ -95,6 +100,18 @@ describe("communications routes", () => {
     expect((await request(admin.app).post("/api/events").send({ title: "Sin fecha" })).status).toBe(400);
     expect((await request(admin.app).post("/api/news-posts").send({ title: "Sin audiencia", content: "C" })).status).toBe(400);
     expect((await request(setup(null).app).get("/api/notifications")).status).toBe(401);
+  });
+
+  test("rejects a user identity or unknown filters supplied in the query string", async () => {
+    const { app, notificationService } = setup("MEMBER");
+    expect((await request(app).get(`/api/notifications?userId=${adminId}`)).status).toBe(400);
+    expect((await request(app).get("/api/notifications?page=0")).status).toBe(400);
+    expect((await request(app).get("/api/notifications?limit=101")).status).toBe(400);
+    expect((await request(app).get("/api/notifications?isRead=maybe")).status).toBe(400);
+    expect(notificationService.listOwn).not.toHaveBeenCalled();
+
+    expect((await request(app).get("/api/notifications?isRead=false&page=2&limit=5")).status).toBe(200);
+    expect(notificationService.listOwn).toHaveBeenCalledWith(memberId, { page: 2, limit: 5, isRead: false });
   });
 
   test("marks one notification as read without accepting another user's id", async () => {
