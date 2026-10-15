@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../../src/generated/prisma/client.js";
-import { NotificationRepository, createNotifications } from "../../src/repository/notification-repository.js";
-import { ScheduledClassRepository } from "../../src/repository/scheduled-class-repository.js";
+import { PrismaClient } from "../../../src/generated/prisma/client.js";
+import { NotificationRepository, createNotifications } from "../../../src/repository/notification-repository.js";
+import { ScheduledClassRepository } from "../../../src/repository/scheduled-class-repository.js";
 
 const connectionString = process.env.NOTIFICATION_TEST_DATABASE_URL;
 if (!connectionString) {
