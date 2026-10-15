@@ -1,6 +1,10 @@
 import type { MembershipPrice, PrismaClient } from "../generated/prisma/client.js";
 import { membershipPriceIncreasedNotice } from "../model/notification-message.js";
-import { createNotifications, type NotificationRecipient } from "./notification-repository.js";
+import {
+  AUDIENCE_TRANSACTION_OPTIONS,
+  createNotifications,
+  type NotificationRecipient,
+} from "./notification-repository.js";
 
 export interface NewMembershipPriceData {
   amount: string;
@@ -65,7 +69,7 @@ export class MembershipPriceRepository implements MembershipPriceRepositoryPort 
         await createNotifications(transaction, notifications);
       }
       return { ...price, previousAmount: previous?.amount.toString() ?? null };
-    });
+    }, AUDIENCE_TRANSACTION_OPTIONS);
   }
 
   findCurrentPrice(now: Date): Promise<MembershipPrice | null> {

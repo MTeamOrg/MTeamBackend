@@ -1,6 +1,10 @@
 import type { EventStatus, Prisma, PrismaClient, UserRole } from "../generated/prisma/client.js";
 import { eventCancelledNotice } from "../model/notification-message.js";
-import { createNotifications, type NotificationRecipient } from "./notification-repository.js";
+import {
+  AUDIENCE_TRANSACTION_OPTIONS,
+  createNotifications,
+  type NotificationRecipient,
+} from "./notification-repository.js";
 import type {
   CreateEventInput,
   EventListQuery,
@@ -124,7 +128,7 @@ export class EventRepository implements EventRepositoryPort {
         await createNotifications(transaction, notifications);
       }
       return updated;
-    });
+    }, AUDIENCE_TRANSACTION_OPTIONS);
   }
 
   private buildWhere(query: Partial<EventListQuery> & { eventId?: string }, role: UserRole): Prisma.EventWhereInput {

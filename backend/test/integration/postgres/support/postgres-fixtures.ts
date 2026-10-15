@@ -2,11 +2,13 @@ import { randomUUID } from "node:crypto";
 
 import { PrismaPg } from "@prisma/adapter-pg";
 import express from "express";
+import jwt from "jsonwebtoken";
 
 import { EventController } from "../../../../src/controller/event-controller.js";
 import { MedicalCertificateController } from "../../../../src/controller/medical-certificate-controller.js";
 import { MembershipPriceController } from "../../../../src/controller/membership-price-controller.js";
 import { NotificationController } from "../../../../src/controller/notification-controller.js";
+import { PaymentController } from "../../../../src/controller/payment-controller.js";
 import { ScheduledClassController } from "../../../../src/controller/scheduled-class-controller.js";
 import { WeeklyScheduleController } from "../../../../src/controller/weekly-schedule-controller.js";
 import { PrismaClient, type UserRole } from "../../../../src/generated/prisma/client.js";
@@ -18,6 +20,7 @@ import { MedicalCertificateRepository } from "../../../../src/repository/medical
 import { MemberMembershipRepository } from "../../../../src/repository/member-membership-repository.js";
 import { MembershipPriceRepository } from "../../../../src/repository/membership-price-repository.js";
 import { NotificationRepository } from "../../../../src/repository/notification-repository.js";
+import { PaymentRepository } from "../../../../src/repository/payment-repository.js";
 import { ScheduledClassRepository } from "../../../../src/repository/scheduled-class-repository.js";
 import { UserRepository } from "../../../../src/repository/user-repository.js";
 import { WeeklyScheduleRepository } from "../../../../src/repository/weekly-schedule-repository.js";
@@ -25,12 +28,14 @@ import { createEventRouter } from "../../../../src/route/event-route.js";
 import { createMedicalCertificateRouter } from "../../../../src/route/medical-certificate-route.js";
 import { createMembershipPriceRouter } from "../../../../src/route/membership-price-route.js";
 import { createNotificationRouter } from "../../../../src/route/notification-route.js";
+import { createPaymentRouter } from "../../../../src/route/payment-route.js";
 import { createScheduledClassRouter } from "../../../../src/route/scheduled-class-route.js";
 import { createWeeklyScheduleRouter } from "../../../../src/route/weekly-schedule-route.js";
 import { EventService } from "../../../../src/service/event-service.js";
 import { MedicalCertificateService } from "../../../../src/service/medical-certificate-service.js";
 import { MembershipPriceService } from "../../../../src/service/membership-price-service.js";
 import { NotificationService } from "../../../../src/service/notification-service.js";
+import { PaymentService } from "../../../../src/service/payment-service.js";
 import { ScheduledClassService } from "../../../../src/service/scheduled-class-service.js";
 import { TokenService } from "../../../../src/service/token-service.js";
 import { WeeklyScheduleService } from "../../../../src/service/weekly-schedule-service.js";
@@ -46,8 +51,20 @@ if (!(["localhost", "127.0.0.1"].includes(parsedConnectionString.hostname) && da
   throw new Error("Notification integration tests only accept a loopback PostgreSQL database with 'test' in its name.");
 }
 
-export const database = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+/** Each call is a separate connection pool, like a freshly started process. */
+export function createDatabaseClient(options: { defaultTransactionTimeoutMs?: number } = {}): PrismaClient {
+  return new PrismaClient({
+    adapter: new PrismaPg({ connectionString }),
+    ...(options.defaultTransactionTimeoutMs === undefined
+      ? {}
+      : { transactionOptions: { timeout: options.defaultTransactionTimeoutMs } }),
+  });
+}
 
+export const database = createDatabaseClient();
+const defaultDatabase = database;
+
+const BULK_EMAIL_SUFFIX = "@fixture-bulk.test";
 const JWT_TEST_SECRET = "postgres-integration-only-secret";
 const tokenService = new TokenService(JWT_TEST_SECRET, 3600);
 
@@ -61,7 +78,8 @@ const unusedStorage = {
 };
 
 /** Real routers, controllers, services, repositories and authentication; only the process wiring is test-local. */
-export function createIntegrationApp(options: { now?: () => Date } = {}) {
+export function createIntegrationApp(options: { now?: () => Date; database?: PrismaClient } = {}) {
+  const database = options.database ?? defaultDatabase;
   const authenticate = createAuthenticationMiddleware(tokenService, new UserRepository(database));
   const app = express();
   app.use(express.json());
@@ -90,6 +108,11 @@ export function createIntegrationApp(options: { now?: () => Date } = {}) {
     authenticate,
     requirePasswordChangeCompleted,
   ));
+  app.use("/api", createPaymentRouter(
+    new PaymentController(new PaymentService(new PaymentRepository(database))),
+    authenticate,
+    requirePasswordChangeCompleted,
+  ));
   app.use("/api", createMedicalCertificateRouter(
     new MedicalCertificateController(new MedicalCertificateService(
       new MedicalCertificateRepository(database),
@@ -107,6 +130,15 @@ export function bearer(user: TestUser): { Authorization: string } {
   return { Authorization: `Bearer ${tokenService.sign(user)}` };
 }
 
+/** A token with the right shape but a wrong secret or an expiry in the past. */
+export function untrustedBearer(user: TestUser, options: { secret?: string; expiresInSeconds?: number } = {}): { Authorization: string } {
+  const token = jwt.sign({ sub: user.id, role: user.role }, options.secret ?? JWT_TEST_SECRET, {
+    algorithm: "HS256",
+    expiresIn: options.expiresInSeconds ?? 3600,
+  });
+  return { Authorization: `Bearer ${token}` };
+}
+
 /** Creates disposable rows and removes exactly those rows afterwards (never a blanket delete). */
 export function createFixtures() {
   const userIds: string[] = [];
@@ -117,6 +149,8 @@ export function createFixtures() {
   const priceIds: string[] = [];
   const certificateIds: string[] = [];
   const paymentIds: string[] = [];
+  const bulkRunId = randomUUID().replaceAll("-", "").slice(0, 8);
+  let usedBulkMembers = false;
 
   async function user(role: UserRole, overrides: { status?: "ACTIVE" | "INACTIVE"; isPasswordChangeRequired?: boolean } = {}): Promise<TestUser> {
     const unique = randomUUID();
@@ -230,6 +264,12 @@ export function createFixtures() {
     for (const item of found) if (!priceIds.includes(item.id)) priceIds.push(item.id);
   }
 
+  /** Ensures events created through the API are also removed afterwards. */
+  async function trackEventsBy(adminId: string): Promise<void> {
+    const found = await database.event.findMany({ where: { createdById: adminId }, select: { id: true } });
+    for (const item of found) if (!eventIds.includes(item.id)) eventIds.push(item.id);
+  }
+
   async function pendingCertificate(memberId: string) {
     const created = await database.medicalCertificate.create({
       data: { memberId, fileUrl: `${memberId}/fixture.pdf`, status: "PENDING" },
@@ -257,10 +297,31 @@ export function createFixtures() {
     return created;
   }
 
+  /** Many active members at once, created by one SQL statement. Used to check large audiences. */
+  async function bulkActiveMembers(count: number): Promise<void> {
+    if (!Number.isInteger(count) || count < 1) throw new Error("count must be a positive integer");
+    await database.$executeRawUnsafe(`
+      INSERT INTO "user" (id, first_name, last_name, document_number, birth_date, email, phone, password_hash, role, status, is_password_change_required, updated_at)
+      SELECT gen_random_uuid(), 'Masivo', 'Prueba', 'BULK-${bulkRunId}-' || g, '1990-01-01', 'b' || g || '-${bulkRunId}${BULK_EMAIL_SUFFIX}',
+             '555-0100', 'test-only-hash', 'MEMBER', 'ACTIVE', false, now()
+      FROM generate_series(1, ${count}) AS g`);
+    usedBulkMembers = true;
+  }
+
+  async function removeBulkMembers(): Promise<void> {
+    if (!usedBulkMembers) return;
+    await database.$executeRawUnsafe(`DELETE FROM notification WHERE user_id IN (SELECT id FROM "user" WHERE email LIKE '%${BULK_EMAIL_SUFFIX}')`);
+    await database.$executeRawUnsafe(`DELETE FROM "user" WHERE email LIKE '%${BULK_EMAIL_SUFFIX}'`);
+    usedBulkMembers = false;
+  }
+
   async function cleanup(): Promise<void> {
+    await removeBulkMembers();
     if (userIds.length) await database.notification.deleteMany({ where: { userId: { in: userIds } } });
     if (certificateIds.length) await database.medicalCertificate.deleteMany({ where: { id: { in: certificateIds } } });
     if (userIds.length) await database.medicalCertificate.deleteMany({ where: { memberId: { in: userIds } } });
+    // Payments registered through the API are only known by their member or administrator.
+    if (userIds.length) await database.payment.deleteMany({ where: { OR: [{ memberId: { in: userIds } }, { createdById: { in: userIds } }] } });
     if (paymentIds.length) await database.payment.deleteMany({ where: { id: { in: paymentIds } } });
     if (priceIds.length) await database.membershipPrice.deleteMany({ where: { id: { in: priceIds } } });
     if (eventIds.length) await database.event.deleteMany({ where: { id: { in: eventIds } } });
@@ -275,5 +336,5 @@ export function createFixtures() {
     for (const list of [userIds, branchIds, scheduleIds, classIds, eventIds, priceIds, certificateIds, paymentIds]) list.length = 0;
   }
 
-  return { user, branch, scheduledClass, trackClassesOf, event, price, trackPricesBy, pendingCertificate, accreditedPayment, cleanup };
+  return { user, bulkActiveMembers, branch, scheduledClass, trackClassesOf, event, trackEventsBy, price, trackPricesBy, pendingCertificate, accreditedPayment, cleanup };
 }

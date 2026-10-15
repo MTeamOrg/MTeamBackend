@@ -19,9 +19,12 @@ describe("notification triggers", () => {
       user: { findMany: jest.fn().mockResolvedValue([{ id: memberId }]) },
       notification: { createMany: notificationCreateMany },
     };
-    const database = { $transaction: (callback: (value: typeof transaction) => Promise<unknown>) => callback(transaction) } as unknown as PrismaClient;
+    const runTransaction = jest.fn((callback: (value: typeof transaction) => Promise<unknown>, _options?: unknown) => callback(transaction));
+    const database = { $transaction: runTransaction } as unknown as PrismaClient;
 
     await new MembershipPriceRepository(database).createPrice({ amount: "20000", effectiveFrom: new Date("2030-10-01T00:00:00.000Z"), createdById: adminId });
+    // Notifying every active member must not rely on Prisma's 5 s default for interactive transactions.
+    expect(runTransaction).toHaveBeenCalledWith(expect.any(Function), { maxWait: 10_000, timeout: 60_000 });
     expect(transaction.user.findMany).toHaveBeenCalledWith({ where: { role: "MEMBER", status: "ACTIVE" }, select: { id: true } });
     expect(notificationCreateMany).toHaveBeenCalledWith(expect.objectContaining({
       skipDuplicates: true,
@@ -102,9 +105,12 @@ describe("notification triggers", () => {
       user: { findMany: jest.fn().mockResolvedValue([{ id: memberId }, { id: "trainer-id" }]) },
       notification: { createMany: notificationCreateMany },
     };
-    const database = { $transaction: (callback: (value: typeof transaction) => Promise<unknown>) => callback(transaction) } as unknown as PrismaClient;
+    const runTransaction = jest.fn((callback: (value: typeof transaction) => Promise<unknown>, _options?: unknown) => callback(transaction));
+    const database = { $transaction: runTransaction } as unknown as PrismaClient;
 
     await new EventRepository(database).updateStatus(event.id, { status: "CANCELLED" });
+    // Notifying every active user must not rely on Prisma's 5 s default for interactive transactions.
+    expect(runTransaction).toHaveBeenCalledWith(expect.any(Function), { maxWait: 10_000, timeout: 60_000 });
     expect(transaction.$queryRaw).toHaveBeenCalledTimes(1);
     expect(transaction.user.findMany).toHaveBeenCalledWith({ where: { role: { in: ["MEMBER", "TRAINER"] }, status: "ACTIVE" }, select: { id: true } });
     expect(notificationCreateMany).toHaveBeenCalledWith(expect.objectContaining({
