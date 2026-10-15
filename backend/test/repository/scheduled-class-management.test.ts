@@ -239,6 +239,31 @@ describe("CLA-03 assignment guards", () => {
 
 
 describe("ENT-04 class notification recipients", () => {
+  test("deduplicates one update retry without suppressing a repeated A to B transition", async () => {
+    const { repository, findUnique, update, notificationCreateMany } = setup();
+    let current = { ...record, activity: "A" };
+    findUnique.mockImplementation(() => Promise.resolve(current));
+    update.mockImplementation((args: { data: Record<string, unknown> }) => {
+      current = { ...current, ...args.data } as typeof current;
+      return Promise.resolve(current);
+    });
+
+    await repository.updateClass(classId, { activity: "B" }, now);
+    await repository.updateClass(classId, { activity: "A" }, now);
+    await repository.updateClass(classId, { activity: "B" }, now);
+
+    const changeKeys = notificationCreateMany.mock.calls.map((call) =>
+      (call[0] as { data: Array<{ dedupeKey: string }> }).data[0].dedupeKey,
+    );
+    expect(changeKeys).toHaveLength(3);
+    expect(new Set(changeKeys).size).toBe(3);
+
+    const updatesAfterChanges = update.mock.calls.length;
+    await repository.updateClass(classId, { activity: "B" }, now);
+    expect(update).toHaveBeenCalledTimes(updatesAfterChanges);
+    expect(notificationCreateMany).toHaveBeenCalledTimes(3);
+  });
+
   test("reassignment notifies the previous and new trainers only", async () => {
     const { repository, update, notificationCreateMany } = setup();
     const newTrainerId = "new-trainer";

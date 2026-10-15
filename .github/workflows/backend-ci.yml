@@ -37,6 +37,7 @@ jobs:
       APP_ENV: test
       DATABASE_URL: postgresql://mteam:mteam_test_password@localhost:5432/mteam_test
       DIRECT_URL: postgresql://mteam:mteam_test_password@localhost:5432/mteam_test
+      NOTIFICATION_TEST_DATABASE_URL: postgresql://mteam:mteam_test_password@localhost:5432/mteam_test
       JWT_SECRET: ci-only-secret
       JWT_EXPIRES_IN: 3600
       CORS_ORIGIN: http://localhost:5173
@@ -51,6 +52,7 @@ jobs:
       - run: npm run prisma:generate
       - run: npm run prisma:validate
       - run: npm run prisma:migrate:deploy
+      - run: npm run test:integration:notifications
       - run: npm test
       - run: npm run build
       - run: npm run openapi:validate
