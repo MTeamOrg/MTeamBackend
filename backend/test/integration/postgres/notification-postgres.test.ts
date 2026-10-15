@@ -27,7 +27,7 @@ async function createUser(role: "MEMBER" | "TRAINER") {
     data: {
       firstName: "Notification",
       lastName: "Integration",
-      documentNumber: unique,
+      documentNumber: unique.replace(/-/g, "").slice(0, 30),
       birthDate: new Date("1990-01-01T00:00:00.000Z"),
       email: `${unique}@example.test`,
       phone: "555-0100",
