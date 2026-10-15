@@ -10,6 +10,8 @@
         "test": "prisma generate && jest --runInBand",
         "test:watch": "jest --watch",
         "test:integration:notifications": "prisma generate && node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.integration.postgres.config.cjs --runInBand",
+        "test:coverage:notifications": "prisma generate && jest --runInBand --coverage --config jest.coverage.notifications.config.cjs",
+        "seed:e2e:notifications": "node scripts/seed-notification-e2e.mjs",
         "test:integration:supabase": "npm run build && jest --config jest.integration.supabase.config.cjs --runInBand",
         "openapi:validate": "node scripts/validate-openapi.mjs",
         "database:inspect": "node scripts/inspect-database.mjs",

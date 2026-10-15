@@ -10,9 +10,9 @@ import {
 } from "../model/scheduled-class-week.js";
 import {
   HistoricalClassError,
+  notifyClassesAssigned,
   requireActiveBranch,
   requireActiveTrainer,
-  notifyClassChange,
 } from "./scheduled-class-repository.js";
 
 export class WeeklyScheduleNotFoundError extends Error {}
@@ -195,12 +195,16 @@ export class WeeklyScheduleRepository implements WeeklyScheduleRepositoryPort {
           },
           select: weeklyScheduleSelect,
         });
-        for (const scheduledClass of created.classes) {
-          if (scheduledClass.trainer) {
-            await notifyClassChange(transaction, scheduledClass.id, scheduledClass.trainer.id,
-              "create", scheduledClass.activity, scheduledClass.startsAt, scheduledClass.branch.id);
-          }
-        }
+        await notifyClassesAssigned(transaction, created.classes.flatMap((scheduledClass) =>
+          scheduledClass.trainer
+            ? [{
+              classId: scheduledClass.id,
+              trainerId: scheduledClass.trainer.id,
+              activity: scheduledClass.activity,
+              startsAt: scheduledClass.startsAt,
+              branch: scheduledClass.branch,
+            }]
+            : []));
         return toView(created);
       });
     } catch (error: unknown) {

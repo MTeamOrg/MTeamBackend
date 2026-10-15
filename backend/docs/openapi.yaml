@@ -557,6 +557,11 @@ paths:
     post:
       tags: [Membership Prices]
       summary: Registrar un nuevo valor de cuota
+      description: |
+        Si el nuevo importe es mayor que el del valor inmediatamente anterior, cada socio activo
+        recibe, en la misma transacción, la notificación "Aumento de cuota" con el nuevo importe y
+        la fecha desde la que se aplica (CUO-06). Un importe igual o menor no genera avisos, ni
+        tampoco el primer valor registrado.
       operationId: createMembershipPrice
       requestBody:
         required: true
@@ -862,6 +867,10 @@ paths:
     patch:
       tags: [Medical Certificates]
       summary: Aprobar o rechazar un apto médico
+      description: |
+        La revisión y la notificación se guardan en una sola transacción. Únicamente el socio dueño
+        del apto recibe el aviso (APM-06) y, si se rechazó, incluye la observación registrada. Una
+        segunda revisión del mismo apto responde 409 y no genera otro aviso.
       operationId: reviewMedicalCertificate
       requestBody:
         required: true
@@ -1186,7 +1195,9 @@ paths:
         transaccional copia actividad, día, horario de inicio, sede y entrenador
         opcional sin modificar el origen. La restricción única de semana hace
         que los reintentos y solicitudes concurrentes no dupliquen clases: la
-        primera creación responde 201 y una semana ya existente responde 409.
+        primera creación responde 201 y una semana ya existente responde 409. Cada
+        entrenador asignado en las clases copiadas recibe una notificación "Clase
+        asignada" por clase, en la misma transacción.
       operationId: copyWeeklySchedule
       security:
         - bearerAuth: []
@@ -1263,7 +1274,8 @@ paths:
         America/Argentina/Buenos_Aires; startsAt debe tener zona horaria y caer
         entre ese lunes inclusive y el lunes siguiente exclusivo en ese calendario.
         No se crean clases que ya comenzaron. La sede y el entrenador opcional
-        deben seguir activos al guardar la clase.
+        deben seguir activos al guardar la clase. Si se indica un entrenador, recibe la
+        notificación "Clase asignada" en la misma transacción.
       operationId: createScheduledClass
       requestBody:
         required: true
@@ -1298,7 +1310,12 @@ paths:
       description: >-
         Exclusivo de administradores. La clase permanece en su semana original;
         startsAt debe seguir dentro de ella. Se permite quitar el entrenador con
-        trainerId null. No se modifican clases que ya comenzaron.
+        trainerId null. No se modifican clases que ya comenzaron. Cada cambio real
+        notifica a los entrenadores afectados: quien conserva la clase recibe "Clase
+        modificada" con lo que cambió (actividad, horario o sede); quien deja de tenerla
+        recibe "Clase reasignada" y quien pasa a tenerla recibe "Clase asignada". Una
+        solicitud que no cambia nada, o su reintento exacto, no genera avisos, mientras
+        que volver a cambiar la clase (A a B, B a A, A a B) genera un aviso por cambio.
       operationId: updateScheduledClass
       requestBody:
         required: true
@@ -1321,7 +1338,8 @@ paths:
       summary: Quitar una clase del cronograma
       description: >-
         Exclusivo de administradores. Quita una clase que todavía no comenzó;
-        conserva el cronograma semanal y las clases históricas.
+        conserva el cronograma semanal y las clases históricas. El entrenador asignado
+        recibe la notificación "Clase cancelada".
       operationId: deleteScheduledClass
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
@@ -1448,6 +1466,11 @@ paths:
     patch:
       tags: [Events]
       summary: Publicar o cancelar un evento
+      description: |
+        Cancelar un evento publicado conserva su registro con estado CANCELLED y notifica a los
+        socios y entrenadores activos (EVE-03). Repetir la cancelación, aunque sea de forma
+        simultánea, no duplica los avisos. Cancelar un borrador, que nunca fue visible, no genera
+        avisos. Un evento cancelado no puede volver a publicarse (409).
       operationId: updateEventStatus
       requestBody:
         required: true
@@ -1516,12 +1539,28 @@ paths:
     get:
       tags: [Notifications]
       summary: Consultar las notificaciones propias
+      description: |
+        Devuelve únicamente las notificaciones de la cuenta autenticada, de la más reciente a la
+        más antigua (desempate estable por identificador). La identidad se obtiene siempre del
+        token: no existe ningún parámetro para consultar la bandeja de otra persona y un
+        parámetro desconocido, como `userId`, se rechaza con 400.
+
+        `total` cuenta las notificaciones que cumplen el filtro `isRead` y `unreadCount` cuenta
+        todas las no leídas de la cuenta, sin importar el filtro ni la página. Sirve para el
+        contador de la interfaz y para saber si "marcar todas" tiene algo que hacer.
+
+        Para un socio, esta consulta también genera, una sola vez por vencimiento, el aviso de
+        "Cuota próxima a vencer" (cinco días o menos de vigencia) o de "Cuota vencida" (la
+        vigencia terminó o no hay pagos acreditados). La operación es idempotente. Las fechas
+        de los textos están expresadas en horario de Argentina (America/Argentina/Buenos_Aires);
+        `createdAt` y `readAt` son instantes UTC en formato ISO 8601.
       operationId: listNotifications
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/Limit"
         - name: isRead
           in: query
+          description: "`true` devuelve solo las leídas y `false` solo las no leídas; sin el parámetro, todas."
           schema: { type: boolean }
       responses:
         "200":
@@ -1529,6 +1568,26 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/NotificationListResponse" }
+              example:
+                items:
+                  - id: 9f0c5d3e-3f0e-4d3b-9a39-6f6a1c2b7e10
+                    userId: 3f2a6f0e-5c2b-4a53-8d0e-2f5d6a1c9b44
+                    title: Apto médico rechazado
+                    message: "Tu apto médico fue rechazado. Observación: Falta la firma del profesional."
+                    type: MEDICAL_CERTIFICATE_REVIEWED
+                    createdAt: "2030-09-02T15:20:00.000Z"
+                    readAt: null
+                  - id: 4a6b1a2c-8c0d-4e0e-8f41-0f9c7b0c2a55
+                    userId: 3f2a6f0e-5c2b-4a53-8d0e-2f5d6a1c9b44
+                    title: Aumento de cuota
+                    message: La cuota mensual pasa a ser de $ 25.000,00 desde el 01/10/2030.
+                    type: MEMBERSHIP_PRICE_CHANGED
+                    createdAt: "2030-09-01T12:00:00.000Z"
+                    readAt: "2030-09-01T12:30:00.000Z"
+                page: 1
+                limit: 20
+                total: 2
+                unreadCount: 1
         "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1538,6 +1597,10 @@ paths:
     patch:
       tags: [Notifications]
       summary: Marcar todas las notificaciones propias como leídas
+      description: |
+        Marca como leídas todas las notificaciones no leídas de la cuenta autenticada. No elimina
+        nada del historial y conserva la fecha de lectura de las que ya estaban leídas. No recibe
+        cuerpo: nunca afecta a otras cuentas.
       operationId: markAllNotificationsAsRead
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
@@ -1551,6 +1614,9 @@ paths:
     get:
       tags: [Notifications]
       summary: Consultar una notificación propia
+      description: |
+        Responde 404 tanto si la notificación no existe como si pertenece a otra cuenta, para no
+        revelar la existencia de notificaciones ajenas.
       operationId: getNotification
       responses:
         "200":
@@ -1570,6 +1636,9 @@ paths:
     patch:
       tags: [Notifications]
       summary: Marcar una notificación propia como leída
+      description: |
+        Es idempotente: repetir la operación conserva la primera fecha de lectura. Responde 404
+        si la notificación no existe o pertenece a otra cuenta, y en ese caso no modifica nada.
       operationId: markNotificationAsRead
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
@@ -2241,6 +2310,12 @@ components:
         status: { type: string, enum: [PUBLISHED, INACTIVE] }
     NotificationType:
       type: string
+      description: |
+        MEMBERSHIP_PRICE_CHANGED: aumento de la cuota. MEMBERSHIP_EXPIRING / MEMBERSHIP_EXPIRED: cuota
+        próxima a vencer o vencida. MEDICAL_CERTIFICATE_REVIEWED: resultado de la revisión del apto
+        médico. CLASS_CHANGED: alta, cambio, reasignación o cancelación de una clase del entrenador.
+        EVENT_CANCELLED: evento publicado que fue cancelado. GENERAL: reservado para comunicaciones
+        internas.
       enum: [MEMBERSHIP_PRICE_CHANGED, MEMBERSHIP_EXPIRING, MEMBERSHIP_EXPIRED, MEDICAL_CERTIFICATE_REVIEWED, CLASS_CHANGED, EVENT_CANCELLED, GENERAL]
     Notification:
       type: object
@@ -2248,23 +2323,32 @@ components:
       required: [id, userId, title, message, type, createdAt, readAt]
       properties:
         id: { type: string, format: uuid }
-        userId: { type: string, format: uuid }
+        userId: { type: string, format: uuid, description: Destinatario; siempre es la cuenta autenticada }
         title: { type: string, maxLength: 200 }
-        message: { type: string }
+        message:
+          type: string
+          description: Texto en español. Las fechas y horas que menciona están en horario de Argentina.
         type: { $ref: "#/components/schemas/NotificationType" }
-        createdAt: { type: string, format: date-time }
-        readAt: { type: [string, "null"], format: date-time }
+        createdAt: { type: string, format: date-time, description: Instante UTC en que se generó el aviso }
+        readAt: { type: [string, "null"], format: date-time, description: Instante UTC de la primera lectura; null si no fue leída }
     NotificationListResponse:
       type: object
       additionalProperties: false
-      required: [items, page, limit, total]
+      required: [items, page, limit, total, unreadCount]
       properties:
         items:
           type: array
           items: { $ref: "#/components/schemas/Notification" }
         page: { type: integer, minimum: 1 }
         limit: { type: integer, minimum: 1, maximum: 100 }
-        total: { type: integer, minimum: 0 }
+        total:
+          type: integer
+          minimum: 0
+          description: Notificaciones que cumplen el filtro solicitado
+        unreadCount:
+          type: integer
+          minimum: 0
+          description: Todas las notificaciones no leídas de la cuenta, sin importar el filtro ni la página
     User:
       type: object
       required: [id, firstName, lastName, documentNumber, email, role, status]

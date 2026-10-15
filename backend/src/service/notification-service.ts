@@ -6,10 +6,13 @@ import {
 import type { NotificationListQuery } from "../validator/notification-validator.js";
 
 export class NotificationService {
-  constructor(private readonly repository: NotificationRepositoryPort) {}
+  constructor(
+    private readonly repository: NotificationRepositoryPort,
+    private readonly now: () => Date = () => new Date(),
+  ) {}
 
   async listOwn(userId: string, query: NotificationListQuery) {
-    await this.repository.ensureMembershipStatusNotification(userId, new Date());
+    await this.refreshMembershipNotice(userId);
     return this.repository.listOwn(userId, query);
   }
 
@@ -27,5 +30,17 @@ export class NotificationService {
 
   markAllOwnAsRead(userId: string): Promise<void> {
     return this.repository.markAllOwnAsRead(userId);
+  }
+
+  /**
+   * Fee notices are derived from the payment history when the member opens the inbox. A failure here
+   * must not stop the member from reading the notifications that already exist.
+   */
+  private async refreshMembershipNotice(userId: string): Promise<void> {
+    try {
+      await this.repository.ensureMembershipStatusNotification(userId, this.now());
+    } catch (error: unknown) {
+      console.error("No se pudo actualizar el aviso de cuota", error);
+    }
   }
 }
