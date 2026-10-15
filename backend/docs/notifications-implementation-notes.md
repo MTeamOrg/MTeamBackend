@@ -31,6 +31,7 @@ Notas de alcance:
 
 - Las escrituras usan `createMany({ skipDuplicates: true })` (`INSERT … ON CONFLICT DO NOTHING`) sobre la restricción única, de modo que reintentos y solicitudes simultáneas no duplican.
 - Cada operación de negocio escribe el cambio y sus avisos en una misma transacción Prisma (precio, apto, evento, clase y copia semanal).
+- Avisar a todos los usuarios activos (aumento de cuota, cancelación de un evento) inserta miles de filas en esa transacción. Prisma cancela las transacciones interactivas a los 5 s, así que con unos 15.000 usuarios la operación completa se revertía (el evento seguía publicado y el precio no se guardaba). Esas dos transacciones declaran `AUDIENCE_TRANSACTION_OPTIONS` (60 s).
 - Las clases, los aptos y los eventos se bloquean con `SELECT … FOR UPDATE` antes de decidir. Una solicitud repetida o simultánea encuentra el estado ya aplicado y no hace nada.
 - En las clases, un cambio real recibe su propio identificador (UUID). Un reintento exacto no llega a generar nada porque la clase ya tiene el estado pedido.
 - **Corregido:** el alta y la baja de una clase usaban la misma clave (`class-changed:{clase}:{clase}:{entrenador}`), por lo que el aviso de cancelación se descartaba en silencio cuando el entrenador estaba asignado desde el alta. Ahora cada evento tiene su propia clave (`created`, `deleted`). Las filas históricas no se modifican y no colisionan con las nuevas.
@@ -89,7 +90,7 @@ Desde `backend/`:
 | Qué | Comando |
 |---|---|
 | Unitarias (con mocks) | `npm test` |
-| Integración con PostgreSQL real: API, autenticación, servicios, repositorios y restricciones | `npm run test:integration:notifications` |
+| Integración con PostgreSQL real: API, autenticación, servicios, repositorios, restricciones del esquema (columnas, enum, índices, claves foráneas), persistencia tras reiniciar la aplicación y audiencias grandes | `npm run test:integration:notifications` |
 | Cobertura del módulo (meta de la materia: 80 %) | `npm run test:coverage:notifications` |
 | Contrato y esquema | `npm run openapi:validate` · `npm run prisma:validate` |
 
@@ -124,6 +125,7 @@ La verificación de punta a punta con el navegador (frontend contra este backend
 | N-09 | Un fallo al generar el aviso de cuota impedía leer toda la bandeja | La excepción se propagaba | Media | Se registra y la bandeja sigue funcionando |
 | N-10 | El umbral de 5 días estaba duplicado | Copia de la regla de `membership-status` | Baja | Se reutiliza `calculateMembershipStatus` |
 | N-11 | Código muerto (`audienceRoles`) | Sin usos | Baja | Eliminado |
+| N-12 | Con 25.000 socios activos, cancelar un evento publicado o registrar un aumento de cuota fallaba con `A commit cannot be executed on an expired transaction` y se revertía todo | La transacción interactiva por defecto de Prisma dura 5 s y el reparto tardaba 8–10 s | Media | Timeout explícito de 60 s en esas dos transacciones; prueba de regresión con 4.000 socios y un cliente con timeout por defecto de 100 ms |
 
 Frontend (repositorio `MTeamFrontend`): el celular no tenía forma de llegar a Notificaciones (la barra inferior tiene cinco pestañas), no había contador de no leídas, "Marcar todas como leídas" miraba solo la página visible, la pantalla no se actualizaba con la aplicación abierta y las pruebas E2E solo usaban una API simulada.
 

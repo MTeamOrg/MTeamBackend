@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import request from "supertest";
 
 import { bearer, createFixtures, createIntegrationApp, database } from "./support/postgres-fixtures.js";
@@ -92,6 +94,17 @@ describe("class change notifications (API, services and PostgreSQL)", () => {
       `Se modificó la clase de Yoga: el horario cambió del 03/03/2036 a las 23:30 al 04/03/2036 a las 10:00.`,
       `Se modificó la clase de Yoga: la sede cambió de ${branch.name} a ${otherBranch.name}.`,
     ].sort());
+  });
+
+  test("names the new activity when only the activity of a class changes", async () => {
+    const { admin, trainer, branch } = await setup();
+    const classId = await createClassThroughApi(admin as never, branch.id, trainer.id);
+
+    const response = await request(app).patch(`/api/scheduled-classes/${classId}`).set(bearer(admin)).send({ activity: "Pilates" });
+    expect(response.status).toBe(200);
+
+    const update = (await notificationsOf(trainer.id)).find(({ title }) => title === "Clase modificada");
+    expect(update?.message).toBe("Se modificó la clase de Pilates: la actividad cambió de Yoga a Pilates.");
   });
 
   test("notifies the previous trainer of the removal and the new trainer of the assignment, nobody else", async () => {
@@ -231,6 +244,28 @@ describe("event cancellation notifications (API, services and PostgreSQL)", () =
 
     expect(await notificationsOf(memberA.id)).toHaveLength(0);
     expect(await notificationsOf(trainer.id)).toHaveLength(0);
+  });
+
+  test("creating and publishing an event never notifies, and an unknown event answers 404", async () => {
+    const admin = await fixtures.user("ADMIN");
+    const member = await fixtures.user("MEMBER");
+    const trainer = await fixtures.user("TRAINER");
+
+    const created = await request(app).post("/api/events").set(bearer(admin)).send({
+      title: "Torneo en preparación", description: "Evento de prueba", startsAt: LATE_EVENING, location: "Sede central", imageUrl: "https://example.test/evento.png",
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.status).toBe("DRAFT");
+    await fixtures.trackEventsBy(admin.id);
+
+    const published = await request(app).patch(`/api/events/${created.body.id}/status`).set(bearer(admin)).send({ status: "PUBLISHED" });
+    expect(published.status).toBe(200);
+    expect(published.body.status).toBe("PUBLISHED");
+    expect(await notificationsOf(member.id)).toHaveLength(0);
+    expect(await notificationsOf(trainer.id)).toHaveLength(0);
+
+    const unknown = await request(app).patch(`/api/events/${randomUUID()}/status`).set(bearer(admin)).send({ status: "CANCELLED" });
+    expect(unknown.status).toBe(404);
   });
 
   test("rejects reopening a cancelled event without creating notices", async () => {

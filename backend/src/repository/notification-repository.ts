@@ -48,6 +48,13 @@ export interface NotificationRecipient {
 }
 
 /**
+ * Announcing something to every active user (a cancelled event, a price increase) inserts thousands of
+ * rows in the same transaction as the change itself. Prisma aborts interactive transactions after 5
+ * seconds by default, which rolled the change back once the audience grew past roughly 15 000 users.
+ */
+export const AUDIENCE_TRANSACTION_OPTIONS = { maxWait: 10_000, timeout: 60_000 } as const;
+
+/**
  * Inserts the notices that do not exist yet. `dedupeKey` identifies one real domain event
  * (never a state), so replays of the same event are ignored and a new event is never lost.
  */

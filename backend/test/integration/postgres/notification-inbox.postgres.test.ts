@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import request from "supertest";
 
-import { bearer, createFixtures, createIntegrationApp, database, type TestUser } from "./support/postgres-fixtures.js";
+import { bearer, createFixtures, createIntegrationApp, database, untrustedBearer, type TestUser } from "./support/postgres-fixtures.js";
 
 const fixtures = createFixtures();
 const app = createIntegrationApp();
@@ -53,6 +53,19 @@ describe("inbox security and isolation (real authentication and PostgreSQL)", ()
     expect((await request(app).get("/api/notifications").set(bearer(deleted))).status).toBe(401);
   });
 
+  test("rejects tokens that are expired or signed with another secret", async () => {
+    const member = await fixtures.user("MEMBER");
+    for (const header of [
+      untrustedBearer(member, { expiresInSeconds: -60 }),
+      untrustedBearer(member, { secret: "another-secret-that-is-not-ours" }),
+    ]) {
+      const response = await request(app).get("/api/notifications").set(header);
+      expect(response.status).toBe(401);
+      expect(response.body.code).toBe("UNAUTHORIZED");
+    }
+    expect((await request(app).get("/api/notifications").set(bearer(member))).status).toBe(200);
+  });
+
   test("shows every account only its own notifications, including administrators and trainers", async () => {
     const admin = await fixtures.user("ADMIN");
     const trainer = await fixtures.user("TRAINER");
@@ -92,6 +105,23 @@ describe("inbox security and isolation (real authentication and PostgreSQL)", ()
 
     expect((await request(app).get(`/api/notifications/${foreignId}`).set(bearer(owner))).status).toBe(200);
     expect((await request(app).get("/api/notifications/not-a-uuid").set(bearer(owner))).status).toBe(400);
+  });
+
+  test("answers the same 404 to administrators and trainers asking for a member's private notification", async () => {
+    const owner = await fixtures.user("MEMBER");
+    const privateId = randomUUID();
+    await seed(owner.id, [{ id: privateId, title: "Privada", createdAt: "2030-01-01T10:00:00Z" }]);
+
+    for (const role of ["ADMIN", "TRAINER"] as const) {
+      const visitor = await fixtures.user(role);
+      const foreign = await request(app).get(`/api/notifications/${privateId}`).set(bearer(visitor));
+      const missing = await request(app).get(`/api/notifications/${randomUUID()}`).set(bearer(visitor));
+      expect({ role, status: foreign.status, body: foreign.body }).toEqual({ role, status: 404, body: missing.body });
+      expect((await request(app).patch(`/api/notifications/${privateId}/read-status`).set(bearer(visitor))).status).toBe(404);
+      expect((await request(app).patch(`/api/notifications/${randomUUID()}/read-status`).set(bearer(visitor))).status).toBe(404);
+      expect((await request(app).get("/api/notifications").set(bearer(visitor))).body.items.some(({ id }: { id: string }) => id === privateId)).toBe(false);
+    }
+    expect((await database.notification.findUniqueOrThrow({ where: { id: privateId } })).readAt).toBeNull();
   });
 
   test("never lets one user mark another user's notifications as read", async () => {
@@ -327,6 +357,36 @@ describe("membership fee notices generated when the member opens the inbox", () 
     await fixtures.accreditedPayment(user.id, admin.id, "2036-02-01T15:00:00.000Z", "2036-03-02T15:00:00.000Z");
     await fixtures.accreditedPayment(user.id, admin.id, "2036-02-28T15:00:00.000Z", "2036-03-29T15:00:00.000Z");
     expect(feeNotices(await open(user, new Date("2036-03-01T15:00:00.000Z")))).toHaveLength(0);
+  });
+
+  test("accrediting a payment through the API renews the validity without creating or repeating notices, even if it is voided", async () => {
+    const { admin, member: user } = await member();
+    const realNow = new Date();
+
+    // Never paid: the fee is expired and the member is told once.
+    expect(feeNotices(await open(user, realNow)).map(({ type }) => type)).toEqual(["MEMBERSHIP_EXPIRED"]);
+
+    const accredited = await request(clockApp).post("/api/payments").set(bearer(admin)).send({ memberId: user.id, amount: 20000, method: "CASH" });
+    expect(accredited.status).toBe(201);
+    const expiresAt = new Date(accredited.body.expiresAt as string);
+    expect(expiresAt.getTime() - new Date(accredited.body.accreditedAt as string).getTime()).toBe(30 * DAY);
+
+    // Now the fee is current: nothing new, and the earlier notice stays in the history.
+    const renewed = await open(user, new Date(realNow.getTime() + 60_000));
+    expect(feeNotices(renewed).map(({ type }) => type)).toEqual(["MEMBERSHIP_EXPIRED"]);
+
+    // Six days before it expires there is still nothing; five days before, exactly one notice.
+    expect(feeNotices(await open(user, new Date(expiresAt.getTime() - 5 * DAY - 1))).map(({ type }) => type)).toEqual(["MEMBERSHIP_EXPIRED"]);
+    const warned = await open(user, new Date(expiresAt.getTime() - 5 * DAY));
+    expect(feeNotices(warned).map(({ type }) => type).sort()).toEqual(["MEMBERSHIP_EXPIRED", "MEMBERSHIP_EXPIRING"]);
+    await open(user, new Date(expiresAt.getTime() - 4 * DAY));
+    expect(await database.notification.count({ where: { userId: user.id } })).toBe(2);
+
+    // Voiding the only payment brings back the "never paid" state, which was already announced.
+    const voided = await request(clockApp).post(`/api/payments/${accredited.body.id}/voids`).set(bearer(admin)).send({ reason: "Pago cargado por error" });
+    expect(voided.status).toBe(200);
+    await open(user, new Date(expiresAt.getTime() - 4 * DAY));
+    expect(await database.notification.count({ where: { userId: user.id } })).toBe(2);
   });
 
   test("never creates fee notices for trainers or administrators", async () => {
