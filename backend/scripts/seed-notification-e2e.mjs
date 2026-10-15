@@ -9,6 +9,7 @@
 //     node scripts/seed-notification-e2e.mjs --out ./e2e-fixture.json
 import { randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import bcrypt from "bcrypt";
 import pg from "pg";
@@ -116,7 +117,18 @@ try {
   );
 
   await client.query("COMMIT");
-  fixture = { password: PASSWORD, admin, member, otherMember, trainer, branch: { id: branchId, name: BRANCH_NAME }, certificateId };
+  fixture = {
+    password: PASSWORD,
+    admin,
+    member,
+    otherMember,
+    trainer,
+    branch: { id: branchId, name: BRANCH_NAME },
+    certificateId,
+    // Lets the browser test check what it stored directly in this local database (it resolves `pg` from backendDir).
+    backendDir: fileURLToPath(new URL("..", import.meta.url)),
+    databaseUrl: connectionString,
+  };
 } catch (error) {
   await client.query("ROLLBACK");
   throw error;
