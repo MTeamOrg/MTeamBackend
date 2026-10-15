@@ -1524,7 +1524,15 @@ paths:
           in: query
           schema: { type: boolean }
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Notificaciones propias ordenadas de la más reciente a la más antigua
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationListResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
 
   /notifications/read-status:
     patch:
@@ -1533,6 +1541,9 @@ paths:
       operationId: markAllNotificationsAsRead
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
 
   /notifications/{notificationId}:
     parameters:
@@ -1542,7 +1553,16 @@ paths:
       summary: Consultar una notificación propia
       operationId: getNotification
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Notificación propia
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Notification" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
 
   /notifications/{notificationId}/read-status:
     parameters:
@@ -1553,6 +1573,11 @@ paths:
       operationId: markNotificationAsRead
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
 
 components:
   securitySchemes:
@@ -1663,6 +1688,11 @@ components:
                 details: null
     NotFound:
       description: Recurso inexistente
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    InternalServerError:
+      description: Error interno inesperado
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
@@ -2224,6 +2254,17 @@ components:
         type: { $ref: "#/components/schemas/NotificationType" }
         createdAt: { type: string, format: date-time }
         readAt: { type: [string, "null"], format: date-time }
+    NotificationListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Notification" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
     User:
       type: object
       required: [id, firstName, lastName, documentNumber, email, role, status]

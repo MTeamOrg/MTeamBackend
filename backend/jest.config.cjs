@@ -5,7 +5,10 @@ module.exports = {
   },
   testEnvironment: "node",
   testMatch: ["<rootDir>/test/**/*.test.ts"],
-  testPathIgnorePatterns: ["<rootDir>/test/integration/supabase/"],
+  testPathIgnorePatterns: [
+    "<rootDir>/test/integration/supabase/",
+    "<rootDir>/test/integration/postgres/",
+  ],
   transform: {
     "^.+\\.tsx?$": [
       "@swc/jest",
