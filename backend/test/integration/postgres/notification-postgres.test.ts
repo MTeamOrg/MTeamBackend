@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../../src/generated/prisma/client.js";
-import { NotificationRepository, createNotifications } from "../../src/repository/notification-repository.js";
-import { ScheduledClassRepository } from "../../src/repository/scheduled-class-repository.js";
+import { PrismaClient } from "../../../src/generated/prisma/client.js";
+import { NotificationRepository, createNotifications } from "../../../src/repository/notification-repository.js";
+import { ScheduledClassRepository } from "../../../src/repository/scheduled-class-repository.js";
 
 const connectionString = process.env.NOTIFICATION_TEST_DATABASE_URL;
 if (!connectionString) {
@@ -27,7 +27,7 @@ async function createUser(role: "MEMBER" | "TRAINER") {
     data: {
       firstName: "Notification",
       lastName: "Integration",
-      documentNumber: unique,
+      documentNumber: unique.replace(/-/g, "").slice(0, 30),
       birthDate: new Date("1990-01-01T00:00:00.000Z"),
       email: `${unique}@example.test`,
       phone: "555-0100",
