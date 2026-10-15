@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { PrismaClient, ScheduledClass } from "../generated/prisma/client.js";
 import { Prisma } from "../generated/prisma/client.js";
 import { belongsToWeek } from "../model/scheduled-class-week.js";
@@ -90,15 +91,22 @@ export class ScheduledClassRepository implements ScheduledClassRepositoryPort {
       }
 
       const data: Prisma.ScheduledClassUncheckedUpdateInput = {};
-      if (input.activity !== undefined) data.activity = input.activity;
-      if (input.startsAt !== undefined) data.startsAt = new Date(input.startsAt);
-      if (input.branchId !== undefined) data.branchId = input.branchId;
-      if (input.trainerId !== undefined) data.trainerId = input.trainerId;
+      if (input.activity !== undefined && input.activity !== existing.activity) data.activity = input.activity;
+      if (input.startsAt !== undefined) {
+        const startsAt = new Date(input.startsAt);
+        if (startsAt.getTime() !== existing.startsAt.getTime()) data.startsAt = startsAt;
+      }
+      if (input.branchId !== undefined && input.branchId !== existing.branchId) data.branchId = input.branchId;
+      if (input.trainerId !== undefined && input.trainerId !== existing.trainerId) data.trainerId = input.trainerId;
+      if (Object.keys(data).length === 0) return withWeek(existing);
+
       const updated = await transaction.scheduledClass.update({
         where: { id }, data, include: scheduleInclude,
       });
       const recipients = new Set([existing.trainerId, updated.trainerId].filter((value): value is string => Boolean(value)));
-      await notifyClassChange(transaction, updated.id, [...recipients], "update", updated.activity, updated.startsAt, updated.branchId);
+      await notifyClassChange(
+        transaction, updated.id, [...recipients], "update", updated.activity, updated.startsAt, updated.branchId, randomUUID(),
+      );
       return withWeek(updated);
     });
   }
@@ -136,13 +144,13 @@ export async function notifyClassChange(
   activity: string | null,
   startsAt: Date,
   branchId: string | null,
+  changeId = classId,
 ): Promise<void> {
   const recipients = Array.isArray(trainerIds) ? trainerIds : [trainerIds];
   if (!recipients.length) return;
   const branch = action === "create" && branchId
     ? await transaction.branch.findUnique({ where: { id: branchId }, select: { name: true } })
     : null;
-  const fingerprint = `${classId}:${action}:${activity ?? "deleted"}:${startsAt.toISOString()}:${branchId ?? "none"}`;
   const notifications: NotificationRecipient[] = recipients.map((userId) => ({
     userId,
     title: "Cambio en tus clases",
@@ -150,7 +158,7 @@ export async function notifyClassChange(
       ? "Se canceló una clase que tenías asignada."
       : `Se ${action === "create" ? "asignó" : "modificó"} la clase${activity ? ` de ${activity}` : ""} del ${startsAt.toLocaleDateString("es-AR")} a las ${startsAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}${branch ? ` en ${branch.name}` : ""}.`,
     type: "CLASS_CHANGED",
-    dedupeKey: `class-changed:${fingerprint}:${userId}`,
+    dedupeKey: `class-changed:${classId}:${changeId}:${userId}`,
   }));
   await createNotifications(transaction, notifications);
 }
