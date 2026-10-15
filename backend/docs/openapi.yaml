@@ -31,6 +31,57 @@ security:
   - bearerAuth: []
 
 paths:
+  /auth/password-recovery:
+    post:
+      tags: [Authentication]
+      operationId: requestPasswordRecovery
+      summary: Solicitar enlace de recuperación (USR-04)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email]
+              properties:
+                email: { type: string, format: email, maxLength: 255 }
+      responses:
+        "202":
+          description: Correo aceptado por el proveedor; respuesta idéntica para cuentas existentes e inexistentes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { type: string }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "429": { description: Demasiadas solicitudes; reintentar en 60 segundos }
+        "503": { description: No se pudo enviar el correo o completar la solicitud }
+  /auth/password-recovery/complete:
+    post:
+      tags: [Authentication]
+      operationId: completePasswordRecovery
+      summary: Establecer contraseña con un enlace de un solo uso
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token, newPassword]
+              properties:
+                token: { type: string, pattern: '^[a-f0-9]{64}$' }
+                newPassword: { type: string, minLength: 8, maxLength: 72, writeOnly: true }
+      responses:
+        "204": { description: Contraseña actualizada; enlace y otros enlaces pendientes invalidados }
+        "400": { description: "VALIDATION_ERROR, PASSWORD_REUSE, INVALID_RECOVERY_TOKEN o EXPIRED_RECOVERY_TOKEN" }
+        "429": { description: Demasiadas solicitudes; reintentar en 60 segundos }
+        "503": { description: Error recuperable; intentar nuevamente }
   /health:
     get:
       tags: [System]

@@ -25,6 +25,13 @@ const environmentSchema = z.object({
     .enum(["development", "test", "staging", "production"])
     .default("development"),
   PORT: z.coerce.number().int().positive().max(65_535).default(3000),
+  FRONTEND_PUBLIC_URL: z.preprocess(emptyOptionalValueToUndefined,
+    z.url().refine(value => {
+      const url = new URL(value);
+      return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password && !url.hash && !url.search;
+    }, "Use an HTTP(S) frontend URL without credentials, query or fragment").optional()),
+  RESEND_API_KEY: optionalEnvironmentString,
+  MAIL_FROM: optionalEnvironmentString,
   CORS_ORIGIN: z.url().default("http://localhost:5173"),
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().trim().min(1),

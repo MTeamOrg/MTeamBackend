@@ -81,7 +81,17 @@ import { createWeeklyScheduleRouter } from "./weekly-schedule-route.js";
 import { createTrainerRouter } from "./trainer-route.js";
 import { createUserRouter } from "./user-route.js";
 
+import { AccountRecoveryController } from "../controller/account-recovery-controller.js";
+import { AccountRecoveryRepository } from "../repository/account-recovery-repository.js";
+import { AccountRecoveryService } from "../service/account-recovery-service.js";
+import { RecoveryEmailService } from "../service/recovery-email-service.js";
+import { createAccountRecoveryRouter } from "./account-recovery-route.js";
+
 export const apiRouter = Router();
+apiRouter.use(createAccountRecoveryRouter(new AccountRecoveryController(new AccountRecoveryService(
+  new AccountRecoveryRepository(database), new PasswordService(),
+  new RecoveryEmailService(environment.RESEND_API_KEY, environment.MAIL_FROM), environment.FRONTEND_PUBLIC_URL,
+))));
 
 const userRepository = new UserRepository(database);
 const passwordService = new PasswordService();

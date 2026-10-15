@@ -115,6 +115,7 @@ model User {
   performedAuditLogs       UserAuditLog[]       @relation("AuditPerformedBy")
   createdEvents            Event[]              @relation("EventCreatedBy")
   createdNewsPosts         NewsPost[]           @relation("NewsPostCreatedBy")
+  passwordRecoveryTokens   PasswordRecoveryToken[]
   notifications            Notification[]
 
   @@map("user")
@@ -340,4 +341,16 @@ model Notification {
 
   @@index([userId, readAt, createdAt])
   @@map("notification")
+}
+
+model PasswordRecoveryToken {
+  tokenHash           String   @id @map("token_hash") @db.VarChar(64)
+  userId              String   @map("user_id") @db.Uuid
+  passwordFingerprint String   @map("password_fingerprint") @db.VarChar(64)
+  expiresAt           DateTime @map("expires_at") @db.Timestamptz(3)
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_recovery_token")
 }
