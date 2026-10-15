@@ -161,6 +161,7 @@ erDiagram
     notification {
         uuid id PK
         uuid user_id FK
+        varchar dedupe_key "nullable, UNIQUE"
         varchar title
         text message
         NotificationType type
@@ -231,6 +232,7 @@ Los nombres de las enumeraciones utilizan PascalCase y sus valores, UPPER_SNAKE_
 - `scheduled_class.trainer_id` es opcional; `branch_id` siempre es obligatorio.
 - `trainer_branch` utiliza `id` como clave primaria y una restricción única compuesta sobre `(trainer_id, branch_id)` para evitar asignaciones duplicadas.
 - Los estados de cuota `CURRENT`, `EXPIRING_SOON` y `EXPIRED` se calculan y no se persisten como columna.
+- `notification.dedupe_key` identifica el evento de dominio que originó el aviso (por ejemplo `event-cancelled:{evento}:{usuario}`) y es único. Es una columna de implementación, nullable, que impide que el reintento o la ejecución simultánea de una misma operación duplique el aviso; ver `backend/docs/notifications-implementation-notes.md`.
 - Los registros históricos no se eliminan al desactivar usuarios, entrenadores, sedes o puntos de acceso.
 
 ## Índices recomendados
