@@ -97,6 +97,7 @@ model User {
   role                     UserRole
   status                   UserStatus           @default(ACTIVE)
   isPasswordChangeRequired Boolean              @default(true) @map("is_password_change_required")
+  sessionVersion           Int                  @default(0) @map("session_version")
   createdAt                DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
   memberProfile            MemberProfile?
@@ -143,6 +144,7 @@ model TrainerProfile {
 
 model MembershipPrice {
   id            String   @id @default(uuid()) @db.Uuid
+  idempotencyKey String?  @unique @map("idempotency_key") @db.Uuid
   amount        Decimal  @db.Decimal(12, 2)
   effectiveFrom DateTime @map("effective_from") @db.Timestamptz(3)
   createdById   String   @map("created_by_id") @db.Uuid
@@ -155,6 +157,7 @@ model MembershipPrice {
 
 model Payment {
   id            String        @id @default(uuid()) @db.Uuid
+  idempotencyKey String?       @unique @map("idempotency_key") @db.Uuid
   memberId      String        @map("member_id") @db.Uuid
   amount        Decimal       @db.Decimal(12, 2)
   method        String        @db.VarChar(50)
