@@ -1,10 +1,11 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { createHash, randomBytes, randomInt } from "node:crypto";
+import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { config } from "dotenv";
 import pg from "pg";
+import { assertIsolatedSupabaseIntegrationTarget } from "./target-guard.js";
 
 const backendRoot = resolve(process.cwd());
 config({
@@ -54,6 +55,7 @@ interface ApiResponse {
 interface ApiOptions {
   method?: string;
   token?: string;
+  headers?: Record<string, string>;
   body?: unknown;
   expected?: number[];
   label?: string;
@@ -64,9 +66,11 @@ let databasePool: pg.Pool;
 let backendProcess: ChildProcess | undefined;
 
 function requiredEnvironment(): void {
+  assertIsolatedSupabaseIntegrationTarget(process.env);
   const required = [
     "DATABASE_URL",
     "DIRECT_URL",
+    "SUPABASE_URL",
     "JWT_SECRET",
     "BOOTSTRAP_ADMIN_EMAIL",
     "BOOTSTRAP_ADMIN_PASSWORD",
@@ -86,6 +90,7 @@ async function api(path: string, options: ApiOptions = {}): Promise<ApiResponse>
   const headers: Record<string, string> = { accept: "application/json" };
   if (options.token) headers.authorization = `Bearer ${options.token}`;
   if (options.body !== undefined) headers["content-type"] = "application/json";
+  Object.assign(headers, options.headers);
 
   const response = await fetch(`${apiBaseUrl}${path}`, {
     method,
@@ -581,13 +586,13 @@ describe("real Supabase requirements verification", () => {
     memberLogin = await login(state.member.email, state.member.password);
     state.memberToken = accessToken(memberLogin, "reactivated member login");
 
-    const temporaryPassword = password();
-    await api(`/users/${state.memberId}/password-resets`, {
+    const passwordReset = await api(`/users/${state.memberId}/password-resets`, {
       method: "POST",
       token: state.adminToken,
-      body: { temporaryPassword },
-      expected: [204],
+      expected: [200],
     });
+    const temporaryPassword = passwordReset.payload.temporaryPassword;
+    expect(temporaryPassword).toMatch(/^[A-Za-z0-9_-]{43}$/);
     const temporaryLogin = await login(state.member.email, temporaryPassword);
     const temporaryToken = accessToken(temporaryLogin, "temporary password login");
     expect((await api("/users/me", {
@@ -623,12 +628,14 @@ describe("real Supabase requirements verification", () => {
     const priceOne = await api("/membership-prices", {
       method: "POST",
       token: state.adminToken,
+      headers: { "Idempotency-Key": randomUUID() },
       body: { amount: 920925.11, effectiveFrom: effectiveOne },
       expected: [201],
     });
     const priceTwo = await api("/membership-prices", {
       method: "POST",
       token: state.adminToken,
+      headers: { "Idempotency-Key": randomUUID() },
       body: { amount: 920925.12, effectiveFrom: effectiveTwo },
       expected: [201],
     });
@@ -679,6 +686,7 @@ describe("real Supabase requirements verification", () => {
     const paymentOne = await api("/payments", {
       method: "POST",
       token: state.adminToken,
+      headers: { "Idempotency-Key": randomUUID() },
       body: {
         memberId: state.memberId,
         amount: 43001.17,
@@ -691,6 +699,7 @@ describe("real Supabase requirements verification", () => {
     const paymentTwo = await api("/payments", {
       method: "POST",
       token: state.adminToken,
+      headers: { "Idempotency-Key": randomUUID() },
       body: {
         memberId: state.memberId,
         amount: 43001.29,

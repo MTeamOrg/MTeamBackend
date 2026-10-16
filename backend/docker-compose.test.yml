@@ -1,0 +1,17 @@
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: mteam_test
+      POSTGRES_USER: mteam_test
+      POSTGRES_PASSWORD: mteam_test_local_only
+    ports:
+      - "127.0.0.1:55432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mteam_test -d mteam_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    restart: "no"

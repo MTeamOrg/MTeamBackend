@@ -443,21 +443,21 @@ paths:
       - $ref: "#/components/parameters/UserId"
     post:
       tags: [Users]
-      summary: Asignar una contraseña temporal
+      summary: Generar una contraseña temporal
       description: >-
-        Operación exclusiva de administradores. Reemplaza la contraseña por
-        un valor temporal y obliga al usuario a cambiarla antes de acceder a
-        cualquier otra ruta privada.
+        Operación exclusiva de administradores. El servidor genera una clave
+        aleatoria de un solo uso, guarda su hash y obliga al usuario a cambiarla
+        antes de acceder a cualquier otra ruta privada. La clave se devuelve una
+        sola vez en esta respuesta y no se registra en auditoría ni notificaciones.
       operationId: resetUserPassword
       security:
         - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/ResetPasswordRequest" }
       responses:
-        "204": { $ref: "#/components/responses/NoContent" }
+        "200":
+          description: Contraseña temporal generada y entregada una sola vez al administrador.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResetPasswordResponse" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -563,6 +563,12 @@ paths:
         la fecha desde la que se aplica (CUO-06). Un importe igual o menor no genera avisos, ni
         tampoco el primer valor registrado.
       operationId: createMembershipPrice
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: UUID estable que debe repetirse al reintentar la misma solicitud.
+          schema: { type: string, format: uuid }
       requestBody:
         required: true
         content:
@@ -577,6 +583,7 @@ paths:
         "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /payments:
     get:
@@ -618,6 +625,11 @@ paths:
       tags: [Payments]
       summary: Registrar y acreditar un pago
       operationId: createPayment
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
       requestBody:
         required: true
         content:
@@ -625,6 +637,10 @@ paths:
             schema: { $ref: "#/components/schemas/CreatePaymentRequest" }
       responses:
         "201": { $ref: "#/components/responses/Created" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /payments/previews:
     post:
@@ -2643,12 +2659,16 @@ components:
       properties:
         status: { $ref: "#/components/schemas/UserStatus" }
         reason: { type: string }
-    ResetPasswordRequest:
+    ResetPasswordResponse:
       type: object
       additionalProperties: false
       required: [temporaryPassword]
       properties:
-        temporaryPassword: { type: string, format: password, minLength: 8, maxLength: 72 }
+        temporaryPassword:
+          type: string
+          minLength: 43
+          maxLength: 43
+          description: Clave aleatoria que solo se devuelve en la respuesta de generación.
     CreateMembershipPriceRequest:
       type: object
       required: [amount, effectiveFrom]
