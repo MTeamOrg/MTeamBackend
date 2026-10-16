@@ -10,31 +10,27 @@ const certificateId = "f12101a5-e6ab-43f7-91b3-2b8fbfd67b84";
 
 describe("notification triggers", () => {
   test("CUO-06 notifies active members only when the price increases", async () => {
-    const notificationCreateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const executeRaw = jest.fn().mockResolvedValue(1);
     const transaction = {
       membershipPrice: {
         create: jest.fn().mockResolvedValue({ id: "price-2", amount: { toString: () => "20000.00" }, effectiveFrom: new Date("2030-10-01T00:00:00.000Z"), createdAt: new Date("2030-09-01T00:00:00.000Z"), createdById: adminId }),
         findFirst: jest.fn().mockResolvedValue({ amount: { toString: () => "18000.00" } }),
+        findUnique: jest.fn().mockResolvedValue(null),
       },
-      user: { findMany: jest.fn().mockResolvedValue([{ id: memberId }]) },
-      notification: { createMany: notificationCreateMany },
+      $executeRaw: executeRaw,
+      user: { findMany: jest.fn() },
+      notification: { createMany: jest.fn() },
     };
     const runTransaction = jest.fn((callback: (value: typeof transaction) => Promise<unknown>, _options?: unknown) => callback(transaction));
     const database = { $transaction: runTransaction } as unknown as PrismaClient;
 
-    await new MembershipPriceRepository(database).createPrice({ amount: "20000", effectiveFrom: new Date("2030-10-01T00:00:00.000Z"), createdById: adminId });
+    await new MembershipPriceRepository(database).createPrice({ amount: "20000", effectiveFrom: new Date("2030-10-01T00:00:00.000Z"), createdById: adminId, idempotencyKey: "32f4164a-f26b-473a-901c-a2c8fd5dc3a8" });
     // Notifying every active member must not rely on Prisma's 5 s default for interactive transactions.
     expect(runTransaction).toHaveBeenCalledWith(expect.any(Function), { maxWait: 10_000, timeout: 60_000 });
-    expect(transaction.user.findMany).toHaveBeenCalledWith({ where: { role: "MEMBER", status: "ACTIVE" }, select: { id: true } });
-    expect(notificationCreateMany).toHaveBeenCalledWith(expect.objectContaining({
-      skipDuplicates: true,
-      data: [expect.objectContaining({
-        userId: memberId,
-        type: "MEMBERSHIP_PRICE_CHANGED",
-        // 2030-10-01T00:00Z is still 30 September at 21:00 in Buenos Aires.
-        message: "La cuota mensual pasa a ser de $ 20.000,00 desde el 30/09/2030.",
-      })],
-    }));
+    // The audience is selected and inserted in one database statement; IDs are not loaded into Node.
+    expect(executeRaw).toHaveBeenCalledTimes(1);
+    expect(transaction.user.findMany).not.toHaveBeenCalled();
+    expect(transaction.notification.createMany).not.toHaveBeenCalled();
   });
 
   test.each(["20000.00", "18000.00", "19999.99"])("CUO-06 does not notify when the new price is %s and the previous one is 20000.00", async (amount) => {
@@ -43,14 +39,17 @@ describe("notification triggers", () => {
       membershipPrice: {
         create: jest.fn().mockResolvedValue({ id: "price-2", amount: { toString: () => amount }, effectiveFrom: new Date("2030-10-01T00:00:00.000Z"), createdAt: new Date(), createdById: adminId }),
         findFirst: jest.fn().mockResolvedValue({ amount: { toString: () => "20000.00" } }),
+        findUnique: jest.fn().mockResolvedValue(null),
       },
       user: { findMany: jest.fn() },
+      $executeRaw: jest.fn(),
       notification: { createMany: notificationCreateMany },
     };
     const database = { $transaction: (callback: (value: typeof transaction) => Promise<unknown>) => callback(transaction) } as unknown as PrismaClient;
 
-    await new MembershipPriceRepository(database).createPrice({ amount, effectiveFrom: new Date("2030-10-01T00:00:00.000Z"), createdById: adminId });
+    await new MembershipPriceRepository(database).createPrice({ amount, effectiveFrom: new Date("2030-10-01T00:00:00.000Z"), createdById: adminId, idempotencyKey: "32f4164a-f26b-473a-901c-a2c8fd5dc3a8" });
     expect(transaction.user.findMany).not.toHaveBeenCalled();
+    expect(transaction.$executeRaw).not.toHaveBeenCalled();
     expect(notificationCreateMany).not.toHaveBeenCalled();
   });
 
@@ -60,13 +59,16 @@ describe("notification triggers", () => {
       membershipPrice: {
         create: jest.fn().mockResolvedValue({ id: "price-1", amount: { toString: () => "20000.00" }, effectiveFrom: new Date("2030-10-01T00:00:00.000Z"), createdAt: new Date(), createdById: adminId }),
         findFirst: jest.fn().mockResolvedValue(null),
+        findUnique: jest.fn().mockResolvedValue(null),
       },
       user: { findMany: jest.fn() },
+      $executeRaw: jest.fn(),
       notification: { createMany: notificationCreateMany },
     };
     const database = { $transaction: (callback: (value: typeof transaction) => Promise<unknown>) => callback(transaction) } as unknown as PrismaClient;
 
-    await new MembershipPriceRepository(database).createPrice({ amount: "20000", effectiveFrom: new Date("2030-10-01T00:00:00.000Z"), createdById: adminId });
+    await new MembershipPriceRepository(database).createPrice({ amount: "20000", effectiveFrom: new Date("2030-10-01T00:00:00.000Z"), createdById: adminId, idempotencyKey: "32f4164a-f26b-473a-901c-a2c8fd5dc3a8" });
+    expect(transaction.$executeRaw).not.toHaveBeenCalled();
     expect(notificationCreateMany).not.toHaveBeenCalled();
   });
 
@@ -91,7 +93,7 @@ describe("notification triggers", () => {
   });
 
   test("cancelling an event keeps the record and notifies active members and trainers", async () => {
-    const notificationCreateMany = jest.fn().mockResolvedValue({ count: 2 });
+    const executeRaw = jest.fn().mockResolvedValue(2);
     const event = {
       id: "event-1", title: "Torneo", description: "D", startsAt: new Date("2030-10-01T12:00:00.000Z"),
       location: "Sede", imageUrl: "https://example.com/event.jpg", status: "PUBLISHED", createdById: adminId,
@@ -102,8 +104,9 @@ describe("notification triggers", () => {
         findUnique: jest.fn().mockResolvedValue(event),
         update: jest.fn().mockResolvedValue({ ...event, status: "CANCELLED" }),
       },
-      user: { findMany: jest.fn().mockResolvedValue([{ id: memberId }, { id: "trainer-id" }]) },
-      notification: { createMany: notificationCreateMany },
+      $executeRaw: executeRaw,
+      user: { findMany: jest.fn() },
+      notification: { createMany: jest.fn() },
     };
     const runTransaction = jest.fn((callback: (value: typeof transaction) => Promise<unknown>, _options?: unknown) => callback(transaction));
     const database = { $transaction: runTransaction } as unknown as PrismaClient;
@@ -112,18 +115,9 @@ describe("notification triggers", () => {
     // Notifying every active user must not rely on Prisma's 5 s default for interactive transactions.
     expect(runTransaction).toHaveBeenCalledWith(expect.any(Function), { maxWait: 10_000, timeout: 60_000 });
     expect(transaction.$queryRaw).toHaveBeenCalledTimes(1);
-    expect(transaction.user.findMany).toHaveBeenCalledWith({ where: { role: { in: ["MEMBER", "TRAINER"] }, status: "ACTIVE" }, select: { id: true } });
-    expect(notificationCreateMany).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.arrayContaining([
-        expect.objectContaining({
-          userId: memberId,
-          type: "EVENT_CANCELLED",
-          dedupeKey: expect.stringContaining(event.id),
-          message: 'Se canceló el evento "Torneo" previsto para el 01/10/2030 a las 09:00.',
-        }),
-        expect.objectContaining({ userId: "trainer-id", type: "EVENT_CANCELLED" }),
-      ]),
-    }));
+    expect(executeRaw).toHaveBeenCalledTimes(1);
+    expect(transaction.user.findMany).not.toHaveBeenCalled();
+    expect(transaction.notification.createMany).not.toHaveBeenCalled();
   });
 
   test.each(["DRAFT", "CANCELLED"] as const)("EVE-03 does not announce a cancellation that starts from %s", async (previous) => {
@@ -139,12 +133,14 @@ describe("notification triggers", () => {
         update: jest.fn().mockResolvedValue({ ...event, status: "CANCELLED" }),
       },
       user: { findMany: jest.fn() },
+      $executeRaw: jest.fn(),
       notification: { createMany: notificationCreateMany },
     };
     const database = { $transaction: (callback: (value: typeof transaction) => Promise<unknown>) => callback(transaction) } as unknown as PrismaClient;
 
     await new EventRepository(database).updateStatus(event.id, { status: "CANCELLED" });
     expect(transaction.user.findMany).not.toHaveBeenCalled();
+    expect(transaction.$executeRaw).not.toHaveBeenCalled();
     expect(notificationCreateMany).not.toHaveBeenCalled();
   });
 

@@ -1,9 +1,7 @@
 import type { EventStatus, Prisma, PrismaClient, UserRole } from "../generated/prisma/client.js";
-import { eventCancelledNotice } from "../model/notification-message.js";
 import {
   AUDIENCE_TRANSACTION_OPTIONS,
-  createNotifications,
-  type NotificationRecipient,
+  createEventCancellationNotifications,
 } from "./notification-repository.js";
 import type {
   CreateEventInput,
@@ -114,18 +112,7 @@ export class EventRepository implements EventRepositoryPort {
       });
       // EVE-03: only an event that users could see is announced as cancelled. A draft never was.
       if (input.status === "CANCELLED" && current.status === "PUBLISHED") {
-        const users = await transaction.user.findMany({
-          where: { role: { in: ["MEMBER", "TRAINER"] }, status: "ACTIVE" },
-          select: { id: true },
-        });
-        const notice = eventCancelledNotice(current);
-        const notifications: NotificationRecipient[] = users.map((user) => ({
-          userId: user.id,
-          ...notice,
-          type: "EVENT_CANCELLED",
-          dedupeKey: `event-cancelled:${current.id}:${user.id}`,
-        }));
-        await createNotifications(transaction, notifications);
+        await createEventCancellationNotifications(transaction, current);
       }
       return updated;
     }, AUDIENCE_TRANSACTION_OPTIONS);

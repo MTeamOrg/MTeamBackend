@@ -46,7 +46,11 @@ export class AccountRecoveryRepository implements AccountRecoveryRepositoryPort 
         where: { tokenHash: token.tokenHash, userId: token.userId, expiresAt: { gt: effectiveNow } },
       });
       if (result.count !== 1) return false;
-      await transaction.user.update({ where: { id: token.userId }, data: { passwordHash, isPasswordChangeRequired: false } });
+      await transaction.user.update({ where: { id: token.userId }, data: {
+        passwordHash,
+        isPasswordChangeRequired: false,
+        sessionVersion: { increment: 1 },
+      } });
       await transaction.passwordRecoveryToken.deleteMany({ where: { userId: token.userId } });
       await transaction.userAuditLog.create({ data: {
         userId: token.userId, performedById: token.userId, action: "UPDATED", reason: "PASSWORD_RECOVERED",

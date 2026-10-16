@@ -26,6 +26,9 @@ export function createAuthenticationMiddleware(
     if (!user) {
       throw new ApplicationError(401, ERROR_CODE.UNAUTHORIZED, "Se requiere una autenticación válida");
     }
+    if (user.sessionVersion !== identity.sessionVersion) {
+      throw new ApplicationError(401, ERROR_CODE.UNAUTHORIZED, "La sesión fue revocada");
+    }
     if (user.status !== "ACTIVE") {
       throw new ApplicationError(403, ERROR_CODE.ACCOUNT_INACTIVE, "La cuenta se encuentra inactiva");
     }

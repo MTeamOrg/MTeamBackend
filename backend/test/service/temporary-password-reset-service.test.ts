@@ -23,14 +23,13 @@ function setup(targetExists = true) {
 }
 
 describe("AdminUserService.resetTemporaryPassword", () => {
-  test("stores only the hash and records the administrator actor", async () => {
+  test("generates a high-entropy temporary password, stores only its hash, and records the administrator actor", async () => {
     const { service, repository, passwordHasher } = setup();
 
-    await service.resetTemporaryPassword(userId, adminId, {
-      temporaryPassword: "temporary-password",
-    });
+    const temporaryPassword = await service.resetTemporaryPassword(userId, adminId);
 
-    expect(passwordHasher.hash).toHaveBeenCalledWith("temporary-password");
+    expect(temporaryPassword).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(passwordHasher.hash).toHaveBeenCalledWith(temporaryPassword);
     expect(repository.resetTemporaryPassword).toHaveBeenCalledWith(
       userId,
       adminId,
@@ -39,7 +38,7 @@ describe("AdminUserService.resetTemporaryPassword", () => {
     expect(repository.resetTemporaryPassword).not.toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
-      "temporary-password",
+      temporaryPassword,
     );
   });
 
@@ -47,9 +46,7 @@ describe("AdminUserService.resetTemporaryPassword", () => {
     const { service, repository, passwordHasher } = setup(false);
 
     await expect(
-      service.resetTemporaryPassword(userId, adminId, {
-        temporaryPassword: "temporary-password",
-      }),
+      service.resetTemporaryPassword(userId, adminId),
     ).rejects.toMatchObject({ statusCode: 404, code: "NOT_FOUND" });
     expect(passwordHasher.hash).not.toHaveBeenCalled();
     expect(repository.resetTemporaryPassword).not.toHaveBeenCalled();

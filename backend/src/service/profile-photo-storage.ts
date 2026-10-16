@@ -1,5 +1,6 @@
 import { ApplicationError } from "../error/application-error.js";
 import { ERROR_CODE } from "../error/error-code.js";
+import { supabaseStorageAuthHeaders } from "./supabase-storage-headers.js";
 
 export interface ProfilePhotoFile {
   buffer: Buffer;
@@ -12,7 +13,7 @@ export interface ProfilePhotoStorage {
 
 export interface ProfilePhotoStorageConfiguration {
   url: string | undefined;
-  serviceRoleKey: string | undefined;
+  apiKey: string | undefined;
   bucket: string | undefined;
 }
 
@@ -20,8 +21,8 @@ export class SupabaseProfilePhotoStorage implements ProfilePhotoStorage {
   constructor(private readonly configuration: ProfilePhotoStorageConfiguration) {}
 
   async upload(userId: string, file: ProfilePhotoFile): Promise<string> {
-    const { url, serviceRoleKey, bucket } = this.configuration;
-    if (!url || !serviceRoleKey || !bucket) {
+    const { url, apiKey, bucket } = this.configuration;
+    if (!url || !apiKey || !bucket) {
       throw new ApplicationError(
         503,
         ERROR_CODE.SERVICE_UNAVAILABLE,
@@ -37,8 +38,7 @@ export class SupabaseProfilePhotoStorage implements ProfilePhotoStorage {
     const uploadResponse = await fetch(uploadUrl, {
       method: "POST",
       headers: {
-        apikey: serviceRoleKey,
-        authorization: `Bearer ${serviceRoleKey}`,
+        ...supabaseStorageAuthHeaders(apiKey),
         "content-type": file.mimeType,
         "cache-control": "0",
         "x-upsert": "true",

@@ -4,7 +4,12 @@ import type {
   PrismaClient,
 } from "../generated/prisma/client.js";
 import { calculateMembershipStatus } from "../model/membership-status.js";
-import { membershipExpiredNotice, membershipExpiringNotice } from "../model/notification-message.js";
+import {
+  eventCancelledNotice,
+  membershipExpiredNotice,
+  membershipExpiringNotice,
+  membershipPriceIncreasedNotice,
+} from "../model/notification-message.js";
 import type { NotificationListQuery } from "../validator/notification-validator.js";
 
 const notificationSelect = {
@@ -48,9 +53,10 @@ export interface NotificationRecipient {
 }
 
 /**
- * Announcing something to every active user (a cancelled event, a price increase) inserts thousands of
- * rows in the same transaction as the change itself. Prisma aborts interactive transactions after 5
- * seconds by default, which rolled the change back once the audience grew past roughly 15 000 users.
+ * The audience fan-outs for price increases and event cancellations use INSERT ... SELECT, so Node
+ * does not load and rebuild thousands of recipients. Keep a bounded transaction allowance because the
+ * notification rows still commit atomically with their business change; the timeout is headroom, not
+ * the only mitigation for a large audience.
  */
 export const AUDIENCE_TRANSACTION_OPTIONS = { maxWait: 10_000, timeout: 60_000 } as const;
 
@@ -67,6 +73,56 @@ export async function createNotifications(
     data: recipients,
     skipDuplicates: true,
   });
+}
+
+/**
+ * Inserts a price increase notice for each active member without loading the audience into the API
+ * process. This runs in the same transaction as the price write, so price and notices commit or
+ * roll back together while Postgres performs the bulk fan-out set-wise.
+ */
+export async function createMembershipPriceIncreaseNotifications(
+  transaction: Prisma.TransactionClient,
+  price: { id: string; amount: string; effectiveFrom: Date },
+): Promise<void> {
+  const notice = membershipPriceIncreasedNotice(price);
+  await transaction.$executeRaw`
+    INSERT INTO "notification" ("id", "user_id", "dedupe_key", "title", "message", "type", "created_at")
+    SELECT
+      gen_random_uuid(),
+      member."id",
+      'membership-price-changed:' || CAST(${price.id} AS text) || ':' || CAST(member."id" AS text),
+      ${notice.title},
+      ${notice.message},
+      'MEMBERSHIP_PRICE_CHANGED',
+      CURRENT_TIMESTAMP
+    FROM "user" AS member
+    WHERE member."role" = 'MEMBER'
+      AND member."status" = 'ACTIVE'
+    ON CONFLICT ("dedupe_key") DO NOTHING
+  `;
+}
+
+/** Fan-out a published event cancellation to active members and trainers inside its state transaction. */
+export async function createEventCancellationNotifications(
+  transaction: Prisma.TransactionClient,
+  event: { id: string; title: string; startsAt: Date },
+): Promise<void> {
+  const notice = eventCancelledNotice(event);
+  await transaction.$executeRaw`
+    INSERT INTO "notification" ("id", "user_id", "dedupe_key", "title", "message", "type", "created_at")
+    SELECT
+      gen_random_uuid(),
+      recipient."id",
+      'event-cancelled:' || CAST(${event.id} AS text) || ':' || CAST(recipient."id" AS text),
+      ${notice.title},
+      ${notice.message},
+      'EVENT_CANCELLED',
+      CURRENT_TIMESTAMP
+    FROM "user" AS recipient
+    WHERE recipient."role" IN ('MEMBER', 'TRAINER')
+      AND recipient."status" = 'ACTIVE'
+    ON CONFLICT ("dedupe_key") DO NOTHING
+  `;
 }
 
 export class NotificationRepository implements NotificationRepositoryPort {

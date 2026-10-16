@@ -20,7 +20,11 @@ test("locks user, consumes unexpired token, updates password, invalidates other 
   expect(database.$transaction).toHaveBeenCalledTimes(1);
   expect(transaction.$queryRaw).toHaveBeenCalled();
   expect(transaction.passwordRecoveryToken.deleteMany).toHaveBeenNthCalledWith(1, { where: { tokenHash: "hash", userId: "user-id", expiresAt: { gt: expect.any(Date) } } });
-  expect(transaction.user.update).toHaveBeenCalledWith({ where: { id: "user-id" }, data: { passwordHash: "new-hash", isPasswordChangeRequired: false } });
+  expect(transaction.user.update).toHaveBeenCalledWith({ where: { id: "user-id" }, data: {
+    passwordHash: "new-hash",
+    isPasswordChangeRequired: false,
+    sessionVersion: { increment: 1 },
+  } });
   expect(transaction.passwordRecoveryToken.deleteMany).toHaveBeenNthCalledWith(2, { where: { userId: "user-id" } });
   expect(transaction.userAuditLog.create).toHaveBeenCalledWith({ data: { userId: "user-id", performedById: "user-id", action: "UPDATED", reason: "PASSWORD_RECOVERED" } });
   expect(transaction.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(transaction.user.update.mock.invocationCallOrder[0]!);

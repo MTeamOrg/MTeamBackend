@@ -22,7 +22,7 @@ beforeAll(async () => {
     id: "83cd902e-0475-4c92-943c-129b751dacee",
     firstName: "Lara", lastName: "Frenkel", email: "lara@example.com",
     passwordHash: await new PasswordService().hash(password),
-    role: "MEMBER", status: "ACTIVE", isPasswordChangeRequired: false,
+    role: "MEMBER", status: "ACTIVE", isPasswordChangeRequired: false, sessionVersion: 0,
   };
 });
 
@@ -52,10 +52,11 @@ describe("POST /api/auth/login", () => {
     expect(response.status).toBe(200);
     expect(response.headers["cache-control"]).toBe("private, no-store");
     expect(repository.findByEmail).toHaveBeenCalledWith(user.email);
-    const { passwordHash: _passwordHash, ...safeUser } = user;
+    const { passwordHash: _passwordHash, sessionVersion: _sessionVersion, ...safeUser } = user;
     expect(response.body).toEqual({ accessToken: expect.any(String), tokenType: "Bearer", expiresIn: 3600, user: safeUser });
     const claims = jwt.verify(response.body.accessToken, secret, { algorithms: ["HS256"] }) as jwt.JwtPayload;
-    expect(Object.keys(claims).sort()).toEqual(["exp", "role", "sub"]);
+    expect(Object.keys(claims).sort()).toEqual(["exp", "role", "sessionVersion", "sub"]);
+    expect(claims.sessionVersion).toBe(0);
     expect(claims.sub).toBe(user.id);
     expect(claims.role).toBe(user.role);
     expect(claims.exp).toBeGreaterThanOrEqual(before + 3600);

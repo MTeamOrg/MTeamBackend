@@ -11,7 +11,7 @@ describe("SupabaseProfilePhotoStorage", () => {
       .mockResolvedValue(new Response(null, { status: 200 }));
     const storage = new SupabaseProfilePhotoStorage({
       url: "https://project.supabase.co",
-      serviceRoleKey: "test-service-role-key",
+      apiKey: "test-service-role-key",
       bucket: "profile-photos",
     });
 
@@ -31,10 +31,26 @@ describe("SupabaseProfilePhotoStorage", () => {
     );
   });
 
+  test("sends a new secret API key on apikey without a Bearer JWT header", async () => {
+    const fetchMock = jest.spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(null, { status: 200 }));
+    const storage = new SupabaseProfilePhotoStorage({
+      url: "https://project.supabase.co",
+      apiKey: "sb_secret_test",
+      bucket: "profile-photos",
+    });
+
+    await storage.upload(userId, { buffer: Buffer.from("photo"), mimeType: "image/png" });
+
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    expect(headers.apikey).toBe("sb_secret_test");
+    expect(headers).not.toHaveProperty("authorization");
+  });
+
   test("fails clearly when storage is not configured", async () => {
     const storage = new SupabaseProfilePhotoStorage({
       url: undefined,
-      serviceRoleKey: undefined,
+      apiKey: undefined,
       bucket: undefined,
     });
 
@@ -55,7 +71,7 @@ describe("SupabaseProfilePhotoStorage", () => {
       .mockResolvedValue(new Response(null, { status: 500 }));
     const storage = new SupabaseProfilePhotoStorage({
       url: "https://project.supabase.co",
-      serviceRoleKey: "test-service-role-key",
+      apiKey: "test-service-role-key",
       bucket: "profile-photos",
     });
 

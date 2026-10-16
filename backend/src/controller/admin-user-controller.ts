@@ -9,7 +9,7 @@ import type {
 } from "../service/admin-user-service.js";
 import {
   passwordResetParamsSchema,
-  resetPasswordSchema,
+  resetPasswordBodySchema,
 } from "../validator/reset-password-validator.js";
 import {
   adminUserListQuerySchema,
@@ -194,7 +194,7 @@ export class AdminUserController {
 
   resetTemporaryPassword: RequestHandler = async (request, response) => {
     const paramsValidation = passwordResetParamsSchema.safeParse(request.params);
-    const bodyValidation = resetPasswordSchema.safeParse(request.body);
+    const bodyValidation = resetPasswordBodySchema.safeParse(request.body ?? {});
     if (!paramsValidation.success || !bodyValidation.success) {
       throw new ApplicationError(
         400,
@@ -209,11 +209,10 @@ export class AdminUserController {
       );
     }
 
-    await this.userService.resetTemporaryPassword(
+    const temporaryPassword = await this.userService.resetTemporaryPassword(
       paramsValidation.data.userId,
       request.authenticatedUser!.id,
-      bodyValidation.data,
     );
-    response.status(204).send();
+    response.status(200).json({ temporaryPassword });
   };
 }

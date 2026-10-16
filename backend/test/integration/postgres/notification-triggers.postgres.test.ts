@@ -52,7 +52,25 @@ describe("class change notifications (API, services and PostgreSQL)", () => {
 
   test("announces an assignment with the Buenos Aires date, time and branch", async () => {
     const { admin, trainer, branch } = await setup();
-    await createClassThroughApi(admin as never, branch.id, trainer.id);
+    const classId = await createClassThroughApi(admin as never, branch.id, trainer.id);
+
+    const persistedClass = await database.scheduledClass.findUniqueOrThrow({
+      where: { id: classId },
+      select: {
+        activity: true,
+        startsAt: true,
+        branchId: true,
+        trainerId: true,
+        schedule: { select: { weekStartsOn: true } },
+      },
+    });
+    expect(persistedClass).toMatchObject({
+      activity: "Yoga",
+      startsAt: new Date(LATE_EVENING),
+      branchId: branch.id,
+      trainerId: trainer.id,
+      schedule: { weekStartsOn: new Date(`${WEEK}T00:00:00.000Z`) },
+    });
 
     const [assigned, ...rest] = await notificationsOf(trainer.id);
     expect(rest).toHaveLength(0);
@@ -66,6 +84,7 @@ describe("class change notifications (API, services and PostgreSQL)", () => {
 
     const deleted = await request(app).delete(`/api/scheduled-classes/${classId}`).set(bearer(admin));
     expect(deleted.status).toBe(204);
+    expect(await database.scheduledClass.findUnique({ where: { id: classId } })).toBeNull();
 
     expect(await titlesOf(trainer.id)).toEqual(["Clase asignada", "Clase cancelada"]);
     const cancellation = (await notificationsOf(trainer.id)).find(({ title }) => title === "Clase cancelada");
@@ -88,6 +107,11 @@ describe("class change notifications (API, services and PostgreSQL)", () => {
     expect(rescheduled.status).toBe(200);
     const moved = await request(app).patch(`/api/scheduled-classes/${classId}`).set(bearer(admin)).send({ branchId: otherBranch.id });
     expect(moved.status).toBe(200);
+    expect(await database.scheduledClass.findUniqueOrThrow({ where: { id: classId } })).toMatchObject({
+      startsAt: new Date(NEXT_MORNING),
+      branchId: otherBranch.id,
+      trainerId: trainer.id,
+    });
 
     const messages = (await notificationsOf(trainer.id)).filter(({ title }) => title === "Clase modificada").map(({ message }) => message).sort();
     expect(messages).toEqual([
@@ -286,7 +310,10 @@ describe("membership price notifications (API, services and PostgreSQL)", () => 
     const inactiveMember = await fixtures.user("MEMBER", { status: "INACTIVE" });
     const trainer = await fixtures.user("TRAINER");
     const publish = async (amount: number, effectiveFrom: string) => {
-      const response = await request(app).post("/api/membership-prices").set(bearer(admin)).send({ amount, effectiveFrom });
+      const response = await request(app).post("/api/membership-prices")
+        .set(bearer(admin))
+        .set("Idempotency-Key", randomUUID())
+        .send({ amount, effectiveFrom });
       expect(response.status).toBe(201);
       await fixtures.trackPricesBy(admin.id);
     };
@@ -294,9 +321,17 @@ describe("membership price notifications (API, services and PostgreSQL)", () => 
   }
 
   test("notifies active members of an increase with the new amount and Buenos Aires effective date", async () => {
-    const { memberA, memberB, inactiveMember, trainer, publish } = await setup();
+    const { admin, memberA, memberB, inactiveMember, trainer, publish } = await setup();
     await publish(20000, "2090-01-01T03:00:00.000Z");
     await publish(25000.5, "2090-06-01T02:30:00.000Z"); // 31/05/2090 23:30 ART
+
+    const history = await request(app).get("/api/membership-prices?page=1&limit=100").set(bearer(admin));
+    expect(history.status).toBe(200);
+    expect(history.body.items.slice(0, 2)).toMatchObject([
+      { amount: "25000.5", previousAmount: "20000" },
+      { amount: "20000", previousAmount: null },
+    ]);
+    expect(history.body.items[0]).not.toHaveProperty("idempotencyKey");
 
     for (const member of [memberA, memberB]) {
       expect((await notificationsOf(member.id)).filter(({ type }) => type === "MEMBERSHIP_PRICE_CHANGED")).toEqual([
@@ -330,12 +365,21 @@ describe("medical certificate result notifications (API, services and PostgreSQL
     const certificate = await fixtures.pendingCertificate(owner.id);
     const review = (body: Record<string, unknown>) => request(app)
       .patch(`/api/medical-certificates/${certificate.id}/review`).set(bearer(admin)).send(body);
-    return { admin, owner, other, review };
+    return { admin, owner, other, certificate, review };
   }
 
   test("tells only the owner that the certificate was approved", async () => {
-    const { owner, other, review } = await setup();
+    const { admin, owner, other, certificate, review } = await setup();
     expect((await review({ status: "APPROVED" })).status).toBe(200);
+
+    const persisted = await database.medicalCertificate.findUniqueOrThrow({ where: { id: certificate.id } });
+    expect(persisted).toMatchObject({
+      memberId: owner.id,
+      status: "APPROVED",
+      reviewedById: admin.id,
+      reviewComment: null,
+    });
+    expect(persisted.reviewedAt).toBeInstanceOf(Date);
 
     expect(await notificationsOf(owner.id)).toEqual([
       expect.objectContaining({
@@ -348,11 +392,19 @@ describe("medical certificate result notifications (API, services and PostgreSQL
   });
 
   test("includes the recorded observation when the certificate is rejected", async () => {
-    const { owner, other, review } = await setup();
+    const { admin, owner, other, certificate, review } = await setup();
     expect((await review({ status: "REJECTED" })).status).toBe(400);
     expect(await notificationsOf(owner.id)).toHaveLength(0);
 
     expect((await review({ status: "REJECTED", reviewComment: "  Falta la firma del profesional.  " })).status).toBe(200);
+    const persisted = await database.medicalCertificate.findUniqueOrThrow({ where: { id: certificate.id } });
+    expect(persisted).toMatchObject({
+      memberId: owner.id,
+      status: "REJECTED",
+      reviewedById: admin.id,
+      reviewComment: "Falta la firma del profesional.",
+    });
+    expect(persisted.reviewedAt).toBeInstanceOf(Date);
     expect(await notificationsOf(owner.id)).toEqual([
       expect.objectContaining({
         title: "Apto médico rechazado",
