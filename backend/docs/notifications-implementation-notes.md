@@ -10,7 +10,7 @@ Los avisos son internos y se muestran dentro de la plataforma. No hay canales pu
 |---|---|---|---|---|
 | CUO-06 | Se registra un valor de cuota **mayor** que el inmediatamente anterior | Socios activos | Aumento de cuota: nuevo importe y fecha desde la que se aplica | `membership-price-changed:{precio}:{socio}` |
 | CUO-04/05 | Al abrir la bandeja: la última acreditación vence dentro de 5 días o menos | El propio socio | Cuota próxima a vencer: fecha y hora de vencimiento | `membership-expiring:{socio}:{vencimiento}` |
-| CUO-05 | Al abrir la bandeja: la vigencia terminó o nunca hubo un pago acreditado | El propio socio | Cuota vencida (con la fecha cuando existe) | `membership-expired:{socio}:{vencimiento\|none}` |
+| CUO-05 | Al abrir la bandeja: la vigencia terminó o nunca hubo un pago acreditado | El propio socio | Cuota vencida: con la fecha cuando existe; sin pagos explica que todavía no hay un pago acreditado | `membership-expired:{socio}:{vencimiento\|none}` |
 | APM-06 | Un administrador aprueba o rechaza un apto médico | Solo el socio dueño | Resultado; si se rechazó, incluye la observación | `medical-certificate-reviewed:{apto}:{estado}` |
 | NOV-03 | Se crea una clase con entrenador o se copia una semana | El entrenador asignado | Clase asignada | `class-changed:{clase}:created:{entrenador}` |
 | NOV-03 | Cambia la actividad, el horario o la sede | El entrenador que conserva la clase | Clase modificada, indicando qué cambió | `class-changed:{clase}:{cambio}:{entrenador}` |
@@ -24,6 +24,8 @@ Notas de alcance:
 - La cancelación de un evento en borrador no se avisa: ningún usuario llegó a verlo como publicado (EVE-03 habla de eventos publicados). El evento se conserva con estado `CANCELLED` en ambos casos.
 - Los administradores no reciben avisos automáticos y la interfaz no les muestra la pantalla de notificaciones, porque ningún evento del alcance los tiene como destinatarios.
 - `GENERAL` queda reservado para comunicaciones internas. Publicar una novedad no genera notificaciones: NOV-03 no la incluye y las novedades ya se consultan en su propio apartado (ENT-04).
+- Los textos de cuota vencida no piden al socio que "registre un pago": los pagos los acredita siempre un administrador (R-07). Un socio sin pagos recibe una explicación (todavía no hay un pago acreditado, por eso la cuota figura vencida, CUO-05) y no un "venció" ni "renová" que no corresponde.
+- Copiar una semana avisa a cada entrenador por cada clase que recibe: en el sistema la copia es una acción explícita del administrador ("Generar desde la semana anterior") y las clases nuevas son visibles para todos desde que se crean. El diagrama de secuencia del cronograma no dibuja el aviso en la copia; el alcance (CLA-04, NOV-03) ni lo exige ni lo prohíbe. Si se prefiere una copia silenciosa, el cambio es quitar `notifyClassesAssigned` de `copySchedule` y ajustar sus pruebas.
 
 ## 2. Deduplicación, concurrencia y transacciones
 
@@ -53,6 +55,18 @@ Por qué alcanza:
 2. No depende de infraestructura: funciona igual si el servidor se reinicia, duerme (planes gratuitos) o hay varias instancias. No hay que configurar cron, workers ni servicios pagos.
 3. Es idempotente y seguro ante concurrencia: el aviso de un vencimiento se identifica por `socio + vencimiento`. Se verificó con 10 consultas simultáneas.
 
+Evidencia que sostiene la decisión (cierre del módulo):
+
+| Escenario exigido | Cómo se verificó |
+|---|---|
+| El socio recibe el aviso cuando corresponde, aunque solo use la plataforma | E2E con backend y PostgreSQL reales: el socio permanece en su panel, entra en los 5 días y el aviso aparece; la cuota vence con la página abierta y aparece el segundo aviso, sin recargar ni abrir la bandeja (el sondeo de 60 s del espacio de trabajo lo dispara) |
+| No se duplica al abrir repetidamente, con varias sesiones o varias instancias | 30 aperturas simultáneas repartidas en dos instancias del servidor con conexiones separadas generan un solo aviso; otro dispositivo lee los mismos avisos y no crea ninguno |
+| Persiste y sobrevive al reinicio de Render | Los avisos están en PostgreSQL; la prueba de persistencia reinicia la aplicación y el estado se conserva |
+| Umbral exacto de cinco días, medianoche, mes, año y bisiesto | Pruebas con reloj controlado: 5 días exactos avisa, 5 días + 1 ms no, 1 ms antes avisa, el instante del vencimiento ya es "vencida" |
+| Pago nuevo, anulación e historial | Un pago nuevo no crea avisos del período nuevo; anularlo vuelve a un estado ya avisado y no lo repite; tras anular el último de dos pagos se avisa el vencimiento del anterior y el aviso previo sigue en el historial |
+
+Alternativa B (proceso programado): solo aportaría valor para un canal fuera de la aplicación, excluido del alcance (3.2). En la infraestructura gratuita (R-06) exigiría un servicio externo (cron del proveedor, GitHub Actions o `pg_cron`) y una credencial, sin cambiar lo que el socio ve. No se agrega.
+
 Refuerzos incluidos: reutiliza `calculateMembershipStatus` (el mismo criterio de 5 días que usan el listado de socios y el control de acceso), informa el vencimiento exacto en horario argentino y, si la generación fallara, la bandeja existente sigue siendo legible (el error se registra en el log del servidor).
 
 Limitación conocida: la consulta (`GET`) tiene un efecto lateral idempotente. Si en el futuro hiciera falta avisar sin que el socio abra la aplicación (por ejemplo por correo), el punto de partida es `NotificationRepository.ensureMembershipStatusNotification(userId, now)`: se puede invocar por lote desde un job programado (cron del proveedor, GitHub Actions o `pg_cron`) sin cambiar el modelo, porque ya es idempotente.
@@ -76,7 +90,7 @@ Limitación conocida: la consulta (`GET`) tiene un efecto lateral idempotente. S
 ## 7. Decisiones funcionales pendientes
 
 - **Acciones manuales de ADMIN:** el perfil de administrador menciona administrar notificaciones, pero no hay criterios para redactarlas, elegir destinatarios, editarlas o retirarlas. No se agregan esas operaciones.
-- **Destinatarios de cambios de clase:** el modelo no relaciona socios con clases y el alcance excluye reservas y cupos. Por eso se notifica solo al entrenador asignado (y al anterior cuando se lo reemplaza).
+- **Destinatarios de cambios de clase:** el modelo no relaciona socios con clases y el alcance excluye reservas y cupos (R-09). Por eso se notifica solo al entrenador asignado (y al anterior cuando se lo reemplaza). Los socios se enteran de los cambios de horario por el cronograma público (CLA-01) y por Novedades, cuyo propósito incluye "cambios de horarios" (NOV-01).
 - **Avisos fuera de la aplicación:** el correo electrónico es opcional en el alcance y no se implementó.
 
 ## 8. Discrepancia del Modelo de Datos
@@ -90,7 +104,7 @@ Desde `backend/`:
 | Qué | Comando |
 |---|---|
 | Unitarias (con mocks) | `npm test` |
-| Integración con PostgreSQL real: API, autenticación, servicios, repositorios, restricciones del esquema (columnas, enum, índices, claves foráneas), persistencia tras reiniciar la aplicación y audiencias grandes | `npm run test:integration:notifications` |
+| Integración con PostgreSQL real: API, autenticación (incluida la sesión revocada), servicios, repositorios, restricciones del esquema (columnas, enum, índices, claves foráneas), persistencia tras reiniciar la aplicación, audiencias grandes, **integridad transaccional** (un trigger hace fallar el aviso y se comprueba que cada operación administrativa se deshace y su reintento funciona), **concurrencia** (copias, aumentos, modificar+eliminar y reasignaciones simultáneas, 30 aperturas desde dos instancias) y **novedades por audiencia** | `npm run test:integration:notifications` |
 | Cobertura del módulo (meta de la materia: 80 %) | `npm run test:coverage:notifications` |
 | Contrato y esquema | `npm run openapi:validate` · `npm run prisma:validate` |
 
@@ -126,6 +140,13 @@ La verificación de punta a punta con el navegador (frontend contra este backend
 | N-10 | El umbral de 5 días estaba duplicado | Copia de la regla de `membership-status` | Baja | Se reutiliza `calculateMembershipStatus` |
 | N-11 | Código muerto (`audienceRoles`) | Sin usos | Baja | Eliminado |
 | N-12 | Con 25.000 socios activos, cancelar un evento publicado o registrar un aumento de cuota fallaba con `A commit cannot be executed on an expired transaction` y se revertía todo | La transacción interactiva por defecto de Prisma dura 5 s y el reparto tardaba 8–10 s | Media | Timeout explícito de 60 s en esas dos transacciones; prueba de regresión con 4.000 socios y un cliente con timeout por defecto de 100 ms |
+| N-13 | El aviso de cuota vencida pedía al socio "registrar un nuevo pago" (solo un administrador acredita pagos, R-07) y a quien nunca pagó le decía que renovara un acceso que no tenía | Texto único escrito sin distinguir el caso de CUO-05 "sin pago acreditado" | Media | Textos nuevos en `membershipExpiredNotice`; los avisos ya generados conservan el texto con el que se guardaron |
+| N-14 | (Frontend) Leer un aviso reconstruía la lista: en el celular, con 20 avisos, la página volvía al inicio (scroll 3.500 px → 0), el aviso se recreaba y el foco caía al `body` | `reload()` pone la pantalla en "Cargando…" y desmonta la lista | Media | Actualización local inmediata, refresco en segundo plano y foco devuelto al aviso; reproducido antes y verificado después con navegador y datos reales |
+| N-15 | (Frontend) Una misma tarjeta mostraba la fecha con reloj de 12 h y año de 2 dígitos en la cabecera y con 24 h y año de 4 dígitos en el texto del aviso | `formatDateTime` usaba los estilos cortos de `es-AR` | Media | `dd/mm/aaaa HH:mm` en horario argentino, independiente de la zona del navegador |
+| N-16 | (Frontend) El error de red decía "Verificá que el backend esté iniciado" a un socio | Mensaje pensado para desarrollo | Baja | "Revisá tu conexión a internet e intentá nuevamente" |
+| N-17 | (Frontend) No existía la acción "abrir una notificación" del diagrama de secuencia (solo un botón "Marcar como leída") | Brecha entre diagrama y pantalla | Media | "Ver detalle" abre el aviso, lo marca como leído y muestra cuándo llegó y cuándo se leyó; el botón explícito se conserva |
+
+Verificado sin cambios (no se encontraron defectos): atomicidad aviso+operación (7 operaciones), concurrencia de copias, aumentos, bajas y reasignaciones, deduplicación por evento, aislamiento entre cuentas, sesión revocada, umbral de 5 días, fechas en horario argentino, novedades por audiencia y estado.
 
 Frontend (repositorio `MTeamFrontend`): el celular no tenía forma de llegar a Notificaciones (la barra inferior tiene cinco pestañas), no había contador de no leídas, "Marcar todas como leídas" miraba solo la página visible, la pantalla no se actualizaba con la aplicación abierta y las pruebas E2E solo usaban una API simulada.
 
@@ -134,5 +155,7 @@ Frontend (repositorio `MTeamFrontend`): el celular no tenía forma de llegar a N
 - El README del frontend decía que eventos, novedades y notificaciones estaban "pendientes"; solo se corrigió lo referido a notificaciones.
 - El frontend no tiene workflow de CI (lint, build y tests no se ejecutan automáticamente).
 - Los archivos de test del backend no se tipan (SWC los transforma sin chequeo) y varios tienen errores de tipos bajo el `tsconfig` estricto.
-- El formato de fecha de `formatDateTime` del frontend usa el reloj de 12 horas por defecto de `es-AR`, mientras que los textos de los avisos usan 24 horas.
 - Un test unitario del frontend (`AdminUsersScreen`) agotó los 5 s de Vitest en una ejecución con la máquina cargada; no es de este módulo y no se reprodujo luego.
+- La recuperación de contraseña por correo (`/auth/password-recovery`) contradice USR-04 y el diagrama "Registro e inicio de sesión", que la dejan fuera de alcance y la resuelven con un administrador que asigna una contraseña temporal (que también existe).
+- `GET /dashboard` figura en `openapi.yaml` pero el backend no lo implementa (responde 404); el frontend usa `/admin/dashboard/metrics`.
+- Los pagos se acreditan con `accreditedAt = now()` y la base impone `expires_at = accredited_at + 30 días`, por lo que ordenar "el último pago" por vencimiento (avisos) o por acreditación (estado de cuota, acceso, listado) es equivalente hoy; conviene unificarlo si algún día se permitiera acreditar con una fecha distinta.
