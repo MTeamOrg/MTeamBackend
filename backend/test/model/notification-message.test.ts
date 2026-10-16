@@ -130,11 +130,20 @@ describe("other notices", () => {
       message: "Tu cuota vence el 31/12/2036 a las 23:59.",
     });
     expect(membershipExpiredNotice(new Date("2036-03-02T15:00:00.000Z")).message)
-      .toBe("Tu cuota venció el 02/03/2036 a las 12:00. Registrá un nuevo pago para mantener tu acceso.");
+      .toBe("Tu cuota venció el 02/03/2036 a las 12:00. Acercate a una sede de M-Team para abonarla: un administrador acreditará el pago y renovará tu acceso.");
     expect(membershipExpiredNotice(null)).toEqual({
       title: "Cuota vencida",
-      message: "Tu cuota se encuentra vencida. Registrá un nuevo pago para mantener tu acceso.",
+      message: "Todavía no tenés un pago acreditado, por eso tu cuota figura como vencida. Acercate a una sede de M-Team para abonarla: un administrador acreditará el pago y habilitará tu acceso.",
     });
+  });
+
+  test("an expired fee never asks the member to register a payment, which only an administrator can credit (R-07)", () => {
+    for (const expiresAt of [null, new Date("2036-03-02T15:00:00.000Z")]) {
+      expect(membershipExpiredNotice(expiresAt).message).not.toMatch(/Registr[aá] /);
+      expect(membershipExpiredNotice(expiresAt).message).toContain("un administrador acreditará el pago");
+    }
+    // A member who never paid is not told that something "expired" or must be "renewed".
+    expect(membershipExpiredNotice(null).message).not.toMatch(/venci[óo] el|renovar/);
   });
 
   test("medical certificate result includes the observation only when it was rejected", () => {

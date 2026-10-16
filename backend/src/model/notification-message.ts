@@ -113,12 +113,18 @@ export function membershipExpiringNotice(expiresAt: Date): NotificationNotice {
   };
 }
 
+/**
+ * CUO-05 considers a fee expired both after its 30 days and when no accredited payment exists. Payments are
+ * credited by an administrator (R-07), so the text never asks the member to register one, and a member who
+ * never paid is told why the fee shows as expired instead of being told it "expired" or must be "renewed".
+ */
 export function membershipExpiredNotice(expiresAt: Date | null): NotificationNotice {
+  const howToPay = "Acercate a una sede de M-Team para abonarla: un administrador acreditará el pago";
   return {
     title: "Cuota vencida",
     message: expiresAt
-      ? `Tu cuota venció el ${formatGymDateTime(expiresAt)}. Registrá un nuevo pago para mantener tu acceso.`
-      : "Tu cuota se encuentra vencida. Registrá un nuevo pago para mantener tu acceso.",
+      ? `Tu cuota venció el ${formatGymDateTime(expiresAt)}. ${howToPay} y renovará tu acceso.`
+      : `Todavía no tenés un pago acreditado, por eso tu cuota figura como vencida. ${howToPay} y habilitará tu acceso.`,
   };
 }
 

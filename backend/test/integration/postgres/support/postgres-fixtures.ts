@@ -9,6 +9,7 @@ import { AuthController } from "../../../../src/controller/auth-controller.js";
 import { EventController } from "../../../../src/controller/event-controller.js";
 import { MedicalCertificateController } from "../../../../src/controller/medical-certificate-controller.js";
 import { MembershipPriceController } from "../../../../src/controller/membership-price-controller.js";
+import { NewsPostController } from "../../../../src/controller/news-post-controller.js";
 import { NotificationController } from "../../../../src/controller/notification-controller.js";
 import { PaymentController } from "../../../../src/controller/payment-controller.js";
 import { ScheduledClassController } from "../../../../src/controller/scheduled-class-controller.js";
@@ -21,6 +22,7 @@ import { EventRepository } from "../../../../src/repository/event-repository.js"
 import { MedicalCertificateRepository } from "../../../../src/repository/medical-certificate-repository.js";
 import { MemberMembershipRepository } from "../../../../src/repository/member-membership-repository.js";
 import { MembershipPriceRepository } from "../../../../src/repository/membership-price-repository.js";
+import { NewsPostRepository } from "../../../../src/repository/news-post-repository.js";
 import { NotificationRepository } from "../../../../src/repository/notification-repository.js";
 import { PaymentRepository } from "../../../../src/repository/payment-repository.js";
 import { ScheduledClassRepository } from "../../../../src/repository/scheduled-class-repository.js";
@@ -31,6 +33,7 @@ import { createAuthRouter, createProtectedAuthRouter } from "../../../../src/rou
 import { createEventRouter } from "../../../../src/route/event-route.js";
 import { createMedicalCertificateRouter } from "../../../../src/route/medical-certificate-route.js";
 import { createMembershipPriceRouter } from "../../../../src/route/membership-price-route.js";
+import { createNewsPostRouter } from "../../../../src/route/news-post-route.js";
 import { createNotificationRouter } from "../../../../src/route/notification-route.js";
 import { createPaymentRouter } from "../../../../src/route/payment-route.js";
 import { createScheduledClassRouter } from "../../../../src/route/scheduled-class-route.js";
@@ -40,6 +43,7 @@ import { AuthService } from "../../../../src/service/auth-service.js";
 import { EventService } from "../../../../src/service/event-service.js";
 import { MedicalCertificateService } from "../../../../src/service/medical-certificate-service.js";
 import { MembershipPriceService } from "../../../../src/service/membership-price-service.js";
+import { NewsPostService } from "../../../../src/service/news-post-service.js";
 import { NotificationService } from "../../../../src/service/notification-service.js";
 import { PaymentService } from "../../../../src/service/payment-service.js";
 import { PasswordService } from "../../../../src/service/password-service.js";
@@ -120,6 +124,11 @@ export function createIntegrationApp(options: { now?: () => Date; database?: Pri
     authenticate,
     requirePasswordChangeCompleted,
   ));
+  app.use("/api", createNewsPostRouter(
+    new NewsPostController(new NewsPostService(new NewsPostRepository(database))),
+    authenticate,
+    requirePasswordChangeCompleted,
+  ));
   app.use("/api", createMembershipPriceRouter(
     new MembershipPriceController(new MembershipPriceService(new MembershipPriceRepository(database))),
     authenticate,
@@ -143,8 +152,9 @@ export function createIntegrationApp(options: { now?: () => Date; database?: Pri
   return app;
 }
 
-export function bearer(user: TestUser): { Authorization: string } {
-  return { Authorization: `Bearer ${tokenService.sign(user)}` };
+/** `sessionVersion` is the one the session was issued with (0 for a session that was never revoked). */
+export function bearer(user: TestUser, options: { sessionVersion?: number } = {}): { Authorization: string } {
+  return { Authorization: `Bearer ${tokenService.sign({ ...user, sessionVersion: options.sessionVersion })}` };
 }
 
 /** A token with the right shape but a wrong secret or an expiry in the past. */
@@ -166,6 +176,7 @@ export function createFixtures() {
   const priceIds: string[] = [];
   const certificateIds: string[] = [];
   const paymentIds: string[] = [];
+  const newsPostIds: string[] = [];
   const bulkRunId = randomUUID().replaceAll("-", "").slice(0, 8);
   let usedBulkMembers = false;
 
@@ -287,6 +298,33 @@ export function createFixtures() {
     for (const item of found) if (!eventIds.includes(item.id)) eventIds.push(item.id);
   }
 
+  async function newsPost(
+    adminId: string,
+    audience: "ALL" | "MEMBERS" | "TRAINERS",
+    status: "DRAFT" | "PUBLISHED" | "INACTIVE",
+    title = `Novedad ${randomUUID()}`,
+  ) {
+    const created = await database.newsPost.create({
+      data: {
+        title,
+        content: "PostgreSQL integration fixture",
+        audience,
+        status,
+        publishedAt: status === "DRAFT" ? null : new Date(),
+        createdById: adminId,
+      },
+      select: { id: true, title: true },
+    });
+    newsPostIds.push(created.id);
+    return created;
+  }
+
+  /** Ensures news posts created through the API are also removed afterwards. */
+  async function trackNewsPostsBy(adminId: string): Promise<void> {
+    const found = await database.newsPost.findMany({ where: { createdById: adminId }, select: { id: true } });
+    for (const item of found) if (!newsPostIds.includes(item.id)) newsPostIds.push(item.id);
+  }
+
   async function pendingCertificate(memberId: string) {
     const created = await database.medicalCertificate.create({
       data: { memberId, fileUrl: `${memberId}/fixture.pdf`, status: "PENDING" },
@@ -342,6 +380,7 @@ export function createFixtures() {
     if (paymentIds.length) await database.payment.deleteMany({ where: { id: { in: paymentIds } } });
     if (priceIds.length) await database.membershipPrice.deleteMany({ where: { id: { in: priceIds } } });
     if (eventIds.length) await database.event.deleteMany({ where: { id: { in: eventIds } } });
+    if (newsPostIds.length) await database.newsPost.deleteMany({ where: { id: { in: newsPostIds } } });
     if (classIds.length) await database.scheduledClass.deleteMany({ where: { id: { in: classIds } } });
     if (scheduleIds.length) await database.weeklySchedule.deleteMany({ where: { id: { in: scheduleIds } } });
     if (branchIds.length) await database.branch.deleteMany({ where: { id: { in: branchIds } } });
@@ -351,8 +390,11 @@ export function createFixtures() {
       await database.memberProfile.deleteMany({ where: { userId: { in: userIds } } });
       await database.user.deleteMany({ where: { id: { in: userIds } } });
     }
-    for (const list of [userIds, branchIds, scheduleIds, classIds, eventIds, priceIds, certificateIds, paymentIds]) list.length = 0;
+    for (const list of [userIds, branchIds, scheduleIds, classIds, eventIds, priceIds, certificateIds, paymentIds, newsPostIds]) list.length = 0;
   }
 
-  return { user, bulkActiveMembers, branch, scheduledClass, trackClassesOf, event, trackEventsBy, price, trackPricesBy, pendingCertificate, accreditedPayment, cleanup };
+  return {
+    user, bulkActiveMembers, branch, scheduledClass, trackClassesOf, event, trackEventsBy, price, trackPricesBy,
+    newsPost, trackNewsPostsBy, pendingCertificate, accreditedPayment, cleanup,
+  };
 }

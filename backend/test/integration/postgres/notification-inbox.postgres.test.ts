@@ -53,6 +53,24 @@ describe("inbox security and isolation (real authentication and PostgreSQL)", ()
     expect((await request(app).get("/api/notifications").set(bearer(deleted))).status).toBe(401);
   });
 
+  test("rejects a session that was revoked after its token was issued, for reading and for marking alike", async () => {
+    const member = await fixtures.user("MEMBER");
+    const staleSession = bearer(member);
+    expect((await request(app).get("/api/notifications").set(staleSession)).status).toBe(200);
+
+    // An administrative password reset or a recovered password revokes every earlier session.
+    await database.user.update({ where: { id: member.id }, data: { sessionVersion: { increment: 1 } } });
+    for (const response of [
+      await request(app).get("/api/notifications").set(staleSession),
+      await request(app).patch("/api/notifications/read-status").set(staleSession),
+      await request(app).get(`/api/notifications/${randomUUID()}`).set(staleSession),
+    ]) {
+      expect(response.status).toBe(401);
+      expect(response.body).toMatchObject({ code: "UNAUTHORIZED" });
+    }
+    expect((await request(app).get("/api/notifications").set(bearer(member, { sessionVersion: 1 }))).status).toBe(200);
+  });
+
   test("rejects tokens that are expired or signed with another secret", async () => {
     const member = await fixtures.user("MEMBER");
     for (const header of [
@@ -271,7 +289,7 @@ describe("membership fee notices generated when the member opens the inbox", () 
       expect.objectContaining({
         type: "MEMBERSHIP_EXPIRED",
         title: "Cuota vencida",
-        message: "Tu cuota se encuentra vencida. Registrá un nuevo pago para mantener tu acceso.",
+        message: "Todavía no tenés un pago acreditado, por eso tu cuota figura como vencida. Acercate a una sede de M-Team para abonarla: un administrador acreditará el pago y habilitará tu acceso.",
       }),
     ]);
     await open(user, now);
@@ -339,7 +357,7 @@ describe("membership fee notices generated when the member opens the inbox", () 
     expect(feeNotices(expired)).toEqual([
       expect.objectContaining({
         type: "MEMBERSHIP_EXPIRED",
-        message: "Tu cuota venció el 02/03/2036 a las 12:00. Registrá un nuevo pago para mantener tu acceso.",
+        message: "Tu cuota venció el 02/03/2036 a las 12:00. Acercate a una sede de M-Team para abonarla: un administrador acreditará el pago y renovará tu acceso.",
       }),
     ]);
 
@@ -389,6 +407,27 @@ describe("membership fee notices generated when the member opens the inbox", () 
     const voided = await request(clockApp).post(`/api/payments/${accredited.body.id}/voids`).set(bearer(admin)).send({ reason: "Pago cargado por error" });
     expect(voided.status).toBe(200);
     await open(user, new Date(expiresAt.getTime() - 4 * DAY));
+    expect(await database.notification.count({ where: { userId: user.id } })).toBe(2);
+  });
+
+  test("voiding the payment a member was warned about recalculates from the previous payment and announces only what is now true", async () => {
+    const { admin, member: user } = await member();
+    await fixtures.accreditedPayment(user.id, admin.id, "2036-01-01T15:00:00.000Z", "2036-01-31T15:00:00.000Z");
+    const latest = await fixtures.accreditedPayment(user.id, admin.id, "2036-02-25T15:00:00.000Z", "2036-03-26T15:00:00.000Z");
+    const now = new Date("2036-03-22T15:00:00.000Z"); // four days before the latest validity ends
+
+    expect(feeNotices(await open(user, now)).map(({ message }) => message)).toEqual(["Tu cuota vence el 26/03/2036 a las 12:00."]);
+
+    clock = now;
+    const voided = await request(clockApp).post(`/api/payments/${latest.id}/voids`).set(bearer(admin)).send({ reason: "Cargado por error" });
+    expect(voided.status).toBe(200);
+
+    // The validity falls back to the older payment, which ended on 31/01: the member is now told that, once.
+    const afterVoid = await open(user, now);
+    expect(feeNotices(afterVoid).map(({ type }) => type).sort()).toEqual(["MEMBERSHIP_EXPIRED", "MEMBERSHIP_EXPIRING"]);
+    expect(feeNotices(afterVoid).find(({ type }) => type === "MEMBERSHIP_EXPIRED")?.message).toContain("Tu cuota venció el 31/01/2036 a las 12:00.");
+    // The earlier warning stays in the history (nothing is deleted) and nothing repeats.
+    await open(user, new Date(now.getTime() + 60_000));
     expect(await database.notification.count({ where: { userId: user.id } })).toBe(2);
   });
 
