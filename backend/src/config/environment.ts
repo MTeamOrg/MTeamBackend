@@ -37,6 +37,7 @@ const environmentSchema = z.object({
   JWT_SECRET: z.string().trim().min(1),
   JWT_EXPIRES_IN: z.coerce.number().int().positive().max(2_147_483_647).default(3600),
   SUPABASE_URL: optionalEnvironmentUrl,
+  SUPABASE_SECRET_KEY: optionalEnvironmentString,
   SUPABASE_SERVICE_ROLE_KEY: optionalEnvironmentString,
   SUPABASE_STORAGE_BUCKET: optionalEnvironmentString,
   SUPABASE_PROFILE_PHOTO_BUCKET: optionalEnvironmentString,

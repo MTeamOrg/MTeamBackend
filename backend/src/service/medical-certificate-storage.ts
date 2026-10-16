@@ -1,5 +1,6 @@
 import { ApplicationError } from "../error/application-error.js";
 import { ERROR_CODE } from "../error/error-code.js";
+import { supabaseStorageAuthHeaders } from "./supabase-storage-headers.js";
 
 export interface MedicalCertificateStorageFile {
   buffer: Buffer;
@@ -14,7 +15,7 @@ export interface MedicalCertificateStorage {
 
 export interface MedicalCertificateStorageConfiguration {
   url: string | undefined;
-  serviceRoleKey: string | undefined;
+  apiKey: string | undefined;
   bucket: string | undefined;
   signedUrlExpiresInSeconds?: number;
 }
@@ -68,8 +69,7 @@ export class SupabaseMedicalCertificateStorage implements MedicalCertificateStor
     const response = await fetch(this.objectUrl(configuration, path), {
       method: "POST",
       headers: {
-        apikey: configuration.serviceRoleKey,
-        authorization: `Bearer ${configuration.serviceRoleKey}`,
+        ...supabaseStorageAuthHeaders(configuration.apiKey),
         "content-type": file.mimeType,
         "cache-control": "0",
       },
@@ -89,8 +89,7 @@ export class SupabaseMedicalCertificateStorage implements MedicalCertificateStor
       {
         method: "POST",
         headers: {
-          apikey: configuration.serviceRoleKey,
-          authorization: `Bearer ${configuration.serviceRoleKey}`,
+          ...supabaseStorageAuthHeaders(configuration.apiKey),
           "content-type": "application/json",
         },
         body: JSON.stringify({ expiresIn: this.signedUrlExpiresInSeconds }),
@@ -120,8 +119,7 @@ export class SupabaseMedicalCertificateStorage implements MedicalCertificateStor
       {
         method: "DELETE",
         headers: {
-          apikey: configuration.serviceRoleKey,
-          authorization: `Bearer ${configuration.serviceRoleKey}`,
+          ...supabaseStorageAuthHeaders(configuration.apiKey),
           "content-type": "application/json",
         },
         body: JSON.stringify({ prefixes: [objectPath] }),
@@ -135,18 +133,18 @@ export class SupabaseMedicalCertificateStorage implements MedicalCertificateStor
 
   private requireConfiguration(): {
     url: string;
-    serviceRoleKey: string;
+    apiKey: string;
     bucket: string;
     signedUrlExpiresInSeconds: number;
   } {
-    const { url, serviceRoleKey, bucket } = this.configuration;
-    if (!url || !serviceRoleKey || !bucket) {
+    const { url, apiKey, bucket } = this.configuration;
+    if (!url || !apiKey || !bucket) {
       throw new ApplicationError(503, ERROR_CODE.SERVICE_UNAVAILABLE,
         "El almacenamiento privado de aptos médicos no está configurado");
     }
     return {
       url,
-      serviceRoleKey,
+      apiKey,
       bucket,
       signedUrlExpiresInSeconds: this.signedUrlExpiresInSeconds,
     };
@@ -155,7 +153,7 @@ export class SupabaseMedicalCertificateStorage implements MedicalCertificateStor
   private objectUrl(
     configuration: {
       url: string;
-      serviceRoleKey: string;
+      apiKey: string;
       bucket: string;
       signedUrlExpiresInSeconds: number;
     },

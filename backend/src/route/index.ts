@@ -105,7 +105,7 @@ const adminDashboardController = new AdminDashboardController(
 );
 const profilePhotoStorage = new SupabaseProfilePhotoStorage({
   url: environment.SUPABASE_URL,
-  serviceRoleKey: environment.SUPABASE_SERVICE_ROLE_KEY,
+  apiKey: environment.SUPABASE_SECRET_KEY ?? environment.SUPABASE_SERVICE_ROLE_KEY,
   bucket: environment.SUPABASE_PROFILE_PHOTO_BUCKET,
 });
 const userService = new UserService(userRepository, profilePhotoStorage);
@@ -144,7 +144,7 @@ const medicalCertificateController = new MedicalCertificateController(
     memberMembershipRepository,
     new SupabaseMedicalCertificateStorage({
       url: environment.SUPABASE_URL,
-      serviceRoleKey: environment.SUPABASE_SERVICE_ROLE_KEY,
+      apiKey: environment.SUPABASE_SECRET_KEY ?? environment.SUPABASE_SERVICE_ROLE_KEY,
       bucket: environment.SUPABASE_STORAGE_BUCKET,
     }),
   ),

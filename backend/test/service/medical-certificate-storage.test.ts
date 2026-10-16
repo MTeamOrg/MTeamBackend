@@ -14,7 +14,7 @@ describe("private medical certificate storage", () => {
         signedURL: "/object/sign/private/member/file.pdf?token=x",
       }));
     const storage = new SupabaseMedicalCertificateStorage({
-      url: "https://project.supabase.co", serviceRoleKey: "server-only", bucket: "private",
+      url: "https://project.supabase.co", apiKey: "server-only", bucket: "private",
     });
 
     await storage.upload("private/member/file.pdf", { buffer: Buffer.from("pdf"), mimeType: "application/pdf" });
@@ -30,6 +30,26 @@ describe("private medical certificate storage", () => {
     );
   });
 
+  test("sends a new secret API key on apikey without treating it as a JWT", async () => {
+    const fetchMock = jest.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+      .mockResolvedValueOnce(Response.json({
+        signedURL: "/object/sign/private/member/file.pdf?token=x",
+      }));
+    const storage = new SupabaseMedicalCertificateStorage({
+      url: "https://project.supabase.co", apiKey: "sb_secret_test", bucket: "private",
+    });
+
+    await storage.upload("member/file.pdf", { buffer: Buffer.from("pdf"), mimeType: "application/pdf" });
+    await storage.createSignedUrl("member/file.pdf");
+
+    for (const [, options] of fetchMock.mock.calls) {
+      const headers = options?.headers as Record<string, string>;
+      expect(headers.apikey).toBe("sb_secret_test");
+      expect(headers).not.toHaveProperty("authorization");
+    }
+  });
+
   test.each([
     ["member/file.pdf", "member/file.pdf"],
     ["private/member/file.pdf", "member/file.pdf"],
@@ -40,7 +60,7 @@ describe("private medical certificate storage", () => {
   });
 
   test("fails closed when private storage configuration is absent", async () => {
-    const storage = new SupabaseMedicalCertificateStorage({ url: undefined, serviceRoleKey: undefined, bucket: undefined });
+    const storage = new SupabaseMedicalCertificateStorage({ url: undefined, apiKey: undefined, bucket: undefined });
     await expect(storage.createSignedUrl("file.pdf"))
       .rejects.toEqual(expect.objectContaining<ApplicationError>({ statusCode: 503 }));
   });
