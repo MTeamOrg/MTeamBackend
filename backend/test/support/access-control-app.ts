@@ -16,6 +16,7 @@ export function createAccessControlApp(roles?: UserRole[]) {
     role: "MEMBER",
     status: "ACTIVE",
     isPasswordChangeRequired: false,
+    sessionVersion: 0,
   };
   const repository: jest.Mocked<UserAccessRepositoryPort> = {
     findAccessControlUserById: jest.fn().mockImplementation(async () => ({ ...currentUser })),

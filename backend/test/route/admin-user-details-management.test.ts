@@ -61,7 +61,7 @@ function setup(
     updateUser: jest.fn().mockResolvedValue(detail("MEMBER")),
     updateUserStatus: jest.fn(),
     listUserAuditLogs: jest.fn<Promise<UserAuditLogListResult>, []>(),
-    resetTemporaryPassword: jest.fn().mockResolvedValue(undefined),
+    resetTemporaryPassword: jest.fn().mockResolvedValue("generated-temporary-password"),
   };
   const authenticate: RequestHandler = (request, _response, next) => {
     if (!role) {

@@ -27,7 +27,7 @@ export interface LoginResponse {
   accessToken: string;
   tokenType: "Bearer";
   expiresIn: number;
-  user: Omit<AuthenticationUser, "passwordHash">;
+  user: Omit<AuthenticationUser, "passwordHash" | "sessionVersion">;
 }
 
 export interface UserLoginService {
@@ -104,7 +104,11 @@ export class AuthService
     }
 
     return {
-      accessToken: this.tokenIssuer.sign({ id: user.id, role: user.role }),
+      accessToken: this.tokenIssuer.sign({
+        id: user.id,
+        role: user.role,
+        sessionVersion: user.sessionVersion,
+      }),
       tokenType: "Bearer",
       expiresIn: this.tokenIssuer.expiresIn,
       user: {

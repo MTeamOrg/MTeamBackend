@@ -39,7 +39,7 @@ const auditLog = {
 
 function setup(role: "ADMIN" | "MEMBER" | null = "ADMIN", passwordChangeRequired = false) {
   const service: jest.Mocked<TemporaryPasswordResetService & AdminUserManagementService> = {
-    resetTemporaryPassword: jest.fn().mockResolvedValue(undefined),
+    resetTemporaryPassword: jest.fn().mockResolvedValue("generated-temporary-password"),
     listUsers: jest.fn().mockResolvedValue({ items: [user], page: 1, limit: 20, total: 1 }),
     updateUserStatus: jest.fn().mockResolvedValue({ ...user, status: "INACTIVE" }),
     listUserAuditLogs: jest.fn().mockResolvedValue({ items: [auditLog], page: 1, limit: 20, total: 1 }),

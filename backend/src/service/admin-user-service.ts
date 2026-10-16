@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+
 import { ApplicationError } from "../error/application-error.js";
 import { ERROR_CODE } from "../error/error-code.js";
 import {
@@ -16,7 +18,6 @@ import type {
   UpdateAdminUserData,
   UpdateUserStatusData,
 } from "../repository/user-repository.js";
-import type { ResetPasswordInput } from "../validator/reset-password-validator.js";
 import type {
   CreateAdminUserInput,
   AdminUserListQueryInput,
@@ -30,8 +31,7 @@ export interface TemporaryPasswordResetService {
   resetTemporaryPassword(
     userId: string,
     performedById: string,
-    input: ResetPasswordInput,
-  ): Promise<void>;
+  ): Promise<string>;
 }
 
 export interface AdminUserManagementService {
@@ -263,19 +263,21 @@ export class AdminUserService
   async resetTemporaryPassword(
     userId: string,
     performedById: string,
-    input: ResetPasswordInput,
-  ): Promise<void> {
+  ): Promise<string> {
     const target = await this.userRepository.findPasswordResetTargetById(userId);
     if (!target) {
       throw new ApplicationError(404, ERROR_CODE.NOT_FOUND, "El usuario no existe");
     }
 
-    const passwordHash = await this.passwordHasher.hash(input.temporaryPassword);
+    // 32 random bytes provide 256 bits of entropy; base64url stays within bcrypt's 72-byte limit.
+    const temporaryPassword = randomBytes(32).toString("base64url");
+    const passwordHash = await this.passwordHasher.hash(temporaryPassword);
     await this.userRepository.resetTemporaryPassword(
       userId,
       performedById,
       passwordHash,
     );
+    return temporaryPassword;
   }
 
   private createConflictError(field: "email" | "documentNumber"): ApplicationError {

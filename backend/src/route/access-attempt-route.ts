@@ -13,6 +13,9 @@ function createAccessAuthentication(tokenVerifier: TokenVerifier, users: UserAcc
     if (!identity) throw new ApplicationError(401, ERROR_CODE.UNAUTHORIZED, "Se requiere una autenticación válida");
     const user = await users.findAccessControlUserById(identity.sub);
     if (!user) throw new ApplicationError(401, ERROR_CODE.UNAUTHORIZED, "Se requiere una autenticación válida");
+    if (user.sessionVersion !== identity.sessionVersion) {
+      throw new ApplicationError(401, ERROR_CODE.UNAUTHORIZED, "La sesión fue revocada");
+    }
     request.authenticatedUser = { id: user.id, role: user.role, isPasswordChangeRequired: user.isPasswordChangeRequired };
     next();
   };
