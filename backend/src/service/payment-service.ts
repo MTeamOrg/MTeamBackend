@@ -4,6 +4,7 @@ import type { Payment } from "../generated/prisma/client.js";
 import {
   MemberNotFoundError,
   PaymentAlreadyVoidedError,
+  PaymentIdempotencyConflictError,
   PaymentNotFoundError,
   UserIsNotMemberError,
   type PaymentRepositoryPort,
@@ -36,9 +37,13 @@ export class PaymentService {
     return this.paymentRepository.getPaymentsSummary(query);
   }
 
-  async createPayment(input: CreatePaymentInput, administratorId: string): Promise<Payment> {
+  async createPayment(
+    input: CreatePaymentInput,
+    administratorId: string,
+    idempotencyKey: string,
+  ): Promise<Payment> {
     try {
-      return await this.paymentRepository.createAccreditedPayment(input, administratorId);
+      return await this.paymentRepository.createAccreditedPayment(input, administratorId, idempotencyKey);
     } catch (error: unknown) {
       if (error instanceof MemberNotFoundError) {
         throw new ApplicationError(404, ERROR_CODE.NOT_FOUND, "El usuario no existe");
@@ -48,6 +53,13 @@ export class PaymentService {
           400,
           ERROR_CODE.VALIDATION_ERROR,
           "El usuario indicado no es socio",
+        );
+      }
+      if (error instanceof PaymentIdempotencyConflictError) {
+        throw new ApplicationError(
+          409,
+          ERROR_CODE.CONFLICT,
+          "La clave de solicitud ya fue utilizada con otros datos",
         );
       }
       throw error;

@@ -4,8 +4,10 @@ import { ApplicationError } from "../error/application-error.js";
 import { ERROR_CODE } from "../error/error-code.js";
 import type { PaymentService } from "../service/payment-service.js";
 import type { PaymentHistory, PaymentHistoryItem } from "../repository/payment-repository.js";
+import type { Payment } from "../generated/prisma/client.js";
 import {
   createPaymentSchema,
+  paymentIdempotencyKeySchema,
   memberPaymentsParamsSchema,
   paymentHistoryQuerySchema,
   paymentListQuerySchema,
@@ -29,6 +31,12 @@ function serializePaymentHistory(history: PaymentHistory) {
     ...history,
     items: history.items.map(serializePaymentHistoryItem),
   };
+}
+
+function serializePayment(payment: Payment) {
+  const { idempotencyKey, ...publicPayment } = payment;
+  void idempotencyKey;
+  return { ...publicPayment, amount: payment.amount.toString() };
 }
 
 export class PaymentController {
@@ -93,20 +101,29 @@ export class PaymentController {
 
   createPayment: RequestHandler = async (request, response) => {
     const validation = createPaymentSchema.safeParse(request.body);
-    if (!validation.success) {
+    const idempotencyKeyValidation = paymentIdempotencyKeySchema.safeParse(
+      request.get("Idempotency-Key"),
+    );
+    if (!validation.success || !idempotencyKeyValidation.success) {
       throw new ApplicationError(
         400,
         ERROR_CODE.VALIDATION_ERROR,
-        "Los datos del pago no son válidos",
-        validation.error.flatten(),
+        "Los datos del pago o su clave de solicitud no son válidos",
+        {
+          body: validation.success ? null : validation.error.flatten(),
+          idempotencyKey: idempotencyKeyValidation.success
+            ? null
+            : idempotencyKeyValidation.error.flatten(),
+        },
       );
     }
 
     const payment = await this.paymentService.createPayment(
       validation.data,
       request.authenticatedUser!.id,
+      idempotencyKeyValidation.data,
     );
-    response.status(201).json({ ...payment, amount: payment.amount.toString() });
+    response.status(201).json(serializePayment(payment));
   };
 
   voidPayment: RequestHandler = async (request, response) => {
@@ -129,6 +146,6 @@ export class PaymentController {
       bodyValidation.data.reason,
       request.authenticatedUser!.id,
     );
-    response.status(200).json({ ...payment, amount: payment.amount.toString() });
+    response.status(200).json(serializePayment(payment));
   };
 }

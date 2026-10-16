@@ -11,6 +11,7 @@ import { createMembershipPriceRouter } from "../../src/route/membership-price-ro
 import type { MembershipPriceService } from "../../src/service/membership-price-service.js";
 
 const administratorId = "a69a0192-a9a9-4936-8c79-bc5ff13d8dc2";
+const idempotencyKey = "32f4164a-f26b-473a-901c-a2c8fd5dc3a8";
 const futureEffectiveFrom = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 const price = {
   id: "30000000-0000-0000-0000-000000000003",
@@ -54,7 +55,10 @@ describe("membership price routes", () => {
   test("an administrator can add a scheduled price without replacing the previous value", async () => {
     const { app, service } = setup("ADMIN");
     const input = { amount: 20000, effectiveFrom: futureEffectiveFrom };
-    const response = await request(app).post("/api/membership-prices").send(input);
+    const response = await request(app)
+      .post("/api/membership-prices")
+      .set("Idempotency-Key", idempotencyKey)
+      .send(input);
 
     expect(response.status).toBe(201);
     expect(response.body).toEqual({
@@ -64,7 +68,7 @@ describe("membership price routes", () => {
       effectiveFrom: price.effectiveFrom.toISOString(),
       createdAt: price.createdAt.toISOString(),
     });
-    expect(service.createPrice).toHaveBeenCalledWith(input, administratorId);
+    expect(service.createPrice).toHaveBeenCalledWith(input, administratorId, idempotencyKey);
   });
 
   test("an administrator can page through the price history", async () => {
@@ -126,6 +130,17 @@ describe("membership price routes", () => {
     expect((await request(app).get("/api/membership-prices?limit=101")).status).toBe(400);
     expect((await request(app).post("/api/membership-prices").send({ amount: -1, effectiveFrom: futureEffectiveFrom })).status).toBe(400);
     expect(service.listPrices).not.toHaveBeenCalled();
+    expect(service.createPrice).not.toHaveBeenCalled();
+  });
+
+  test("requires a valid idempotency key when creating a price", async () => {
+    const { app, service } = setup("ADMIN");
+    const response = await request(app)
+      .post("/api/membership-prices")
+      .send({ amount: 20000, effectiveFrom: futureEffectiveFrom });
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe(ERROR_CODE.VALIDATION_ERROR);
     expect(service.createPrice).not.toHaveBeenCalled();
   });
 });

@@ -4,6 +4,8 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import express from "express";
 import jwt from "jsonwebtoken";
 
+import { AdminUserController } from "../../../../src/controller/admin-user-controller.js";
+import { AuthController } from "../../../../src/controller/auth-controller.js";
 import { EventController } from "../../../../src/controller/event-controller.js";
 import { MedicalCertificateController } from "../../../../src/controller/medical-certificate-controller.js";
 import { MembershipPriceController } from "../../../../src/controller/membership-price-controller.js";
@@ -24,6 +26,8 @@ import { PaymentRepository } from "../../../../src/repository/payment-repository
 import { ScheduledClassRepository } from "../../../../src/repository/scheduled-class-repository.js";
 import { UserRepository } from "../../../../src/repository/user-repository.js";
 import { WeeklyScheduleRepository } from "../../../../src/repository/weekly-schedule-repository.js";
+import { createAdminUserRouter } from "../../../../src/route/admin-user-route.js";
+import { createAuthRouter, createProtectedAuthRouter } from "../../../../src/route/auth-route.js";
 import { createEventRouter } from "../../../../src/route/event-route.js";
 import { createMedicalCertificateRouter } from "../../../../src/route/medical-certificate-route.js";
 import { createMembershipPriceRouter } from "../../../../src/route/membership-price-route.js";
@@ -31,11 +35,14 @@ import { createNotificationRouter } from "../../../../src/route/notification-rou
 import { createPaymentRouter } from "../../../../src/route/payment-route.js";
 import { createScheduledClassRouter } from "../../../../src/route/scheduled-class-route.js";
 import { createWeeklyScheduleRouter } from "../../../../src/route/weekly-schedule-route.js";
+import { AdminUserService } from "../../../../src/service/admin-user-service.js";
+import { AuthService } from "../../../../src/service/auth-service.js";
 import { EventService } from "../../../../src/service/event-service.js";
 import { MedicalCertificateService } from "../../../../src/service/medical-certificate-service.js";
 import { MembershipPriceService } from "../../../../src/service/membership-price-service.js";
 import { NotificationService } from "../../../../src/service/notification-service.js";
 import { PaymentService } from "../../../../src/service/payment-service.js";
+import { PasswordService } from "../../../../src/service/password-service.js";
 import { ScheduledClassService } from "../../../../src/service/scheduled-class-service.js";
 import { TokenService } from "../../../../src/service/token-service.js";
 import { WeeklyScheduleService } from "../../../../src/service/weekly-schedule-service.js";
@@ -68,7 +75,7 @@ const BULK_EMAIL_SUFFIX = "@fixture-bulk.test";
 const JWT_TEST_SECRET = "postgres-integration-only-secret";
 const tokenService = new TokenService(JWT_TEST_SECRET, 3600);
 
-export type TestUser = { id: string; role: UserRole };
+export type TestUser = { id: string; role: UserRole; email: string };
 
 /** Stands in for Supabase Storage: the review flow never touches files. */
 const unusedStorage = {
@@ -80,9 +87,19 @@ const unusedStorage = {
 /** Real routers, controllers, services, repositories and authentication; only the process wiring is test-local. */
 export function createIntegrationApp(options: { now?: () => Date; database?: PrismaClient } = {}) {
   const database = options.database ?? defaultDatabase;
-  const authenticate = createAuthenticationMiddleware(tokenService, new UserRepository(database));
+  const users = new UserRepository(database);
+  const passwordService = new PasswordService();
+  const authenticate = createAuthenticationMiddleware(tokenService, users);
   const app = express();
   app.use(express.json());
+  const authController = new AuthController(new AuthService(users, passwordService, tokenService));
+  app.use("/api", createAuthRouter(authController));
+  app.use("/api", createProtectedAuthRouter(authController, authenticate));
+  app.use("/api", createAdminUserRouter(
+    new AdminUserController(new AdminUserService(users, passwordService)),
+    authenticate,
+    requirePasswordChangeCompleted,
+  ));
   app.use("/api", createNotificationRouter(
     new NotificationController(new NotificationService(new NotificationRepository(database), options.now)),
     authenticate,
@@ -173,7 +190,7 @@ export function createFixtures() {
           memberProfile: { create: { emergencyContactName: "Contacto", emergencyContactPhone: "555-0101" } },
         } : {}),
       },
-      select: { id: true, role: true },
+      select: { id: true, role: true, email: true },
     });
     userIds.push(created.id);
     return created;
@@ -329,6 +346,7 @@ export function createFixtures() {
     if (scheduleIds.length) await database.weeklySchedule.deleteMany({ where: { id: { in: scheduleIds } } });
     if (branchIds.length) await database.branch.deleteMany({ where: { id: { in: branchIds } } });
     if (userIds.length) {
+      await database.userAuditLog.deleteMany({ where: { OR: [{ userId: { in: userIds } }, { performedById: { in: userIds } }] } });
       await database.trainerProfile.deleteMany({ where: { userId: { in: userIds } } });
       await database.memberProfile.deleteMany({ where: { userId: { in: userIds } } });
       await database.user.deleteMany({ where: { id: { in: userIds } } });

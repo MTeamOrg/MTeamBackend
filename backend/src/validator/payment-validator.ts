@@ -12,6 +12,8 @@ export const createPaymentSchema = z.strictObject({
 
 export type CreatePaymentInput = z.infer<typeof createPaymentSchema>;
 
+export const paymentIdempotencyKeySchema = z.uuid();
+
 export const voidPaymentParamsSchema = z.strictObject({ paymentId: z.uuid() });
 
 export const voidPaymentSchema = z.strictObject({

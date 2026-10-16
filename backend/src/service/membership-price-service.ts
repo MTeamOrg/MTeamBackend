@@ -7,20 +7,34 @@ import type {
   MembershipPriceRepositoryPort,
   MembershipPriceWithPrevious,
 } from "../repository/membership-price-repository.js";
+import { MembershipPriceIdempotencyConflictError } from "../repository/membership-price-repository.js";
 import type { CreateMembershipPriceInput } from "../validator/membership-price-validator.js";
 
 export class MembershipPriceService {
   constructor(private readonly priceRepository: MembershipPriceRepositoryPort) {}
 
-  createPrice(
+  async createPrice(
     input: CreateMembershipPriceInput,
     administratorId: string,
+    idempotencyKey: string,
   ): Promise<MembershipPriceWithPrevious> {
-    return this.priceRepository.createPrice({
-      amount: input.amount.toString(),
-      effectiveFrom: new Date(input.effectiveFrom),
-      createdById: administratorId,
-    });
+    try {
+      return await this.priceRepository.createPrice({
+        amount: input.amount.toString(),
+        effectiveFrom: new Date(input.effectiveFrom),
+        createdById: administratorId,
+        idempotencyKey,
+      });
+    } catch (error: unknown) {
+      if (error instanceof MembershipPriceIdempotencyConflictError) {
+        throw new ApplicationError(
+          409,
+          ERROR_CODE.CONFLICT,
+          "La clave de solicitud ya fue utilizada con otros datos",
+        );
+      }
+      throw error;
+    }
   }
 
   listPrices(query: MembershipPriceListQuery): Promise<MembershipPriceHistory> {

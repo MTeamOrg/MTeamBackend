@@ -1,9 +1,14 @@
 import type { MembershipPrice, PrismaClient } from "../../src/generated/prisma/client.js";
-import { MembershipPriceRepository, type MembershipPriceRepositoryPort } from "../../src/repository/membership-price-repository.js";
+import {
+  MembershipPriceIdempotencyConflictError,
+  MembershipPriceRepository,
+  type MembershipPriceRepositoryPort,
+} from "../../src/repository/membership-price-repository.js";
 import { MembershipPriceService } from "../../src/service/membership-price-service.js";
 import { createMembershipPriceSchema } from "../../src/validator/membership-price-validator.js";
 
 const administratorId = "a69a0192-a9a9-4936-8c79-bc5ff13d8dc2";
+const idempotencyKey = "32f4164a-f26b-473a-901c-a2c8fd5dc3a8";
 const now = new Date("2026-09-24T12:00:00.000Z");
 
 function price(id: string, amount: string, effectiveFrom: string, createdAt: string) {
@@ -26,11 +31,27 @@ describe("membership price management", () => {
     const input = { amount: 20000, effectiveFrom: futureEffectiveFrom };
 
     expect(createMembershipPriceSchema.safeParse(input).success).toBe(true);
-    expect(await service.createPrice(input, administratorId)).toEqual({ ...created, previousAmount: "18000.00" });
+    expect(await service.createPrice(input, administratorId, idempotencyKey)).toEqual({ ...created, previousAmount: "18000.00" });
     expect(createPrice).toHaveBeenCalledWith({
       amount: "20000",
       effectiveFrom: new Date(input.effectiveFrom),
       createdById: administratorId,
+      idempotencyKey,
+    });
+  });
+
+  test("rejects reusing an idempotency key for a different price request", async () => {
+    const repository = {
+      createPrice: jest.fn().mockRejectedValue(new MembershipPriceIdempotencyConflictError()),
+    } as unknown as MembershipPriceRepositoryPort;
+    const service = new MembershipPriceService(repository);
+
+    await expect(service.createPrice({
+      amount: 21000,
+      effectiveFrom: "2026-10-01T00:00:00.000Z",
+    }, administratorId, idempotencyKey)).rejects.toMatchObject({
+      statusCode: 409,
+      code: "CONFLICT",
     });
   });
 
@@ -39,7 +60,8 @@ describe("membership price management", () => {
     const create = jest.fn().mockResolvedValue(created);
     const findFirst = jest.fn().mockResolvedValue({ amount: { toString: () => "18000.00" } });
     const transaction = {
-      membershipPrice: { create, findFirst },
+      membershipPrice: { create, findFirst, findUnique: jest.fn().mockResolvedValue(null) },
+      $executeRaw: jest.fn().mockResolvedValue(1),
       user: { findMany: jest.fn().mockResolvedValue([{ id: "member-id" }]) },
       notification: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
     };
@@ -51,11 +73,12 @@ describe("membership price management", () => {
       amount: "20000",
       effectiveFrom: created.effectiveFrom,
       createdById: administratorId,
+      idempotencyKey,
     });
 
     expect(result.previousAmount).toBe("18000.00");
     expect(create).toHaveBeenCalledWith({
-      data: { amount: "20000", effectiveFrom: created.effectiveFrom, createdById: administratorId },
+      data: { amount: "20000", effectiveFrom: created.effectiveFrom, createdById: administratorId, idempotencyKey },
     });
     expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
       where: { OR: [
@@ -73,6 +96,7 @@ describe("membership price management", () => {
     const transaction = { membershipPrice: {
       create: jest.fn().mockResolvedValue(created),
       findFirst: jest.fn().mockResolvedValue(null),
+      findUnique: jest.fn().mockResolvedValue(null),
     } };
     const database = {
       $transaction: (callback: (tx: typeof transaction) => Promise<unknown>) => callback(transaction),
@@ -82,9 +106,42 @@ describe("membership price management", () => {
       amount: "18000",
       effectiveFrom: created.effectiveFrom,
       createdById: administratorId,
+      idempotencyKey,
     });
 
     expect(result.previousAmount).toBeNull();
+  });
+
+  test("returns the existing price for an exact retry without creating duplicate notices", async () => {
+    const created = {
+      ...price("30000000-0000-0000-0000-000000000003", "20000.00", "2026-10-01T00:00:00.000Z", "2026-09-24T12:00:00.000Z"),
+      idempotencyKey,
+      amount: { toString: () => "20000.00", equals: (value: string) => Number(value) === 20000 },
+    };
+    const findUnique = jest.fn().mockResolvedValue(created);
+    const findFirst = jest.fn().mockResolvedValue({ amount: { toString: () => "18000.00" } });
+    const create = jest.fn();
+    const notificationCreateMany = jest.fn();
+    const transaction = {
+      membershipPrice: { findUnique, findFirst, create },
+      user: { findMany: jest.fn() },
+      notification: { createMany: notificationCreateMany },
+    };
+    const database = {
+      $transaction: (callback: (tx: typeof transaction) => Promise<unknown>) => callback(transaction),
+    } as unknown as PrismaClient;
+
+    const result = await new MembershipPriceRepository(database).createPrice({
+      amount: "20000",
+      effectiveFrom: created.effectiveFrom,
+      createdById: administratorId,
+      idempotencyKey,
+    });
+
+    expect(result.id).toBe(created.id);
+    expect(result.previousAmount).toBe("18000.00");
+    expect(create).not.toHaveBeenCalled();
+    expect(notificationCreateMany).not.toHaveBeenCalled();
   });
 
   test("the current price excludes future effective dates", async () => {

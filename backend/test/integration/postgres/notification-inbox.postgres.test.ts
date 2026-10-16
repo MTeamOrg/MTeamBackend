@@ -366,7 +366,10 @@ describe("membership fee notices generated when the member opens the inbox", () 
     // Never paid: the fee is expired and the member is told once.
     expect(feeNotices(await open(user, realNow)).map(({ type }) => type)).toEqual(["MEMBERSHIP_EXPIRED"]);
 
-    const accredited = await request(clockApp).post("/api/payments").set(bearer(admin)).send({ memberId: user.id, amount: 20000, method: "CASH" });
+    const accredited = await request(clockApp).post("/api/payments")
+      .set(bearer(admin))
+      .set("Idempotency-Key", randomUUID())
+      .send({ memberId: user.id, amount: 20000, method: "CASH" });
     expect(accredited.status).toBe(201);
     const expiresAt = new Date(accredited.body.expiresAt as string);
     expect(expiresAt.getTime() - new Date(accredited.body.accreditedAt as string).getTime()).toBe(30 * DAY);

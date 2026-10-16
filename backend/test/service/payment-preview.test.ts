@@ -82,11 +82,15 @@ describe("payment preview", () => {
       const create = jest.fn().mockResolvedValue({ id: "payment-1" });
       const transaction = {
         user: { findUnique: jest.fn().mockResolvedValue({ role: "MEMBER" }) },
-        payment: { create },
+        payment: { findUnique: jest.fn().mockResolvedValue(null), create },
       };
       const database = { $transaction: (callback: (tx: typeof transaction) => Promise<unknown>) =>
         callback(transaction) } as unknown as PrismaClient;
-      await new PaymentRepository(database).createAccreditedPayment(input, administratorId);
+      await new PaymentRepository(database).createAccreditedPayment(
+        input,
+        administratorId,
+        "0ddc4d30-3e84-46ac-ae77-5d11de610875",
+      );
 
       expect(preview.estimatedExpiresAt).toEqual(calculatePaymentExpiresAt(now));
       expect(create).toHaveBeenCalledWith({ data: expect.objectContaining({
