@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import request from "supertest";
 
+import { formatGymDate } from "../../../src/model/notification-message.js";
 import { bearer, createFixtures, createIntegrationApp, database } from "./support/postgres-fixtures.js";
 
 const fixtures = createFixtures();
@@ -355,6 +356,77 @@ describe("membership price notifications (API, services and PostgreSQL)", () => 
     await publish(21000, "2090-04-01T03:00:00.000Z");
     expect(await notificationsOf(memberA.id)).toHaveLength(1);
   });
+
+  test("a first price announces nothing and an increase that applies immediately states today's date in Buenos Aires", async () => {
+    const { admin, memberA, publish } = await setup();
+    await fixtures.price(admin.id, "10000", "2020-01-01T03:00:00.000Z"); // the price in force before the change
+    expect(await notificationsOf(memberA.id)).toHaveLength(0);
+
+    const effectiveFrom = new Date();
+    await publish(12000, effectiveFrom.toISOString());
+    expect(await notificationsOf(memberA.id)).toEqual([
+      expect.objectContaining({
+        type: "MEMBERSHIP_PRICE_CHANGED",
+        message: `La cuota mensual pasa a ser de $ 12.000,00 desde el ${formatGymDate(effectiveFrom)}.`,
+      }),
+    ]);
+  });
+
+  test("compares every price with the one in force just before it takes effect, whatever the order they were typed in", async () => {
+    const { memberA, publish } = await setup();
+    await publish(10000, "2090-01-01T03:00:00.000Z"); // first: nothing
+    await publish(15000, "2090-12-01T03:00:00.000Z"); // 10.000 -> 15.000: announced
+    expect(await notificationsOf(memberA.id)).toHaveLength(1);
+
+    await publish(12000, "2090-06-01T03:00:00.000Z"); // typed later but applies between them: 10.000 -> 12.000, announced
+    expect((await notificationsOf(memberA.id)).map(({ message }) => message).sort()).toEqual([
+      "La cuota mensual pasa a ser de $ 12.000,00 desde el 01/06/2090.",
+      "La cuota mensual pasa a ser de $ 15.000,00 desde el 01/12/2090.",
+    ]);
+
+    await publish(11000, "2090-07-01T03:00:00.000Z"); // 12.000 -> 11.000: a decrease, nothing new
+    expect(await notificationsOf(memberA.id)).toHaveLength(2);
+  });
+
+  test("rejects invalid price requests without saving or announcing anything", async () => {
+    const { admin, memberA, publish } = await setup();
+    await publish(10000, "2090-01-01T03:00:00.000Z");
+    const send = (body: Record<string, unknown>, key: string | null = randomUUID()) => {
+      const call = request(app).post("/api/membership-prices").set(bearer(admin));
+      return (key ? call.set("Idempotency-Key", key) : call).send(body);
+    };
+
+    for (const response of [
+      await send({ amount: 0, effectiveFrom: "2090-02-01T03:00:00.000Z" }),
+      await send({ amount: -5, effectiveFrom: "2090-02-01T03:00:00.000Z" }),
+      await send({ amount: 15000.123, effectiveFrom: "2090-02-01T03:00:00.000Z" }),
+      await send({ amount: 15000, effectiveFrom: "mañana" }),
+      await send({ amount: 15000 }),
+      await send({ amount: 15000, effectiveFrom: "2090-02-01T03:00:00.000Z" }, null),
+      await send({ amount: 15000, effectiveFrom: "2090-02-01T03:00:00.000Z" }, "no-es-un-uuid"),
+    ]) {
+      expect(response.status).toBe(400);
+    }
+    expect(await database.membershipPrice.count({ where: { createdById: admin.id } })).toBe(1);
+    expect(await notificationsOf(memberA.id)).toHaveLength(0);
+  });
+
+  test("an exact retry returns the same price and announces nothing again, while the same key with other data is refused", async () => {
+    const { admin, memberA, publish } = await setup();
+    await publish(10000, "2090-01-01T03:00:00.000Z");
+    const key = randomUUID();
+    const send = (amount: number) => request(app).post("/api/membership-prices").set(bearer(admin)).set("Idempotency-Key", key)
+      .send({ amount, effectiveFrom: "2090-02-01T03:00:00.000Z" });
+
+    const first = await send(13000);
+    const retry = await send(13000);
+    await fixtures.trackPricesBy(admin.id);
+    expect([first.status, retry.status]).toEqual([201, 201]);
+    expect(retry.body.id).toBe(first.body.id);
+    expect((await send(14000)).status).toBe(409);
+    expect(await database.membershipPrice.count({ where: { createdById: admin.id } })).toBe(2);
+    expect(await notificationsOf(memberA.id)).toHaveLength(1);
+  });
 });
 
 describe("medical certificate result notifications (API, services and PostgreSQL)", () => {
@@ -425,5 +497,33 @@ describe("medical certificate result notifications (API, services and PostgreSQL
     expect(results.filter(({ status }) => status === 409)).toHaveLength(2);
     expect((await review({ status: "APPROVED" })).status).toBe(409);
     expect(await notificationsOf(owner.id)).toHaveLength(1);
+  });
+
+  test("a certificate presented after a rejection gets its own review and its own notice, and the history stays intact", async () => {
+    const { admin, owner, other, certificate, review } = await setup();
+    expect((await review({ status: "REJECTED", reviewComment: "Falta el sello." })).status).toBe(200);
+
+    const second = await fixtures.pendingCertificate(owner.id); // the member uploads a new document
+    const secondReview = await request(app).patch(`/api/medical-certificates/${second.id}/review`).set(bearer(admin)).send({ status: "APPROVED" });
+    expect(secondReview.status).toBe(200);
+
+    expect((await notificationsOf(owner.id)).map(({ title }) => title).sort()).toEqual(["Apto médico aprobado", "Apto médico rechazado"]);
+    expect(await notificationsOf(other.id)).toHaveLength(0);
+    // The processed certificates cannot be reviewed again, and nothing was lost or repeated.
+    expect((await review({ status: "APPROVED" })).status).toBe(409);
+    expect((await request(app).patch(`/api/medical-certificates/${second.id}/review`).set(bearer(admin)).send({ status: "REJECTED", reviewComment: "Otra vez" })).status).toBe(409);
+    expect(await notificationsOf(owner.id)).toHaveLength(2);
+    expect(await database.medicalCertificate.findMany({ where: { memberId: owner.id }, orderBy: { uploadedAt: "asc" }, select: { status: true } }))
+      .toEqual([{ status: "REJECTED" }, { status: "APPROVED" }]);
+  });
+
+  test("the notice never carries the file, its address or anything but the administrative observation", async () => {
+    const { owner, certificate, review } = await setup();
+    expect((await review({ status: "REJECTED", reviewComment: "Ilegible, volvé a subirlo." })).status).toBe(200);
+    const [notice] = await database.notification.findMany({ where: { userId: owner.id } });
+    const content = `${notice?.title} ${notice?.message}`;
+    expect(content).not.toContain(certificate.id);
+    expect(content).not.toMatch(/fixture\.pdf|https?:|storage|token|signed/i);
+    expect(notice?.message).toBe("Tu apto médico fue rechazado. Observación: Ilegible, volvé a subirlo.");
   });
 });
