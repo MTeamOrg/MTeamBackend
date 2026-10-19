@@ -148,3 +148,21 @@ describe("UserService own profile", () => {
     expect(result.photoUrl).toBe("https://storage.example/profile-photo/user");
   });
 });
+
+test.each(["MEMBER", "ADMIN"] as const)("rejects professional fields for %s", async (role) => {
+  for (const input of [{ specialty: "Funcional" }, { description: "Entrenamiento" }]) {
+    const repository = new FakeOwnProfileRepository();
+    await expect(createService(repository).updateOwnProfile({ id: memberProfile.id, role }, input))
+      .rejects.toMatchObject({ statusCode: 400, code: "VALIDATION_ERROR" });
+    expect(repository.updatedData).toBeNull();
+  }
+});
+test("normalizes trainer fields and returns persisted response", async () => {
+  const repository = new FakeOwnProfileRepository();
+  const updated = { ...memberProfile, role: "TRAINER" as const, trainerProfile: { specialty: "Funcional", description: "Personalizado" } };
+  const persist = jest.spyOn(repository, "updateOwnProfile").mockResolvedValue(updated);
+  await expect(createService(repository).updateOwnProfile(
+    { id: memberProfile.id, role: "TRAINER" }, { specialty: " Funcional ", description: " Personalizado " },
+  )).resolves.toEqual(updated);
+  expect(persist).toHaveBeenCalledWith(memberProfile.id, "TRAINER", updated.trainerProfile);
+});

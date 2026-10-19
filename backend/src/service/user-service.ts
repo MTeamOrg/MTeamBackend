@@ -58,6 +58,8 @@ export class UserService implements OwnProfileService {
       if (ownerId && ownerId !== user.id) throw this.createEmailConflict();
       data.email = email;
     }
+    if (input.specialty !== undefined) data.specialty = input.specialty.trim();
+    if (input.description !== undefined) data.description = input.description.trim();
     if (input.phone !== undefined) data.phone = input.phone.trim();
     if (input.emergencyContactName !== undefined) {
       data.emergencyContactName = input.emergencyContactName.trim();
@@ -86,6 +88,15 @@ export class UserService implements OwnProfileService {
     role: UserRole,
     input: UpdateOwnProfileInput,
   ): void {
+    const hasTrainerFields = input.specialty !== undefined || input.description !== undefined;
+    if (role !== "TRAINER" && hasTrainerFields) {
+      throw new ApplicationError(
+        400,
+        ERROR_CODE.VALIDATION_ERROR,
+        "El perfil profesional solo corresponde a entrenadores",
+        { fields: ["specialty", "description"] },
+      );
+    }
     const hasEmergencyContact =
       input.emergencyContactName !== undefined ||
       input.emergencyContactPhone !== undefined;
