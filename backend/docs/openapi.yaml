@@ -1,0 +1,2739 @@
+openapi: 3.1.0
+info:
+  title: M-Team API
+  version: 0.1.0
+  description: |
+    Contrato inicial de la API REST de M-Team. La API administra usuarios,
+    cuota mensual, pagos, aptos médicos, accesos QR, sedes, clases,
+    entrenadores, eventos, novedades y notificaciones.
+servers:
+  - url: http://localhost:3000/api
+    description: Desarrollo local
+tags:
+  - name: System
+  - name: Authentication
+  - name: Dashboard
+  - name: Users
+  - name: Members
+  - name: Membership Prices
+  - name: Payments
+  - name: Medical Certificates
+  - name: Access Attempts
+  - name: Access Points
+  - name: Branches
+  - name: Weekly Schedules
+  - name: Scheduled Classes
+  - name: Trainers
+  - name: Events
+  - name: News Posts
+  - name: Notifications
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/password-recovery:
+    post:
+      tags: [Authentication]
+      operationId: requestPasswordRecovery
+      summary: Solicitar enlace de recuperación (USR-04)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email]
+              properties:
+                email: { type: string, format: email, maxLength: 255 }
+      responses:
+        "202":
+          description: Correo aceptado por el proveedor; respuesta idéntica para cuentas existentes e inexistentes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { type: string }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "429": { description: Demasiadas solicitudes; reintentar en 60 segundos }
+        "503": { description: No se pudo enviar el correo o completar la solicitud }
+  /auth/password-recovery/complete:
+    post:
+      tags: [Authentication]
+      operationId: completePasswordRecovery
+      summary: Establecer contraseña con un enlace de un solo uso
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token, newPassword]
+              properties:
+                token: { type: string, pattern: '^[a-f0-9]{64}$' }
+                newPassword: { type: string, minLength: 8, maxLength: 72, writeOnly: true }
+      responses:
+        "204": { description: Contraseña actualizada; enlace y otros enlaces pendientes invalidados }
+        "400": { description: "VALIDATION_ERROR, PASSWORD_REUSE, INVALID_RECOVERY_TOKEN o EXPIRED_RECOVERY_TOKEN" }
+        "429": { description: Demasiadas solicitudes; reintentar en 60 segundos }
+        "503": { description: Error recuperable; intentar nuevamente }
+  /health:
+    get:
+      tags: [System]
+      summary: Verificar el estado de la API
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: API disponible
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Registrar una cuenta de socio
+      operationId: registerMember
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Cuenta de socio registrada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Iniciar sesión
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            example:
+              email: socio@example.com
+              password: example-password-only
+      responses:
+        "200":
+          description: Sesión iniciada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          description: Cuerpo de inicio de sesión inválido
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              example:
+                code: VALIDATION_ERROR
+                message: Los datos de inicio de sesión no son válidos
+                details: { formErrors: [], fieldErrors: { email: [Correo inválido] } }
+        "401":
+          description: El correo inexistente y la contraseña incorrecta producen el mismo error
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              example:
+                code: INVALID_CREDENTIALS
+                message: Correo electrónico o contraseña incorrectos
+                details: null
+        "403":
+          description: Cuenta inactiva con credenciales válidas
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              example:
+                code: ACCOUNT_INACTIVE
+                message: La cuenta se encuentra inactiva
+                details: null
+
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Cerrar sesión
+      description: >-
+        Valida la sesión actual y finaliza la operación sin contenido. Como
+        la API utiliza JWT sin sesiones persistentes, el frontend debe eliminar
+        el token almacenado y redirigir al formulario de ingreso.
+      operationId: logout
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Obtener la identidad autenticada
+      operationId: getCurrentIdentity
+      responses:
+        "200":
+          description: Identidad autenticada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /auth/password:
+    patch:
+      tags: [Authentication]
+      summary: Cambiar la contraseña propia
+      operationId: changePassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400":
+          description: Datos inválidos, contraseña actual incorrecta o reutilización de contraseña
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              examples:
+                validationError:
+                  summary: Cuerpo inválido
+                  value:
+                    code: VALIDATION_ERROR
+                    message: Los datos para cambiar la contraseña no son válidos
+                    details: { formErrors: [], fieldErrors: { newPassword: [La contraseña debe tener al menos 8 caracteres] } }
+                invalidCurrentPassword:
+                  summary: Contraseña actual incorrecta
+                  value:
+                    code: INVALID_CURRENT_PASSWORD
+                    message: La contraseña actual es incorrecta
+                    details: null
+                passwordReuse:
+                  summary: Reutilización de la contraseña actual
+                  value:
+                    code: PASSWORD_REUSE
+                    message: La contraseña nueva debe ser diferente de la actual
+                    details: null
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /dashboard:
+    get:
+      tags: [Dashboard]
+      summary: Obtener el panel correspondiente al rol autenticado
+      operationId: getDashboard
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /users:
+    get:
+      tags: [Users]
+      summary: Listar y filtrar usuarios
+      description: >-
+        Operación exclusiva de administradores. Permite buscar por nombre,
+        apellido, documento o correo, y filtrar por rol o estado.
+      operationId: listUsers
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - name: role
+          in: query
+          schema: { $ref: "#/components/schemas/UserRole" }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/UserStatus" }
+      responses:
+        "200":
+          description: Listado paginado de usuarios
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserListResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Users]
+      summary: Crear una cuenta desde administración
+      operationId: createUser
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: Cuenta creada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserDetail" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /users/me:
+    get:
+      tags: [Users]
+      summary: Consultar el perfil propio
+      operationId: getOwnProfile
+      responses:
+        "200":
+          description: Perfil actual
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OwnProfile" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    patch:
+      tags: [Users]
+      summary: Modificar los datos permitidos del perfil propio
+      operationId: updateOwnProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateProfileRequest" }
+      responses:
+        "200":
+          description: Perfil actualizado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OwnProfile" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /users/me/photo:
+    put:
+      tags: [Users]
+      summary: Reemplazar la fotografía del perfil propio
+      operationId: updateOwnPhoto
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Fotografía JPG o PNG de hasta 5 MB.
+      responses:
+        "200":
+          description: Perfil actualizado con la URL de la fotografía
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OwnProfile" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "502":
+          description: Fallo del servicio de almacenamiento
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "503":
+          description: Almacenamiento no configurado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /users/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    get:
+      tags: [Users]
+      summary: Consultar el detalle administrativo de un usuario
+      operationId: getUser
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Detalle administrativo del usuario
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserDetail" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Users]
+      summary: Modificar un usuario desde administración
+      operationId: updateUser
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateUserRequest" }
+      responses:
+        "200":
+          description: Usuario modificado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserDetail" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /users/{userId}/status:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    patch:
+      tags: [Users]
+      summary: Activar, desactivar o reactivar una cuenta
+      description: >-
+        Operación exclusiva de administradores. Sólo modifica el estado de la
+        cuenta y conserva pagos, aptos, accesos, clases y demás historial. La
+        interfaz debe solicitar confirmación antes de enviar la operación.
+      operationId: updateUserStatus
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateUserStatusRequest" }
+      responses:
+        "200":
+          description: Usuario con el nuevo estado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserListItem" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /users/{userId}/password-resets:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    post:
+      tags: [Users]
+      summary: Generar una contraseña temporal
+      description: >-
+        Operación exclusiva de administradores. El servidor genera una clave
+        aleatoria de un solo uso, guarda su hash y obliga al usuario a cambiarla
+        antes de acceder a cualquier otra ruta privada. La clave se devuelve una
+        sola vez en esta respuesta y no se registra en auditoría ni notificaciones.
+      operationId: resetUserPassword
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Contraseña temporal generada y entregada una sola vez al administrador.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResetPasswordResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /users/{userId}/audit-logs:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    get:
+      tags: [Users]
+      summary: Consultar el historial administrativo de una cuenta
+      operationId: listUserAuditLogs
+      description: Sólo lectura. Incluye la acción, el motivo, la fecha y el administrador responsable.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Historial paginado de la cuenta
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserAuditLogResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /members:
+    get:
+      tags: [Members]
+      summary: Listar socios y filtrar por estado de cuota
+      description: >-
+        Exclusivo de administradores. El estado de cuota se calcula desde el
+        último pago acreditado válido; el filtro se aplica antes de paginar.
+      operationId: listMembers
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - name: membershipStatus
+          in: query
+          schema: { $ref: "#/components/schemas/MembershipStatus" }
+      responses:
+        "200":
+          description: Listado paginado de socios
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemberListResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /members/me/membership:
+    get:
+      tags: [Members]
+      summary: Consultar el estado de la cuota propia
+      operationId: getOwnMembership
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /membership-prices/current:
+    get:
+      tags: [Membership Prices]
+      summary: Consultar el valor vigente de la cuota
+      operationId: getCurrentMembershipPrice
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /membership-prices:
+    get:
+      tags: [Membership Prices]
+      summary: Consultar el historial de valores de cuota (administradores)
+      operationId: listMembershipPrices
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Historial paginado de valores de cuota
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, page, limit, total]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/MembershipPriceHistoryItem" }
+                  page: { type: integer }
+                  limit: { type: integer }
+                  total: { type: integer }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Membership Prices]
+      summary: Registrar un nuevo valor de cuota
+      description: |
+        Si el nuevo importe es mayor que el del valor inmediatamente anterior, cada socio activo
+        recibe, en la misma transacción, la notificación "Aumento de cuota" con el nuevo importe y
+        la fecha desde la que se aplica (CUO-06). Un importe igual o menor no genera avisos, ni
+        tampoco el primer valor registrado.
+      operationId: createMembershipPrice
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: UUID estable que debe repetirse al reintentar la misma solicitud.
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateMembershipPriceRequest" }
+      responses:
+        "201":
+          description: Nuevo valor de cuota registrado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MembershipPriceHistoryItem" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /payments:
+    get:
+      tags: [Payments]
+      summary: Buscar y filtrar pagos
+      description: >-
+        Exclusivo de administradores. Los filtros se combinan y se aplican antes
+        de paginar. El documento admite coincidencias parciales y el medio es exacto.
+        Las fechas corresponden a accreditedAt, con from inclusivo y to exclusivo.
+        Incluye pagos acreditados y anulados.
+      operationId: listPayments
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: memberId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: documentNumber
+          in: query
+          schema: { type: string }
+        - name: method
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/PaymentStatus" }
+      responses:
+        "200":
+          description: Pagos filtrados y paginados
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentReportResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Payments]
+      summary: Registrar y acreditar un pago
+      operationId: createPayment
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreatePaymentRequest" }
+      responses:
+        "201": { $ref: "#/components/responses/Created" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /payments/previews:
+    post:
+      tags: [Payments]
+      summary: Calcular un resumen previo sin crear el pago
+      description: >-
+        Operación exclusiva de administradores. El vencimiento estimado se calcula
+        al solicitar la vista previa; la acreditación vuelve a calcular su fecha efectiva.
+      operationId: previewPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PaymentPreviewRequest" }
+      responses:
+        "200":
+          description: Resumen estimado sin registrar el pago
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentPreviewResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /payments/summary:
+    get:
+      tags: [Payments]
+      summary: Calcular la recaudación acreditada por día
+      description: >-
+        Exclusivo de administradores. Usa accreditedAt con from inclusivo y to
+        exclusivo, interpreta las fechas en America/Argentina/Buenos_Aires y
+        devuelve una entrada por cada día calendario cubierto por el período,
+        incluyendo días sin pagos con importe cero. Solo considera pagos
+        ACCREDITED, independientemente de la paginación del listado.
+      operationId: getPaymentsSummary
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Total y recaudación diaria de pagos acreditados del período
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentSummaryResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /payments/{paymentId}:
+    parameters:
+      - $ref: "#/components/parameters/PaymentId"
+    get:
+      tags: [Payments]
+      summary: Consultar un pago
+      operationId: getPayment
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /payments/{paymentId}/voids:
+    parameters:
+      - $ref: "#/components/parameters/PaymentId"
+    post:
+      tags: [Payments]
+      summary: Anular un pago acreditado
+      description: Operación exclusiva de administradores. Conserva el pago y registra la anulación.
+      operationId: voidPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VoidPaymentRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /members/me/payments:
+    get:
+      tags: [Payments]
+      summary: Consultar el historial de pagos propio
+      description: Exclusivo de socios autenticados; incluye pagos acreditados y anulados.
+      operationId: listOwnPayments
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Historial paginado de pagos propios
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentHistoryResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /members/{memberId}/payments:
+    parameters:
+      - $ref: "#/components/parameters/MemberId"
+    get:
+      tags: [Payments]
+      summary: Consultar los pagos de un socio
+      description: Exclusivo de administradores; incluye pagos acreditados y anulados.
+      operationId: listMemberPayments
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Historial paginado de pagos del socio
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentHistoryResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /members/me/medical-certificates:
+    get:
+      tags: [Medical Certificates]
+      summary: Consultar el historial propio de aptos médicos
+      operationId: listOwnMedicalCertificates
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Historial propio de aptos médicos
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalCertificateOwnListResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Medical Certificates]
+      summary: Cargar un apto médico
+      operationId: uploadMedicalCertificate
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Archivo PDF, JPG o PNG de hasta 5 MB.
+      responses:
+        "201":
+          description: Documento recibido y pendiente de revisión
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalCertificate" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /medical-certificates:
+    get:
+      tags: [Medical Certificates]
+      summary: Buscar y filtrar aptos médicos
+      operationId: listMedicalCertificates
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - name: memberId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/MedicalCertificateStatus" }
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: Lista paginada de aptos médicos
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalCertificateAdminListResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /medical-certificates/{certificateId}:
+    parameters:
+      - $ref: "#/components/parameters/CertificateId"
+    get:
+      tags: [Medical Certificates]
+      summary: Consultar el detalle de un apto médico
+      operationId: getMedicalCertificate
+      responses:
+        "200":
+          description: Detalle del apto médico sin exponer una URL pública permanente
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalCertificate" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /medical-certificates/{certificateId}/file:
+    parameters:
+      - $ref: "#/components/parameters/CertificateId"
+    get:
+      tags: [Medical Certificates]
+      summary: Obtener acceso temporal al archivo del apto
+      operationId: getMedicalCertificateFile
+      responses:
+        "200":
+          description: URL firmada de corta duración para el archivo privado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalCertificateFileResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /medical-certificates/{certificateId}/review:
+    parameters:
+      - $ref: "#/components/parameters/CertificateId"
+    patch:
+      tags: [Medical Certificates]
+      summary: Aprobar o rechazar un apto médico
+      description: |
+        La revisión y la notificación se guardan en una sola transacción. Únicamente el socio dueño
+        del apto recibe el aviso (APM-06) y, si se rechazó, incluye la observación registrada. Una
+        segunda revisión del mismo apto responde 409 y no genera otro aviso.
+      operationId: reviewMedicalCertificate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MedicalReviewRequest" }
+      responses:
+        "200":
+          description: Apto médico revisado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalCertificate" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /access-attempts:
+    get:
+      tags: [Access Attempts]
+      summary: Consultar y filtrar intentos de ingreso
+      operationId: listAccessAttempts
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: userId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: search
+          in: query
+          description: Busca por nombre, apellido o documento del usuario.
+          schema: { type: string, maxLength: 100 }
+        - name: branchId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: role
+          in: query
+          schema: { $ref: "#/components/schemas/UserRole" }
+        - name: result
+          in: query
+          schema: { $ref: "#/components/schemas/AccessResult" }
+      responses:
+        "200":
+          description: Intentos de ingreso con usuario, sede y punto de acceso cuando se identifican.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PaginatedResponse"
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: "#/components/schemas/AccessAttempt" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Access Attempts]
+      summary: Validar un QR fijo y registrar el intento
+      description: Verifica la sesión y registra como rechazado un intento de una cuenta inactiva.
+      operationId: createAccessAttempt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AccessAttemptRequest" }
+      responses:
+        "201":
+          description: Intento de ingreso evaluado y registrado, también cuando se rechaza.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccessAttempt" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /access-attempts/{attemptId}:
+    parameters:
+      - $ref: "#/components/parameters/AttemptId"
+    get:
+      tags: [Access Attempts]
+      summary: Consultar un intento de ingreso
+      operationId: getAccessAttempt
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /access-points:
+    get:
+      tags: [Access Points]
+      summary: Listar puntos de acceso
+      operationId: listAccessPoints
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+    post:
+      tags: [Access Points]
+      summary: Crear un punto de acceso
+      operationId: createAccessPoint
+      requestBody:
+        $ref: "#/components/requestBodies/GenericJson"
+      responses:
+        "201": { $ref: "#/components/responses/Created" }
+
+  /access-points/{accessPointId}:
+    parameters:
+      - $ref: "#/components/parameters/AccessPointId"
+    patch:
+      tags: [Access Points]
+      summary: Modificar o cambiar el estado de un punto de acceso
+      operationId: updateAccessPoint
+      requestBody:
+        $ref: "#/components/requestBodies/GenericJson"
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /branches:
+    get:
+      tags: [Branches]
+      summary: Listar sedes activas públicamente
+      description: Busca en nombre, dirección y descripción sin distinguir mayúsculas. Filtra antes de paginar.
+      operationId: listBranches
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Sedes activas ordenadas por nombre e identificador
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicBranchListResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+    post:
+      tags: [Branches]
+      summary: Crear una sede
+      operationId: createBranch
+      requestBody:
+        $ref: "#/components/requestBodies/GenericJson"
+      responses:
+        "201": { $ref: "#/components/responses/Created" }
+
+  /branches/{branchId}:
+    parameters:
+      - $ref: "#/components/parameters/BranchId"
+    get:
+      tags: [Branches]
+      summary: Consultar una sede activa públicamente
+      operationId: getBranch
+      security: []
+      responses:
+        "200":
+          description: Datos de la sede y sus clases programadas, ordenadas por fecha e identificador
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicBranchDetail" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Branches]
+      summary: Modificar una sede
+      operationId: updateBranch
+      requestBody:
+        $ref: "#/components/requestBodies/GenericJson"
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /branches/{branchId}/status:
+    parameters:
+      - $ref: "#/components/parameters/BranchId"
+    patch:
+      tags: [Branches]
+      summary: Activar o desactivar una sede
+      description: Conserva la sede y sus relaciones históricas; las consultas públicas solo muestran sedes activas.
+      operationId: updateBranchStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateBranchStatusRequest" }
+      responses:
+        "200":
+          description: Sede con el estado actualizado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminBranch" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /admin/branches:
+    get:
+      tags: [Branches]
+      summary: Buscar y filtrar sedes para administración
+      description: Incluye sedes activas y desactivadas; combina búsqueda y estado antes de paginar.
+      operationId: listAdminBranches
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - name: isActive
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Sedes filtradas ordenadas por nombre e identificador
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminBranchListResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /admin/branches/{branchId}:
+    parameters:
+      - $ref: "#/components/parameters/BranchId"
+    get:
+      tags: [Branches]
+      summary: Consultar una sede activa o desactivada para administración
+      operationId: getAdminBranch
+      responses:
+        "200":
+          description: Datos de la sede y sus clases históricas y programadas
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminBranchDetail" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /branches/{branchId}/access-points:
+    parameters:
+      - $ref: "#/components/parameters/BranchId"
+    get:
+      tags: [Access Points]
+      summary: Listar los puntos de acceso de una sede
+      operationId: listBranchAccessPoints
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+    post:
+      tags: [Access Points]
+      summary: Crear un punto de acceso en una sede
+      operationId: createBranchAccessPoint
+      requestBody:
+        $ref: "#/components/requestBodies/GenericJson"
+      responses:
+        "201": { $ref: "#/components/responses/Created" }
+
+  /weekly-schedules:
+    get:
+      tags: [Weekly Schedules]
+      summary: Consultar el cronograma de una semana
+      description: >-
+        Consulta pública. Sin weekStartsOn devuelve la semana actual de
+        America/Argentina/Buenos_Aires; si se indica, debe ser un lunes. La
+        ventana comienza el lunes 00:00 inclusive y termina el lunes siguiente
+        00:00 sin incluirlo.
+        Solo incluye clases de sedes activas, ordenadas por inicio, sede e id.
+        El dominio vigente solo almacena startsAt: no registra una hora de
+        finalización y la API no infiere una duración inexistente.
+      operationId: listWeeklySchedules
+      security: []
+      parameters:
+        - name: weekStartsOn
+          in: query
+          required: false
+          description: Lunes local; si se omite se usa la semana actual de Buenos Aires.
+          schema: { type: string, format: date, example: "2030-09-02" }
+      responses:
+        "200":
+          description: Cronograma semanal y sus clases ordenadas por fecha
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeeklySchedule" }
+              example:
+                id: f12101a5-e6ab-43f7-91b3-2b8fbfd67b84
+                weekStartsOn: "2030-09-02"
+                classes:
+                  - id: eb3bc849-5234-48a3-b54a-9f9e38608de2
+                    activity: Yoga
+                    day: "2030-09-02"
+                    startsAt: "2030-09-02T13:00:00.000Z"
+                    startTime: "10:00"
+                    branch:
+                      id: 83cd902e-0475-4c92-943c-129b751dacee
+                      name: Centro
+                    trainer: null
+        "400": { $ref: "#/components/responses/ValidationError" }
+
+  /weekly-schedules/{scheduleId}:
+    parameters:
+      - $ref: "#/components/parameters/ScheduleId"
+    get:
+      tags: [Weekly Schedules]
+      summary: Consultar un cronograma semanal
+      operationId: getWeeklySchedule
+      security: []
+      responses:
+        "200":
+          description: Cronograma semanal y sus clases ordenadas por fecha
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeeklySchedule" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /weekly-schedules/{scheduleId}/copies:
+    parameters:
+      - $ref: "#/components/parameters/ScheduleId"
+    post:
+      tags: [Weekly Schedules]
+      summary: Copiar el cronograma a otra semana
+      description: >-
+        Exclusivo de administradores autenticados que ya cambiaron su
+        contraseña temporal. La fecha de destino debe ser exactamente el lunes
+        siguiente al cronograma de origen y no puede ser pasada. La operación
+        transaccional copia actividad, día, horario de inicio, sede y entrenador
+        opcional sin modificar el origen. La restricción única de semana hace
+        que los reintentos y solicitudes concurrentes no dupliquen clases: la
+        primera creación responde 201 y una semana ya existente responde 409. Cada
+        entrenador asignado en las clases copiadas recibe una notificación "Clase
+        asignada" por clase, en la misma transacción.
+      operationId: copyWeeklySchedule
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [weekStartsOn]
+              properties:
+                weekStartsOn: { type: string, format: date, example: "2030-09-09" }
+      responses:
+        "201":
+          description: Cronograma semanal copiado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeeklySchedule" }
+              example:
+                id: 8e75fbd7-22cf-4e18-8e72-6ee20e0f00ad
+                weekStartsOn: "2030-09-09"
+                classes:
+                  - id: 47baa66b-2574-4e63-bbd1-7b21421ed273
+                    activity: Yoga
+                    day: "2030-09-09"
+                    startsAt: "2030-09-09T13:00:00.000Z"
+                    startTime: "10:00"
+                    branch:
+                      id: 83cd902e-0475-4c92-943c-129b751dacee
+                      name: Centro
+                    trainer: null
+        "400":
+          description: Identificadores inválidos, destino no lunes o destino que no es la semana siguiente
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              example:
+                code: VALIDATION_ERROR
+                message: La semana de destino debe ser la semana inmediatamente siguiente
+                details: null
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: Cronograma, sede o entrenador inexistente
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "409":
+          description: Semana ya existente, destino pasado, sede desactivada o entrenador inactivo
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              examples:
+                existingWeek:
+                  summary: Reintento o solicitud concurrente
+                  value:
+                    code: CONFLICT
+                    message: Ya existe un cronograma para la semana de destino
+                    details: null
+                inactiveAssignment:
+                  summary: Una asignación dejó de ser válida
+                  value:
+                    code: CONFLICT
+                    message: La sede está desactivada
+                    details: null
+
+  /scheduled-classes:
+    post:
+      tags: [Scheduled Classes]
+      summary: Crear una clase en un cronograma
+      description: >-
+        Exclusivo de administradores. Crea automáticamente el cronograma si es la
+        primera clase de esa semana. weekStartsOn es el lunes del calendario de
+        America/Argentina/Buenos_Aires; startsAt debe tener zona horaria y caer
+        entre ese lunes inclusive y el lunes siguiente exclusivo en ese calendario.
+        No se crean clases que ya comenzaron. La sede y el entrenador opcional
+        deben seguir activos al guardar la clase. Si se indica un entrenador, recibe la
+        notificación "Clase asignada" en la misma transacción.
+      operationId: createScheduledClass
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateScheduledClassRequest" }
+      responses:
+        "201":
+          description: Clase creada y cronograma semanal asociado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ManagedScheduledClass" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /scheduled-classes/{classId}:
+    parameters:
+      - $ref: "#/components/parameters/ClassId"
+    get:
+      tags: [Scheduled Classes]
+      summary: Consultar una clase
+      operationId: getScheduledClass
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+    patch:
+      tags: [Scheduled Classes]
+      summary: Modificar una clase
+      description: >-
+        Exclusivo de administradores. La clase permanece en su semana original;
+        startsAt debe seguir dentro de ella. Se permite quitar el entrenador con
+        trainerId null. No se modifican clases que ya comenzaron. Cada cambio real
+        notifica a los entrenadores afectados: quien conserva la clase recibe "Clase
+        modificada" con lo que cambió (actividad, horario o sede); quien deja de tenerla
+        recibe "Clase reasignada" y quien pasa a tenerla recibe "Clase asignada". Una
+        solicitud que no cambia nada, o su reintento exacto, no genera avisos, mientras
+        que volver a cambiar la clase (A a B, B a A, A a B) genera un aviso por cambio.
+      operationId: updateScheduledClass
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateScheduledClassRequest" }
+      responses:
+        "200":
+          description: Clase modificada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ManagedScheduledClass" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Scheduled Classes]
+      summary: Quitar una clase del cronograma
+      description: >-
+        Exclusivo de administradores. Quita una clase que todavía no comenzó;
+        conserva el cronograma semanal y las clases históricas. El entrenador asignado
+        recibe la notificación "Clase cancelada".
+      operationId: deleteScheduledClass
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /trainers:
+    get:
+      tags: [Trainers]
+      summary: Listar entrenadores activos
+      operationId: listTrainers
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+
+  /trainers/me:
+    get:
+      tags: [Trainers]
+      summary: Consultar el perfil profesional propio
+      operationId: getOwnTrainerProfile
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+    patch:
+      tags: [Trainers]
+      summary: Modificar el perfil profesional propio
+      operationId: updateOwnTrainerProfile
+      requestBody:
+        $ref: "#/components/requestBodies/GenericJson"
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /trainers/me/scheduled-classes:
+    get:
+      tags: [Trainers]
+      summary: Consultar las clases propias del entrenador
+      operationId: listOwnTrainerClasses
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+
+  /trainers/{trainerId}:
+    parameters:
+      - $ref: "#/components/parameters/TrainerId"
+    get:
+      tags: [Trainers]
+      summary: Consultar el perfil público de un entrenador
+      operationId: getTrainer
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /trainers/{trainerId}/branches:
+    parameters:
+      - $ref: "#/components/parameters/TrainerId"
+    put:
+      tags: [Trainers]
+      summary: Reemplazar las sedes asignadas a un entrenador
+      operationId: replaceTrainerBranches
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branchIds]
+              properties:
+                branchIds:
+                  type: array
+                  uniqueItems: true
+                  items: { type: string, format: uuid }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /events:
+    get:
+      tags: [Events]
+      summary: Listar eventos visibles
+      operationId: listEvents
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/EventStatus" }
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+    post:
+      tags: [Events]
+      summary: Crear un evento
+      operationId: createEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateEventRequest" }
+      responses:
+        "201": { $ref: "#/components/responses/Created" }
+
+  /events/{eventId}:
+    parameters:
+      - $ref: "#/components/parameters/EventId"
+    get:
+      tags: [Events]
+      summary: Consultar un evento
+      operationId: getEvent
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+    patch:
+      tags: [Events]
+      summary: Modificar un evento
+      operationId: updateEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateEventRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /events/{eventId}/status:
+    parameters:
+      - $ref: "#/components/parameters/EventId"
+    patch:
+      tags: [Events]
+      summary: Publicar o cancelar un evento
+      description: |
+        Cancelar un evento publicado conserva su registro con estado CANCELLED y notifica a los
+        socios y entrenadores activos (EVE-03). Repetir la cancelación, aunque sea de forma
+        simultánea, no duplica los avisos. Cancelar un borrador, que nunca fue visible, no genera
+        avisos. Un evento cancelado no puede volver a publicarse (409).
+      operationId: updateEventStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateEventStatusRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /news-posts:
+    get:
+      tags: [News Posts]
+      summary: Listar novedades visibles para la audiencia
+      operationId: listNewsPosts
+      responses:
+        "200": { $ref: "#/components/responses/Paginated" }
+    post:
+      tags: [News Posts]
+      summary: Crear una novedad
+      operationId: createNewsPost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateNewsPostRequest" }
+      responses:
+        "201": { $ref: "#/components/responses/Created" }
+
+  /news-posts/{newsPostId}:
+    parameters:
+      - $ref: "#/components/parameters/NewsPostId"
+    get:
+      tags: [News Posts]
+      summary: Consultar una novedad
+      operationId: getNewsPost
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+    patch:
+      tags: [News Posts]
+      summary: Modificar una novedad
+      operationId: updateNewsPost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateNewsPostRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /news-posts/{newsPostId}/status:
+    parameters:
+      - $ref: "#/components/parameters/NewsPostId"
+    patch:
+      tags: [News Posts]
+      summary: Publicar o desactivar una novedad
+      operationId: updateNewsPostStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateNewsPostStatusRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: Consultar las notificaciones propias
+      description: |
+        Devuelve únicamente las notificaciones de la cuenta autenticada, de la más reciente a la
+        más antigua (desempate estable por identificador). La identidad se obtiene siempre del
+        token: no existe ningún parámetro para consultar la bandeja de otra persona y un
+        parámetro desconocido, como `userId`, se rechaza con 400.
+
+        `total` cuenta las notificaciones que cumplen el filtro `isRead` y `unreadCount` cuenta
+        todas las no leídas de la cuenta, sin importar el filtro ni la página. Sirve para el
+        contador de la interfaz y para saber si "marcar todas" tiene algo que hacer.
+
+        Para un socio, esta consulta también genera, una sola vez por vencimiento, el aviso de
+        "Cuota próxima a vencer" (cinco días o menos de vigencia) o de "Cuota vencida" (la
+        vigencia terminó o no hay pagos acreditados). La operación es idempotente. Las fechas
+        de los textos están expresadas en horario de Argentina (America/Argentina/Buenos_Aires);
+        `createdAt` y `readAt` son instantes UTC en formato ISO 8601.
+      operationId: listNotifications
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - name: isRead
+          in: query
+          description: "`true` devuelve solo las leídas y `false` solo las no leídas; sin el parámetro, todas."
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Notificaciones propias ordenadas de la más reciente a la más antigua
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationListResponse" }
+              example:
+                items:
+                  - id: 9f0c5d3e-3f0e-4d3b-9a39-6f6a1c2b7e10
+                    userId: 3f2a6f0e-5c2b-4a53-8d0e-2f5d6a1c9b44
+                    title: Apto médico rechazado
+                    message: "Tu apto médico fue rechazado. Observación: Falta la firma del profesional."
+                    type: MEDICAL_CERTIFICATE_REVIEWED
+                    createdAt: "2030-09-02T15:20:00.000Z"
+                    readAt: null
+                  - id: 4a6b1a2c-8c0d-4e0e-8f41-0f9c7b0c2a55
+                    userId: 3f2a6f0e-5c2b-4a53-8d0e-2f5d6a1c9b44
+                    title: Aumento de cuota
+                    message: La cuota mensual pasa a ser de $ 25.000,00 desde el 01/10/2030.
+                    type: MEMBERSHIP_PRICE_CHANGED
+                    createdAt: "2030-09-01T12:00:00.000Z"
+                    readAt: "2030-09-01T12:30:00.000Z"
+                page: 1
+                limit: 20
+                total: 2
+                unreadCount: 1
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /notifications/read-status:
+    patch:
+      tags: [Notifications]
+      summary: Marcar todas las notificaciones propias como leídas
+      description: |
+        Marca como leídas todas las notificaciones no leídas de la cuenta autenticada. No elimina
+        nada del historial y conserva la fecha de lectura de las que ya estaban leídas. No recibe
+        cuerpo: nunca afecta a otras cuentas.
+      operationId: markAllNotificationsAsRead
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /notifications/{notificationId}:
+    parameters:
+      - $ref: "#/components/parameters/NotificationId"
+    get:
+      tags: [Notifications]
+      summary: Consultar una notificación propia
+      description: |
+        Responde 404 tanto si la notificación no existe como si pertenece a otra cuenta, para no
+        revelar la existencia de notificaciones ajenas.
+      operationId: getNotification
+      responses:
+        "200":
+          description: Notificación propia
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Notification" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /notifications/{notificationId}/read-status:
+    parameters:
+      - $ref: "#/components/parameters/NotificationId"
+    patch:
+      tags: [Notifications]
+      summary: Marcar una notificación propia como leída
+      description: |
+        Es idempotente: repetir la operación conserva la primera fecha de lectura. Responde 404
+        si la notificación no existe o pertenece a otra cuenta, y en ese caso no modifica nada.
+      operationId: markNotificationAsRead
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Enviar Authorization: Bearer <JWT>. La API verifica la firma HS256 y la
+        expiración, y consulta en cada solicitud privada el usuario actual.
+        El usuario debe existir y estar ACTIVE. Los permisos se evalúan con su
+        rol actual en la base de datos, no con el rol incluido en el JWT.
+
+  parameters:
+    Search:
+      name: search
+      in: query
+      schema: { type: string }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    From:
+      name: from
+      in: query
+      schema: { type: string, format: date-time }
+    To:
+      name: to
+      in: query
+      schema: { type: string, format: date-time }
+    UserId: { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
+    MemberId: { name: memberId, in: path, required: true, schema: { type: string, format: uuid } }
+    PaymentId: { name: paymentId, in: path, required: true, schema: { type: string, format: uuid } }
+    CertificateId: { name: certificateId, in: path, required: true, schema: { type: string, format: uuid } }
+    AttemptId: { name: attemptId, in: path, required: true, schema: { type: string, format: uuid } }
+    AccessPointId: { name: accessPointId, in: path, required: true, schema: { type: string, format: uuid } }
+    BranchId: { name: branchId, in: path, required: true, schema: { type: string, format: uuid } }
+    ScheduleId: { name: scheduleId, in: path, required: true, schema: { type: string, format: uuid } }
+    ClassId: { name: classId, in: path, required: true, schema: { type: string, format: uuid } }
+    TrainerId: { name: trainerId, in: path, required: true, schema: { type: string, format: uuid } }
+    EventId: { name: eventId, in: path, required: true, schema: { type: string, format: uuid } }
+    NewsPostId: { name: newsPostId, in: path, required: true, schema: { type: string, format: uuid } }
+    NotificationId: { name: notificationId, in: path, required: true, schema: { type: string, format: uuid } }
+
+  requestBodies:
+    GenericJson:
+      required: true
+      content:
+        application/json:
+          schema: { type: object, additionalProperties: true }
+
+  responses:
+    Success:
+      description: Operación exitosa
+      content:
+        application/json:
+          schema: { type: object, additionalProperties: true }
+    Created:
+      description: Recurso creado
+      content:
+        application/json:
+          schema: { type: object, additionalProperties: true }
+    NoContent:
+      description: Operación completada sin contenido
+    Paginated:
+      description: Resultado paginado
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/PaginatedResponse" }
+    ValidationError:
+      description: Datos inválidos
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Unauthorized:
+      description: Bearer ausente o mal formado, JWT inválido o vencido, o usuario inexistente
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            code: UNAUTHORIZED
+            message: Se requiere una autenticación válida
+            details: null
+    Forbidden:
+      description: Cuenta inactiva, cambio de contraseña pendiente o rol actual sin permisos
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          examples:
+            insufficientRole:
+              value:
+                code: FORBIDDEN
+                message: No tiene permisos para realizar esta operación
+                details: null
+            inactiveAccount:
+              value:
+                code: ACCOUNT_INACTIVE
+                message: La cuenta se encuentra inactiva
+                details: null
+            passwordChangeRequired:
+              value:
+                code: PASSWORD_CHANGE_REQUIRED
+                message: Debe cambiar la contraseña temporal antes de continuar
+                details: null
+    NotFound:
+      description: Recurso inexistente
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    InternalServerError:
+      description: Error interno inesperado
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Conflict:
+      description: La operación entra en conflicto con el estado actual
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, environment]
+      properties:
+        status: { type: string, const: ok }
+        environment: { type: string, examples: [development] }
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [code, message, details]
+      properties:
+        message: { type: string }
+        code: { type: string }
+        details: { type: [object, "null"], additionalProperties: true }
+    PaginatedResponse:
+      type: object
+      required: [items, page, limit, total]
+      properties:
+        items: { type: array, items: {} }
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+    UserRole:
+      type: string
+      enum: [MEMBER, TRAINER, ADMIN]
+    UserStatus:
+      type: string
+      enum: [ACTIVE, INACTIVE]
+    MembershipStatus:
+      type: string
+      description: Estado calculado; no se almacena en la base de datos.
+      enum: [CURRENT, EXPIRING_SOON, EXPIRED]
+    MemberListItem:
+      type: object
+      additionalProperties: false
+      required: [id, firstName, lastName, documentNumber, email, status, membershipStatus, lastPaymentAt, expiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        documentNumber: { type: string }
+        email: { type: string, format: email }
+        status: { $ref: "#/components/schemas/UserStatus" }
+        membershipStatus: { $ref: "#/components/schemas/MembershipStatus" }
+        lastPaymentAt: { type: [string, "null"], format: date-time }
+        expiresAt: { type: [string, "null"], format: date-time }
+    MemberListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MemberListItem" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    PaymentStatus:
+      type: string
+      enum: [ACCREDITED, VOIDED]
+    PaymentHistoryItem:
+      type: object
+      additionalProperties: false
+      required: [id, accreditedAt, amount, method, receiptNumber, status, expiresAt, voidedAt, voidReason]
+      properties:
+        id: { type: string, format: uuid }
+        accreditedAt: { type: string, format: date-time }
+        amount: { type: string, description: Importe decimal representado sin pérdida de precisión }
+        method: { type: string }
+        receiptNumber: { type: [string, "null"] }
+        status: { $ref: "#/components/schemas/PaymentStatus" }
+        expiresAt: { type: string, format: date-time }
+        voidedAt: { type: [string, "null"], format: date-time }
+        voidReason: { type: [string, "null"] }
+    PaymentHistoryResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentHistoryItem" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    PaymentReportItem:
+      type: object
+      additionalProperties: false
+      required: [id, accreditedAt, amount, method, receiptNumber, status, expiresAt, voidedAt, voidReason, member]
+      properties:
+        id: { type: string, format: uuid }
+        accreditedAt: { type: string, format: date-time }
+        amount: { type: string, description: Importe decimal sin pérdida de precisión }
+        method: { type: string }
+        receiptNumber: { type: [string, "null"] }
+        status: { $ref: "#/components/schemas/PaymentStatus" }
+        expiresAt: { type: string, format: date-time }
+        voidedAt: { type: [string, "null"], format: date-time }
+        voidReason: { type: [string, "null"] }
+        member:
+          type: object
+          additionalProperties: false
+          required: [id, firstName, lastName, documentNumber, email]
+          properties:
+            id: { type: string, format: uuid }
+            firstName: { type: string }
+            lastName: { type: string }
+            documentNumber: { type: string }
+            email: { type: string, format: email }
+    PaymentReportResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentReportItem" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    PaymentSummaryResponse:
+      type: object
+      additionalProperties: false
+      required: [from, to, paymentCount, totalAmount, days]
+      properties:
+        from: { type: string, format: date-time, description: Límite inclusivo de accreditedAt }
+        to: { type: string, format: date-time, description: Límite exclusivo de accreditedAt }
+        paymentCount: { type: integer, minimum: 0 }
+        totalAmount: { type: string, description: Suma decimal exacta de pagos ACCREDITED }
+        days:
+          type: array
+          description: Un valor por cada día calendario cubierto por el período, ordenado ascendentemente
+          items: { $ref: "#/components/schemas/PaymentSummaryDay" }
+    PaymentSummaryDay:
+      type: object
+      additionalProperties: false
+      required: [date, amount]
+      properties:
+        date: { type: string, format: date }
+        amount: { type: string, description: Suma decimal exacta de pagos ACCREDITED de la fecha }
+    PublicBranchCard:
+      type: object
+      additionalProperties: false
+      required: [id, name, imageUrl, address, openingHours, phone, description]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        imageUrl: { type: string, format: uri }
+        address: { type: string }
+        openingHours: { type: string }
+        phone: { type: string }
+        description: { type: string }
+    PublicBranchListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PublicBranchCard" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    PublicBranchScheduledClass:
+      type: object
+      additionalProperties: false
+      required: [id, activity, startsAt, trainer]
+      properties:
+        id: { type: string, format: uuid }
+        activity: { type: string }
+        startsAt: { type: string, format: date-time }
+        trainer:
+          oneOf:
+            - type: 'null'
+            - type: object
+              additionalProperties: false
+              required: [id, firstName, lastName]
+              properties:
+                id: { type: string, format: uuid }
+                firstName: { type: string }
+                lastName: { type: string }
+    PublicBranchDetail:
+      type: object
+      additionalProperties: false
+      required: [id, name, imageUrl, address, openingHours, phone, description, latitude, longitude, scheduledClasses]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        imageUrl: { type: string, format: uri }
+        address: { type: string }
+        openingHours: { type: string }
+        phone: { type: string }
+        description: { type: string }
+        latitude: { type: [string, 'null'], description: Coordenada decimal disponible }
+        longitude: { type: [string, 'null'], description: Coordenada decimal disponible }
+        scheduledClasses:
+          type: array
+          items: { $ref: "#/components/schemas/PublicBranchScheduledClass" }
+    UpdateBranchStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [isActive]
+      properties:
+        isActive: { type: boolean }
+    AdminBranch:
+      type: object
+      additionalProperties: false
+      required: [id, name, imageUrl, address, openingHours, phone, description, latitude, longitude, isActive]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        imageUrl: { type: string, format: uri }
+        address: { type: string }
+        openingHours: { type: string }
+        phone: { type: string }
+        description: { type: string }
+        latitude: { type: [string, 'null'] }
+        longitude: { type: [string, 'null'] }
+        isActive: { type: boolean }
+    AdminBranchListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminBranch" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    AdminBranchDetail:
+      type: object
+      additionalProperties: false
+      required: [id, name, imageUrl, address, openingHours, phone, description, latitude, longitude, isActive, scheduledClasses]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        imageUrl: { type: string, format: uri }
+        address: { type: string }
+        openingHours: { type: string }
+        phone: { type: string }
+        description: { type: string }
+        latitude: { type: [string, 'null'] }
+        longitude: { type: [string, 'null'] }
+        isActive: { type: boolean }
+        scheduledClasses:
+          type: array
+          items: { $ref: "#/components/schemas/PublicBranchScheduledClass" }
+    CreateScheduledClassRequest:
+      type: object
+      additionalProperties: false
+      required: [weekStartsOn, activity, startsAt, branchId]
+      properties:
+        weekStartsOn: { type: string, format: date, description: Lunes local de la semana }
+        activity: { type: string, minLength: 1, maxLength: 150 }
+        startsAt: { type: string, format: date-time, description: Fecha y hora con zona horaria }
+        branchId: { type: string, format: uuid }
+        trainerId: { type: [string, 'null'], format: uuid, description: Opcional; null deja la clase sin entrenador }
+    UpdateScheduledClassRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        activity: { type: string, minLength: 1, maxLength: 150 }
+        startsAt: { type: string, format: date-time }
+        branchId: { type: string, format: uuid }
+        trainerId: { type: [string, 'null'], format: uuid }
+    ManagedScheduledClass:
+      type: object
+      additionalProperties: false
+      required: [id, scheduleId, weekStartsOn, activity, startsAt, branchId, trainerId]
+      properties:
+        id: { type: string, format: uuid }
+        scheduleId: { type: string, format: uuid }
+        weekStartsOn: { type: string, format: date }
+        activity: { type: string }
+        startsAt: { type: string, format: date-time }
+        branchId: { type: string, format: uuid }
+        trainerId: { type: [string, 'null'], format: uuid }
+    WeeklyScheduleClass:
+      type: object
+      additionalProperties: false
+      required: [id, activity, day, startsAt, startTime, branch, trainer]
+      properties:
+        id: { type: string, format: uuid }
+        activity: { type: string }
+        day:
+          type: string
+          format: date
+          description: Día local en America/Argentina/Buenos_Aires.
+        startsAt:
+          type: string
+          format: date-time
+          description: Instante de inicio normalizado en ISO 8601.
+        startTime:
+          type: string
+          pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+          description: Hora local de inicio en formato HH:mm.
+        branch:
+          type: object
+          additionalProperties: false
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+        trainer:
+          oneOf:
+            - type: 'null'
+            - type: object
+              additionalProperties: false
+              required: [id, firstName, lastName]
+              properties:
+                id: { type: string, format: uuid }
+                firstName: { type: string }
+                lastName: { type: string }
+    WeeklySchedule:
+      type: object
+      additionalProperties: false
+      required: [id, weekStartsOn, classes]
+      properties:
+        id: { type: [string, 'null'], format: uuid }
+        weekStartsOn: { type: string, format: date }
+        classes:
+          type: array
+          items: { $ref: "#/components/schemas/WeeklyScheduleClass" }
+    MedicalCertificateStatus:
+      type: string
+      enum: [PENDING, APPROVED, REJECTED]
+    MedicalCertificateMember:
+      type: object
+      additionalProperties: false
+      required: [id, firstName, lastName, documentNumber, email]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        documentNumber: { type: string }
+        email: { type: string, format: email }
+    MedicalCertificateReviewer:
+      type: object
+      additionalProperties: false
+      required: [id, firstName, lastName]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+    MedicalCertificate:
+      type: object
+      additionalProperties: false
+      required: [id, memberId, status, uploadedAt, reviewedAt, reviewComment, member, reviewedBy]
+      properties:
+        id: { type: string, format: uuid }
+        memberId: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/MedicalCertificateStatus" }
+        uploadedAt: { type: string, format: date-time }
+        reviewedAt: { type: [string, "null"], format: date-time }
+        reviewComment: { type: [string, "null"] }
+        member:
+          oneOf:
+            - $ref: "#/components/schemas/MedicalCertificateMember"
+            - type: "null"
+        reviewedBy:
+          oneOf:
+            - $ref: "#/components/schemas/MedicalCertificateReviewer"
+            - type: "null"
+    InitialMedicalCertificatePeriod:
+      type: object
+      additionalProperties: false
+      required: [startsAt, expiresAt, daysRemaining, isActive]
+      properties:
+        startsAt: { type: [string, "null"], format: date-time }
+        expiresAt: { type: [string, "null"], format: date-time }
+        daysRemaining: { type: integer, minimum: 0 }
+        isActive: { type: boolean }
+    MedicalCertificateOwnListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total, initialMedicalCertificatePeriod]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MedicalCertificate" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1 }
+        total: { type: integer, minimum: 0 }
+        initialMedicalCertificatePeriod: { $ref: "#/components/schemas/InitialMedicalCertificatePeriod" }
+    MedicalCertificateAdminListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MedicalCertificate" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1 }
+        total: { type: integer, minimum: 0 }
+    MedicalCertificateFileResponse:
+      type: object
+      additionalProperties: false
+      required: [signedUrl, expiresIn]
+      properties:
+        signedUrl: { type: string, format: uri }
+        expiresIn: { type: integer, minimum: 1, description: Duración de la URL firmada en segundos }
+    AccessResult:
+      type: string
+      enum: [ALLOWED, DENIED]
+    AccessDenialReason:
+      type: [string, "null"]
+      enum: [INVALID_QR, INACTIVE_USER, INACTIVE_BRANCH, INACTIVE_ACCESS_POINT, EXPIRED_MEMBERSHIP, MEDICAL_CERTIFICATE_REQUIRED, null]
+    AccessAttempt:
+      type: object
+      additionalProperties: false
+      required: [id, userId, roleAtAttempt, branchId, accessPointId, result, denialReason, attemptedAt, branch, accessPoint]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        roleAtAttempt: { $ref: "#/components/schemas/UserRole" }
+        branchId: { type: [string, "null"], format: uuid }
+        accessPointId: { type: [string, "null"], format: uuid }
+        result: { $ref: "#/components/schemas/AccessResult" }
+        denialReason: { $ref: "#/components/schemas/AccessDenialReason" }
+        attemptedAt: { type: string, format: date-time }
+        user:
+          type: object
+          additionalProperties: false
+          required: [id, firstName, lastName, documentNumber]
+          properties:
+            id: { type: string, format: uuid }
+            firstName: { type: string }
+            lastName: { type: string }
+            documentNumber: { type: string }
+        branch: { $ref: "#/components/schemas/EntityRefOrNull" }
+        accessPoint: { $ref: "#/components/schemas/EntityRefOrNull" }
+    EntityRefOrNull:
+      oneOf:
+        - $ref: "#/components/schemas/EntityRef"
+        - type: "null"
+    EntityRef:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+    EventStatus:
+      type: string
+      enum: [DRAFT, PUBLISHED, CANCELLED]
+    EventDisplayStatus:
+      type: string
+      enum: [UPCOMING, FINISHED, CANCELLED]
+    Event:
+      type: object
+      additionalProperties: false
+      required: [id, title, description, startsAt, location, imageUrl, status, displayStatus, createdById]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string, maxLength: 200 }
+        description: { type: string }
+        startsAt: { type: string, format: date-time }
+        location: { type: string, maxLength: 255 }
+        imageUrl: { type: string, format: uri }
+        status: { $ref: "#/components/schemas/EventStatus" }
+        displayStatus: { $ref: "#/components/schemas/EventDisplayStatus" }
+        createdById: { type: string, format: uuid }
+    CreateEventRequest:
+      type: object
+      additionalProperties: false
+      required: [title, description, startsAt, location, imageUrl]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, minLength: 1 }
+        startsAt: { type: string, format: date-time }
+        location: { type: string, minLength: 1, maxLength: 255 }
+        imageUrl: { type: string, format: uri, maxLength: 2048 }
+        status: { type: string, enum: [DRAFT, PUBLISHED], default: DRAFT }
+    UpdateEventRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, minLength: 1 }
+        startsAt: { type: string, format: date-time }
+        location: { type: string, minLength: 1, maxLength: 255 }
+        imageUrl: { type: string, format: uri, maxLength: 2048 }
+    UpdateEventStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [PUBLISHED, CANCELLED] }
+    PublicationAudience:
+      type: string
+      enum: [ALL, MEMBERS, TRAINERS]
+    PublicationStatus:
+      type: string
+      enum: [DRAFT, PUBLISHED, INACTIVE]
+    NewsPost:
+      type: object
+      additionalProperties: false
+      required: [id, title, content, imageUrl, audience, status, publishedAt, createdById]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string, maxLength: 200 }
+        content: { type: string }
+        imageUrl: { type: [string, "null"], format: uri }
+        audience: { $ref: "#/components/schemas/PublicationAudience" }
+        status: { $ref: "#/components/schemas/PublicationStatus" }
+        publishedAt: { type: [string, "null"], format: date-time }
+        createdById: { type: string, format: uuid }
+    CreateNewsPostRequest:
+      type: object
+      additionalProperties: false
+      required: [title, content, audience]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        content: { type: string, minLength: 1 }
+        imageUrl: { type: [string, "null"], format: uri }
+        audience: { $ref: "#/components/schemas/PublicationAudience" }
+        status: { type: string, enum: [DRAFT, PUBLISHED], default: DRAFT }
+    UpdateNewsPostRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        content: { type: string, minLength: 1 }
+        imageUrl: { type: [string, "null"], format: uri }
+        audience: { $ref: "#/components/schemas/PublicationAudience" }
+    UpdateNewsPostStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [PUBLISHED, INACTIVE] }
+    NotificationType:
+      type: string
+      description: |
+        MEMBERSHIP_PRICE_CHANGED: aumento de la cuota. MEMBERSHIP_EXPIRING / MEMBERSHIP_EXPIRED: cuota
+        próxima a vencer o vencida. MEDICAL_CERTIFICATE_REVIEWED: resultado de la revisión del apto
+        médico. CLASS_CHANGED: alta, cambio, reasignación o cancelación de una clase del entrenador.
+        EVENT_CANCELLED: evento publicado que fue cancelado. GENERAL: reservado para comunicaciones
+        internas.
+      enum: [MEMBERSHIP_PRICE_CHANGED, MEMBERSHIP_EXPIRING, MEMBERSHIP_EXPIRED, MEDICAL_CERTIFICATE_REVIEWED, CLASS_CHANGED, EVENT_CANCELLED, GENERAL]
+    Notification:
+      type: object
+      additionalProperties: false
+      required: [id, userId, title, message, type, createdAt, readAt]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid, description: Destinatario; siempre es la cuenta autenticada }
+        title: { type: string, maxLength: 200 }
+        message:
+          type: string
+          description: Texto en español. Las fechas y horas que menciona están en horario de Argentina.
+        type: { $ref: "#/components/schemas/NotificationType" }
+        createdAt: { type: string, format: date-time, description: Instante UTC en que se generó el aviso }
+        readAt: { type: [string, "null"], format: date-time, description: Instante UTC de la primera lectura; null si no fue leída }
+    NotificationListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total, unreadCount]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Notification" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total:
+          type: integer
+          minimum: 0
+          description: Notificaciones que cumplen el filtro solicitado
+        unreadCount:
+          type: integer
+          minimum: 0
+          description: Todas las notificaciones no leídas de la cuenta, sin importar el filtro ni la página
+    User:
+      type: object
+      required: [id, firstName, lastName, documentNumber, email, role, status]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        documentNumber: { type: string }
+        birthDate: { type: string, format: date }
+        email: { type: string, format: email }
+        phone: { type: string }
+        photoUrl: { type: [string, "null"], format: uri }
+        role: { $ref: "#/components/schemas/UserRole" }
+        status: { $ref: "#/components/schemas/UserStatus" }
+        isPasswordChangeRequired: { type: boolean }
+    AdminUserListItem:
+      type: object
+      additionalProperties: false
+      required: [id, firstName, lastName, documentNumber, email, role, status]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        documentNumber: { type: string }
+        email: { type: string, format: email }
+        role: { $ref: "#/components/schemas/UserRole" }
+        status: { $ref: "#/components/schemas/UserStatus" }
+    AdminUserPayment:
+      type: object
+      additionalProperties: false
+      required: [id, amount, method, receiptNumber, status, createdAt, accreditedAt, expiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        amount: { type: string, description: Importe decimal representado sin pérdida de precisión }
+        method: { type: string }
+        receiptNumber: { type: [string, "null"] }
+        status: { $ref: "#/components/schemas/PaymentStatus" }
+        createdAt: { type: string, format: date-time }
+        accreditedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    AdminUserMedicalCertificate:
+      type: object
+      additionalProperties: false
+      required: [id, fileUrl, status, uploadedAt, reviewedAt, reviewComment]
+      properties:
+        id: { type: string, format: uuid }
+        fileUrl: { type: string, format: uri }
+        status: { $ref: "#/components/schemas/MedicalCertificateStatus" }
+        uploadedAt: { type: string, format: date-time }
+        reviewedAt: { type: [string, "null"], format: date-time }
+        reviewComment: { type: [string, "null"] }
+    AdminUserDetail:
+      type: object
+      additionalProperties: false
+      required: [id, firstName, lastName, documentNumber, birthDate, email, phone, photoUrl, role, status, createdAt, isPasswordChangeRequired, memberProfile, trainerProfile, membership, payments, medicalCertificates, trainerBranches, classes]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        documentNumber: { type: string }
+        birthDate: { type: string, format: date }
+        email: { type: string, format: email }
+        phone: { type: string }
+        photoUrl: { type: [string, "null"], format: uri }
+        role: { $ref: "#/components/schemas/UserRole" }
+        status: { $ref: "#/components/schemas/UserStatus" }
+        createdAt: { type: string, format: date-time }
+        isPasswordChangeRequired: { type: boolean }
+        memberProfile:
+          oneOf:
+            - $ref: "#/components/schemas/MemberProfile"
+            - type: "null"
+        trainerProfile:
+          oneOf:
+            - $ref: "#/components/schemas/TrainerProfile"
+            - type: "null"
+        membership:
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [status, paymentId, expiresAt]
+              properties:
+                status: { type: string, enum: [ACTIVE, EXPIRED] }
+                paymentId: { type: string, format: uuid }
+                expiresAt: { type: string, format: date-time }
+            - type: "null"
+        payments:
+          type: array
+          items: { $ref: "#/components/schemas/AdminUserPayment" }
+        medicalCertificates:
+          type: array
+          items: { $ref: "#/components/schemas/AdminUserMedicalCertificate" }
+        trainerBranches:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, address]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              address: { type: string }
+        classes:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, activity, startsAt, branch]
+            properties:
+              id: { type: string, format: uuid }
+              activity: { type: string }
+              startsAt: { type: string, format: date-time }
+              branch:
+                type: object
+                additionalProperties: false
+                required: [id, name]
+                properties:
+                  id: { type: string, format: uuid }
+                  name: { type: string }
+    UserListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminUserListItem" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    UserAuditLog:
+      type: object
+      additionalProperties: false
+      required: [id, userId, action, reason, occurredAt, performedBy]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        action:
+          type: string
+          enum: [CREATED, UPDATED, ACTIVATED, DEACTIVATED, PASSWORD_RESET]
+        reason: { type: [string, "null"] }
+        occurredAt: { type: string, format: date-time }
+        performedBy:
+          type: object
+          additionalProperties: false
+          required: [id, firstName, lastName, email, role]
+          properties:
+            id: { type: string, format: uuid }
+            firstName: { type: string }
+            lastName: { type: string }
+            email: { type: string, format: email }
+            role: { $ref: "#/components/schemas/UserRole" }
+    UserAuditLogResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/UserAuditLog" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    MemberProfile:
+      type: object
+      required: [emergencyContactName, emergencyContactPhone]
+      properties:
+        emergencyContactName: { type: string }
+        emergencyContactPhone: { type: string }
+    TrainerProfile:
+      type: object
+      required: [specialty, description]
+      properties:
+        specialty: { type: string }
+        description: { type: string }
+    OwnProfile:
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - type: object
+          required: [memberProfile, trainerProfile]
+          properties:
+            memberProfile:
+              oneOf:
+                - $ref: "#/components/schemas/MemberProfile"
+                - type: "null"
+            trainerProfile:
+              oneOf:
+                - $ref: "#/components/schemas/TrainerProfile"
+                - type: "null"
+    RegisterRequest:
+      type: object
+      required: [firstName, lastName, documentNumber, birthDate, email, phone, password]
+      properties:
+        firstName: { type: string, minLength: 1 }
+        lastName: { type: string, minLength: 1 }
+        documentNumber: { type: string, minLength: 1 }
+        birthDate: { type: string, format: date }
+        email: { type: string, format: email }
+        phone: { type: string, minLength: 1 }
+        password: { type: string, format: password, minLength: 8 }
+        emergencyContactName: { type: string }
+        emergencyContactPhone: { type: string }
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Se eliminan espacios exteriores y se convierte a minúsculas antes de validar y buscar
+        password: { type: string, format: password, minLength: 1 }
+    LoginResponse:
+      type: object
+      additionalProperties: false
+      required: [accessToken, tokenType, expiresIn, user]
+      properties:
+        accessToken:
+          type: string
+          description: JWT HS256 con sub (ID), role y exp (expiración); sin datos personales ni iat
+        tokenType: { type: string, const: Bearer }
+        expiresIn: { type: integer, minimum: 1, examples: [3600], description: Vigencia en segundos }
+        user:
+          type: object
+          additionalProperties: false
+          required: [id, firstName, lastName, email, role, status, isPasswordChangeRequired]
+          properties:
+            id: { type: string, format: uuid }
+            firstName: { type: string }
+            lastName: { type: string }
+            email: { type: string, format: email }
+            role: { $ref: "#/components/schemas/UserRole" }
+            status: { type: string, const: ACTIVE }
+            isPasswordChangeRequired: { type: boolean }
+    AuthResponse:
+      type: object
+      required: [accessToken, user]
+      properties:
+        accessToken: { type: string }
+        user: { $ref: "#/components/schemas/User" }
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string, format: password, minLength: 1, maxLength: 72 }
+        newPassword: { type: string, format: password, minLength: 8, maxLength: 72 }
+    UpdateProfileRequest:
+      type: object
+      properties:
+        email: { type: string, format: email }
+        phone: { type: string }
+        emergencyContactName: { type: string }
+        emergencyContactPhone: { type: string }
+      minProperties: 1
+    CreateUserRequest:
+      type: object
+      additionalProperties: false
+      required: [firstName, lastName, documentNumber, birthDate, email, phone, password, role]
+      properties:
+        firstName: { type: string, minLength: 1 }
+        lastName: { type: string, minLength: 1 }
+        documentNumber: { type: string, minLength: 1 }
+        birthDate: { type: string, format: date }
+        email: { type: string, format: email }
+        phone: { type: string, minLength: 1 }
+        password: { type: string, format: password, minLength: 8, maxLength: 72 }
+        role: { $ref: "#/components/schemas/UserRole" }
+        emergencyContactName: { type: string }
+        emergencyContactPhone: { type: string }
+        specialty: { type: string }
+        description: { type: string }
+    UpdateUserRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        firstName: { type: string }
+        lastName: { type: string }
+        documentNumber: { type: string }
+        birthDate: { type: string, format: date }
+        email: { type: string, format: email }
+        phone: { type: string }
+        emergencyContactName: { type: string }
+        emergencyContactPhone: { type: string }
+        specialty: { type: string }
+        description: { type: string }
+        reason: { type: string }
+      minProperties: 1
+    UpdateUserStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { $ref: "#/components/schemas/UserStatus" }
+        reason: { type: string }
+    ResetPasswordResponse:
+      type: object
+      additionalProperties: false
+      required: [temporaryPassword]
+      properties:
+        temporaryPassword:
+          type: string
+          minLength: 43
+          maxLength: 43
+          description: Clave aleatoria que solo se devuelve en la respuesta de generación.
+    CreateMembershipPriceRequest:
+      type: object
+      required: [amount, effectiveFrom]
+      properties:
+        amount: { type: number, format: double, exclusiveMinimum: 0 }
+        effectiveFrom: { type: string, format: date-time }
+    MembershipPriceHistoryItem:
+      type: object
+      required: [id, amount, previousAmount, effectiveFrom, createdAt, createdById]
+      properties:
+        id: { type: string, format: uuid }
+        amount: { type: string, description: Importe decimal del nuevo valor }
+        previousAmount: { type: [string, "null"], description: Importe anterior derivado del historial por fecha de vigencia }
+        effectiveFrom: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        createdById: { type: string, format: uuid }
+    PaymentPreviewRequest:
+      type: object
+      required: [memberId, amount, method]
+      properties:
+        memberId: { type: string, format: uuid }
+        amount: { type: number, format: double, exclusiveMinimum: 0 }
+        method: { type: string }
+        receiptNumber: { type: string }
+    PaymentPreviewResponse:
+      type: object
+      additionalProperties: false
+      required: [member, currentPrice, amount, method, receiptNumber, estimatedAccreditedAt, estimatedExpiresAt]
+      properties:
+        member:
+          type: object
+          additionalProperties: false
+          required: [id, firstName, lastName, documentNumber, email]
+          properties:
+            id: { type: string, format: uuid }
+            firstName: { type: string }
+            lastName: { type: string }
+            documentNumber: { type: string }
+            email: { type: string, format: email }
+        currentPrice: { type: string, description: Precio vigente de cuota expresado como decimal exacto }
+        amount: { type: string, description: Importe ingresado expresado como decimal exacto }
+        method: { type: string }
+        receiptNumber: { type: [string, "null"] }
+        estimatedAccreditedAt: { type: string, format: date-time }
+        estimatedExpiresAt: { type: string, format: date-time }
+    CreatePaymentRequest:
+      allOf:
+        - $ref: "#/components/schemas/PaymentPreviewRequest"
+    VoidPaymentRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    MedicalReviewRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [APPROVED, REJECTED]
+        reviewComment: { type: string }
+    AccessAttemptRequest:
+      type: object
+      additionalProperties: false
+      required: [qrToken]
+      properties:
+        qrToken: { type: string, minLength: 1 }
