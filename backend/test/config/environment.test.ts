@@ -4,6 +4,8 @@ async function loadEnvironment(): Promise<Record<string, unknown>> {
   let parsedEnvironment: Record<string, unknown> | undefined;
 
   await jest.isolateModulesAsync(async () => {
+    // Keep a developer's local .env from repopulating variables intentionally removed below.
+    jest.doMock("../../src/config/load-environment-files.js", () => ({ loadEnvironmentFiles: jest.fn() }));
     const environmentModule = await import("../../src/config/environment.js");
     parsedEnvironment = environmentModule.environment;
   });
