@@ -12,6 +12,7 @@ import type { PaymentService } from "../../src/service/payment-service.js";
 
 const memberId = "f846bcd2-c43f-4c08-a523-515b60b1c8a8";
 const administratorId = "75f219ab-e396-40e5-b4cc-af0c516d3345";
+const idempotencyKey = "0ddc4d30-3e84-46ac-ae77-5d11de610875";
 
 function setup(role: UserRole | null = "ADMIN", passwordChangeRequired = false) {
   const service = {
@@ -45,10 +46,12 @@ describe("POST /api/payments", () => {
     const { app, service } = setup();
     const body = { memberId, amount: 12345.67, method: "TRANSFER", receiptNumber: "TEST" };
 
-    const response = await request(app).post("/api/payments").send(body);
+    const response = await request(app).post("/api/payments")
+      .set("Idempotency-Key", idempotencyKey)
+      .send(body);
 
     expect(response.status).toBe(201);
-    expect(service.createPayment).toHaveBeenCalledWith(body, administratorId);
+    expect(service.createPayment).toHaveBeenCalledWith(body, administratorId, idempotencyKey);
     expect(response.body).toMatchObject({ amount: "12345.67", status: "ACCREDITED" });
   });
 
@@ -61,6 +64,15 @@ describe("POST /api/payments", () => {
   ])("rejects invalid input %p before calling the service", async (body) => {
     const { app, service } = setup();
     expect((await request(app).post("/api/payments").send(body)).status).toBe(400);
+    expect(service.createPayment).not.toHaveBeenCalled();
+  });
+
+  test("requires a valid idempotency key", async () => {
+    const { app, service } = setup();
+    const response = await request(app).post("/api/payments")
+      .set("Idempotency-Key", "invalid-key")
+      .send({ memberId, amount: 10, method: "CASH" });
+    expect(response.status).toBe(400);
     expect(service.createPayment).not.toHaveBeenCalled();
   });
 

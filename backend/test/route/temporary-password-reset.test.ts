@@ -17,7 +17,7 @@ function setup(
   isPasswordChangeRequired = false,
 ) {
   const service: jest.Mocked<TemporaryPasswordResetService> = {
-    resetTemporaryPassword: jest.fn().mockResolvedValue(undefined),
+    resetTemporaryPassword: jest.fn().mockResolvedValue("VGVzdC1nZW5lcmF0ZWQtdGVtcC1wYXNzd29yZC1vbmNlLTIwMjY"),
   };
   const authenticate: RequestHandler = (req, _res, next) => {
     if (!role) {
@@ -45,29 +45,30 @@ function setup(
 }
 
 describe("POST /api/users/:userId/password-resets", () => {
-  test("allows an administrator to assign a temporary password", async () => {
+  test("allows an administrator to generate a temporary password", async () => {
     const { app, service } = setup();
 
     const response = await request(app)
-      .post(`/api/users/${userId}/password-resets`)
-      .send({ temporaryPassword: "temporary-password" });
+      .post(`/api/users/${userId}/password-resets`);
 
-    expect(response.status).toBe(204);
+    expect(response.status).toBe(200);
+    expect(response.body.temporaryPassword).toBe("VGVzdC1nZW5lcmF0ZWQtdGVtcC1wYXNzd29yZC1vbmNlLTIwMjY");
     expect(service.resetTemporaryPassword).toHaveBeenCalledWith(
       userId,
       adminId,
-      { temporaryPassword: "temporary-password" },
     );
   });
 
   test.each([
-    ["invalid user id", "/api/users/not-a-uuid/password-resets", { temporaryPassword: "temporary-password" }],
-    ["short password", `/api/users/${userId}/password-resets`, { temporaryPassword: "short" }],
-    ["unknown field", `/api/users/${userId}/password-resets`, { temporaryPassword: "temporary-password", role: "ADMIN" }],
+    ["invalid user id", "/api/users/not-a-uuid/password-resets", undefined],
+    ["provided password", `/api/users/${userId}/password-resets`, { temporaryPassword: "caller-chosen-password" }],
+    ["unknown field", `/api/users/${userId}/password-resets`, { role: "ADMIN" }],
   ])("rejects %s", async (_name, path, body) => {
     const { app, service } = setup();
 
-    const response = await request(app).post(path).send(body);
+    const req = request(app).post(path);
+    if (body) req.send(body);
+    const response = await req;
 
     expect(response.status).toBe(400);
     expect(response.body.code).toBe("VALIDATION_ERROR");
@@ -78,8 +79,7 @@ describe("POST /api/users/:userId/password-resets", () => {
     const { app, service } = setup(role);
 
     const response = await request(app)
-      .post(`/api/users/${userId}/password-resets`)
-      .send({ temporaryPassword: "temporary-password" });
+      .post(`/api/users/${userId}/password-resets`);
 
     expect(response.status).toBe(403);
     expect(response.body.code).toBe("FORBIDDEN");
@@ -90,8 +90,7 @@ describe("POST /api/users/:userId/password-resets", () => {
     const { app, service } = setup(null);
 
     const response = await request(app)
-      .post(`/api/users/${userId}/password-resets`)
-      .send({ temporaryPassword: "temporary-password" });
+      .post(`/api/users/${userId}/password-resets`);
 
     expect(response.status).toBe(401);
     expect(service.resetTemporaryPassword).not.toHaveBeenCalled();
@@ -101,8 +100,7 @@ describe("POST /api/users/:userId/password-resets", () => {
     const { app, service } = setup("ADMIN", true);
 
     const response = await request(app)
-      .post(`/api/users/${userId}/password-resets`)
-      .send({ temporaryPassword: "temporary-password" });
+      .post(`/api/users/${userId}/password-resets`);
 
     expect(response.status).toBe(403);
     expect(response.body.code).toBe("PASSWORD_CHANGE_REQUIRED");

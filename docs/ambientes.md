@@ -52,6 +52,7 @@ DATABASE_URL=
 DIRECT_URL=
 JWT_SECRET=
 SUPABASE_URL=
+SUPABASE_SECRET_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 SUPABASE_STORAGE_BUCKET=
 SUPABASE_PROFILE_PHOTO_BUCKET=
@@ -69,7 +70,8 @@ Propósito de las variables:
 | `DIRECT_URL` | Conexión directa para migraciones cuando el proveedor utiliza un pool de conexiones. |
 | `JWT_SECRET` | Firma de credenciales de autenticación; debe ser diferente por ambiente. |
 | `SUPABASE_URL` | URL del proyecto de almacenamiento correspondiente al ambiente. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Credencial privada utilizada solamente por el backend. |
+| `SUPABASE_SECRET_KEY` | Clave privada de API recomendada para Storage; usar solo en el backend. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Compatibilidad temporal con la clave JWT heredada; solo backend. |
 | `SUPABASE_STORAGE_BUCKET` | Bucket privado para aptos médicos y otros documentos restringidos. |
 | `SUPABASE_PROFILE_PHOTO_BUCKET` | Bucket público exclusivo para fotografías de perfil; no almacena aptos médicos. |
 | `CORS_ORIGIN` | Origen del frontend autorizado para ese ambiente. |
@@ -86,7 +88,7 @@ privados:
 3. Reservar `SUPABASE_STORAGE_BUCKET` para aptos médicos y otros documentos
    privados.
 4. No guardar aptos médicos en el bucket público ni exponer la
-   `SUPABASE_SERVICE_ROLE_KEY` al frontend.
+   credenciales privadas de Supabase al frontend.
 
 Los buckets de development, test, staging y production deben ser independientes
 o pertenecer a proyectos Supabase separados. La aplicación no crea buckets

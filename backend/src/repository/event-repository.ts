@@ -1,5 +1,8 @@
 import type { EventStatus, Prisma, PrismaClient, UserRole } from "../generated/prisma/client.js";
-import { createNotifications, type NotificationRecipient } from "./notification-repository.js";
+import {
+  AUDIENCE_TRANSACTION_OPTIONS,
+  createEventCancellationNotifications,
+} from "./notification-repository.js";
 import type {
   CreateEventInput,
   EventListQuery,
@@ -94,6 +97,8 @@ export class EventRepository implements EventRepositoryPort {
 
   async updateStatus(id: string, input: EventStatusUpdateInput): Promise<EventRecord> {
     return this.database.$transaction(async (transaction) => {
+      // Concurrent status changes of the same event wait here, so only one of them can cancel it.
+      await transaction.$queryRaw`SELECT id FROM "event" WHERE id = CAST(${id} AS uuid) FOR UPDATE`;
       const current = await transaction.event.findUnique({ where: { id }, select: eventSelect });
       if (!current) throw new EventNotFoundError();
       if (current.status === "CANCELLED" && input.status !== "CANCELLED") {
@@ -105,22 +110,12 @@ export class EventRepository implements EventRepositoryPort {
         data: { status: input.status },
         select: eventSelect,
       });
-      if (input.status === "CANCELLED") {
-        const users = await transaction.user.findMany({
-          where: { role: { in: ["MEMBER", "TRAINER"] }, status: "ACTIVE" },
-          select: { id: true },
-        });
-        const notifications: NotificationRecipient[] = users.map((user) => ({
-          userId: user.id,
-          title: "Evento cancelado",
-          message: `Se canceló el evento \"${current.title}\" previsto para ${current.startsAt.toLocaleDateString("es-AR")}.`,
-          type: "EVENT_CANCELLED",
-          dedupeKey: `event-cancelled:${current.id}:${user.id}`,
-        }));
-        await createNotifications(transaction, notifications);
+      // EVE-03: only an event that users could see is announced as cancelled. A draft never was.
+      if (input.status === "CANCELLED" && current.status === "PUBLISHED") {
+        await createEventCancellationNotifications(transaction, current);
       }
       return updated;
-    });
+    }, AUDIENCE_TRANSACTION_OPTIONS);
   }
 
   private buildWhere(query: Partial<EventListQuery> & { eventId?: string }, role: UserRole): Prisma.EventWhereInput {

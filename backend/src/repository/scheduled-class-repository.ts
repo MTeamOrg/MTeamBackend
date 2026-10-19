@@ -1,6 +1,14 @@
 import { randomUUID } from "node:crypto";
 import type { PrismaClient, ScheduledClass } from "../generated/prisma/client.js";
 import { Prisma } from "../generated/prisma/client.js";
+import {
+  classAssignedNotice,
+  classCancelledNotice,
+  classUnassignedNotice,
+  classUpdatedNotice,
+  type ClassDetails,
+  type NotificationNotice,
+} from "../model/notification-message.js";
 import { belongsToWeek } from "../model/scheduled-class-week.js";
 import type {
   CreateScheduledClassInput,
@@ -63,7 +71,19 @@ export class ScheduledClassRepository implements ScheduledClassRepositoryPort {
         },
         include: scheduleInclude,
       });
-      await notifyClassChange(transaction, record.id, input.trainerId ?? [], "create", record.activity, record.startsAt, input.branchId);
+      if (record.trainerId) {
+        const branch = await transaction.branch.findUniqueOrThrow({
+          where: { id: record.branchId },
+          select: { id: true, name: true },
+        });
+        await notifyClassesAssigned(transaction, [{
+          classId: record.id,
+          trainerId: record.trainerId,
+          activity: record.activity,
+          startsAt: record.startsAt,
+          branch,
+        }]);
+      }
       return withWeek(record);
     });
   }
@@ -103,10 +123,7 @@ export class ScheduledClassRepository implements ScheduledClassRepositoryPort {
       const updated = await transaction.scheduledClass.update({
         where: { id }, data, include: scheduleInclude,
       });
-      const recipients = new Set([existing.trainerId, updated.trainerId].filter((value): value is string => Boolean(value)));
-      await notifyClassChange(
-        transaction, updated.id, [...recipients], "update", updated.activity, updated.startsAt, updated.branchId, randomUUID(),
-      );
+      await notifyClassUpdated(transaction, existing, updated);
       return withWeek(updated);
     });
   }
@@ -115,13 +132,31 @@ export class ScheduledClassRepository implements ScheduledClassRepositoryPort {
     return this.database.$transaction(async (transaction) => {
       await this.lockClass(transaction, id);
       const existing = await transaction.scheduledClass.findUnique({
-        where: { id }, select: { startsAt: true, trainerId: true },
+        where: { id },
+        select: {
+          startsAt: true,
+          trainerId: true,
+          activity: true,
+          branch: { select: { id: true, name: true } },
+        },
       });
       if (!existing) throw new ScheduledClassNotFoundError();
       if (existing.startsAt <= now) throw new HistoricalClassError();
       await transaction.scheduledClass.delete({ where: { id } });
       if (existing.trainerId) {
-        await notifyClassChange(transaction, id, existing.trainerId, "delete", null, existing.startsAt, null);
+        // A class is deleted once, so one deterministic key per class and trainer is enough. It must
+        // differ from the key used when the class was assigned, or this notice would be dropped.
+        await createNotifications(transaction, [classNotification(
+          id,
+          "deleted",
+          existing.trainerId,
+          classCancelledNotice({
+            activity: existing.activity,
+            startsAt: existing.startsAt,
+            branchId: existing.branch.id,
+            branchName: existing.branch.name,
+          }),
+        )]);
       }
       // The weekly schedule and other classes remain in place.
     });
@@ -136,30 +171,84 @@ export class ScheduledClassRepository implements ScheduledClassRepositoryPort {
 
 }
 
-export async function notifyClassChange(
-  transaction: Prisma.TransactionClient,
+/**
+ * One notification per real change. The key is `class-changed:<class>:<change>:<trainer>` where
+ * `<change>` names the event: `created` and `deleted` happen once per class, while every update gets
+ * its own identity so an A to B to A to B sequence keeps all three notices. Exact retries of an
+ * update never reach this point because the locked row already holds the requested state.
+ */
+function classNotification(
   classId: string,
-  trainerIds: string | string[],
-  action: "create" | "update" | "delete",
-  activity: string | null,
-  startsAt: Date,
-  branchId: string | null,
-  changeId = classId,
-): Promise<void> {
-  const recipients = Array.isArray(trainerIds) ? trainerIds : [trainerIds];
-  if (!recipients.length) return;
-  const branch = action === "create" && branchId
-    ? await transaction.branch.findUnique({ where: { id: branchId }, select: { name: true } })
-    : null;
-  const notifications: NotificationRecipient[] = recipients.map((userId) => ({
-    userId,
-    title: "Cambio en tus clases",
-    message: action === "delete"
-      ? "Se canceló una clase que tenías asignada."
-      : `Se ${action === "create" ? "asignó" : "modificó"} la clase${activity ? ` de ${activity}` : ""} del ${startsAt.toLocaleDateString("es-AR")} a las ${startsAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}${branch ? ` en ${branch.name}` : ""}.`,
+  change: string,
+  trainerId: string,
+  notice: NotificationNotice,
+): NotificationRecipient {
+  return {
+    userId: trainerId,
+    ...notice,
     type: "CLASS_CHANGED",
-    dedupeKey: `class-changed:${classId}:${changeId}:${userId}`,
-  }));
+    dedupeKey: `class-changed:${classId}:${change}:${trainerId}`,
+  };
+}
+
+export interface AssignedClass {
+  classId: string;
+  trainerId: string;
+  activity: string;
+  startsAt: Date;
+  branch: { id: string; name: string };
+}
+
+/** A class that appears with a trainer already assigned (manual creation or weekly copy). */
+export async function notifyClassesAssigned(
+  transaction: Prisma.TransactionClient,
+  assigned: AssignedClass[],
+): Promise<void> {
+  await createNotifications(transaction, assigned.map((item) => classNotification(
+    item.classId,
+    "created",
+    item.trainerId,
+    classAssignedNotice({
+      activity: item.activity,
+      startsAt: item.startsAt,
+      branchId: item.branch.id,
+      branchName: item.branch.name,
+    }),
+  )));
+}
+
+async function notifyClassUpdated(
+  transaction: Prisma.TransactionClient,
+  before: ScheduledClass,
+  after: ScheduledClass,
+): Promise<void> {
+  const branches = await transaction.branch.findMany({
+    where: { id: { in: [before.branchId, after.branchId] } },
+    select: { id: true, name: true },
+  });
+  const detailsOf = (record: ScheduledClass): ClassDetails => ({
+    activity: record.activity,
+    startsAt: record.startsAt,
+    branchId: record.branchId,
+    branchName: branches.find((branch) => branch.id === record.branchId)?.name ?? "",
+  });
+  const previous = detailsOf(before);
+  const current = detailsOf(after);
+  const change = randomUUID();
+  const notifications: NotificationRecipient[] = [];
+
+  if (before.trainerId === after.trainerId) {
+    if (after.trainerId) {
+      notifications.push(classNotification(after.id, change, after.trainerId, classUpdatedNotice(previous, current)));
+    }
+  } else {
+    if (before.trainerId) {
+      notifications.push(classNotification(after.id, change, before.trainerId, classUnassignedNotice(previous)));
+    }
+    if (after.trainerId) {
+      notifications.push(classNotification(after.id, change, after.trainerId, classAssignedNotice(current)));
+    }
+  }
   await createNotifications(transaction, notifications);
 }
 

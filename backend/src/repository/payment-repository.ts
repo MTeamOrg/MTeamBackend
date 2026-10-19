@@ -11,6 +11,7 @@ export class MemberNotFoundError extends Error {}
 export class UserIsNotMemberError extends Error {}
 export class PaymentNotFoundError extends Error {}
 export class PaymentAlreadyVoidedError extends Error {}
+export class PaymentIdempotencyConflictError extends Error {}
 
 export type PaymentHistoryItem = Pick<Payment,
   "id" | "amount" | "method" | "receiptNumber" | "status" |
@@ -94,6 +95,7 @@ export interface PaymentRepositoryPort {
   createAccreditedPayment(
     input: CreatePaymentInput,
     administratorId: string,
+    idempotencyKey: string,
   ): Promise<Payment>;
   voidAccreditedPayment(paymentId: string, reason: string, administratorId: string): Promise<Payment>;
   isMember(memberId: string): Promise<boolean>;
@@ -194,35 +196,66 @@ export class PaymentRepository implements PaymentRepositoryPort {
     };
   }
 
-  createAccreditedPayment(
+  async createAccreditedPayment(
     input: CreatePaymentInput,
     administratorId: string,
+    idempotencyKey: string,
   ): Promise<Payment> {
-    return this.database.$transaction(async (transaction) => {
-      const user = await transaction.user.findUnique({
-        where: { id: input.memberId },
-        select: { role: true },
-      });
-      if (!user) throw new MemberNotFoundError();
-      if (user.role !== "MEMBER") throw new UserIsNotMemberError();
+    try {
+      return await this.database.$transaction(async (transaction) => {
+        const existing = await transaction.payment.findUnique({ where: { idempotencyKey } });
+        if (existing) return this.getIdempotentResult(existing, input, administratorId);
 
-      const accreditedAt = new Date();
-      const expiresAt = calculatePaymentExpiresAt(accreditedAt);
+        const user = await transaction.user.findUnique({
+          where: { id: input.memberId },
+          select: { role: true },
+        });
+        if (!user) throw new MemberNotFoundError();
+        if (user.role !== "MEMBER") throw new UserIsNotMemberError();
 
-      return transaction.payment.create({
-        data: {
-          memberId: input.memberId,
-          amount: input.amount.toString(),
-          method: input.method,
-          receiptNumber: input.receiptNumber ?? null,
-          status: "ACCREDITED",
-          createdById: administratorId,
-          confirmedById: administratorId,
-          accreditedAt,
-          expiresAt,
-        },
+        const accreditedAt = new Date();
+        const expiresAt = calculatePaymentExpiresAt(accreditedAt);
+
+        return transaction.payment.create({
+          data: {
+            memberId: input.memberId,
+            amount: input.amount.toString(),
+            method: input.method,
+            receiptNumber: input.receiptNumber ?? null,
+            status: "ACCREDITED",
+            createdById: administratorId,
+            confirmedById: administratorId,
+            idempotencyKey,
+            accreditedAt,
+            expiresAt,
+          },
+        });
       });
-    });
+    } catch (error: unknown) {
+      // Resolve a simultaneous retry after the losing transaction rolls back on the unique key.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const existing = await this.database.payment.findUnique({ where: { idempotencyKey } });
+        if (existing) return this.getIdempotentResult(existing, input, administratorId);
+      }
+      throw error;
+    }
+  }
+
+  private getIdempotentResult(
+    existing: Payment,
+    input: CreatePaymentInput,
+    administratorId: string,
+  ): Payment {
+    if (
+      existing.memberId !== input.memberId ||
+      !existing.amount.equals(input.amount) ||
+      existing.method !== input.method ||
+      existing.receiptNumber !== (input.receiptNumber ?? null) ||
+      existing.createdById !== administratorId
+    ) {
+      throw new PaymentIdempotencyConflictError();
+    }
+    return existing;
   }
 
   voidAccreditedPayment(paymentId: string, reason: string, administratorId: string): Promise<Payment> {

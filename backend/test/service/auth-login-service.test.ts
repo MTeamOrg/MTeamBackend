@@ -10,6 +10,7 @@ const user: AuthenticationUser = {
   role: "MEMBER",
   status: "ACTIVE",
   isPasswordChangeRequired: false,
+  sessionVersion: 0,
 };
 
 function setup() {
@@ -30,8 +31,8 @@ describe("AuthService.login", () => {
     const result = await service.login({ email: " LARA@EXAMPLE.COM ", password: " p " });
     expect(repository.findByEmail).toHaveBeenCalledWith("lara@example.com");
     expect(passwords.compare).toHaveBeenCalledWith(" p ", user.passwordHash);
-    expect(tokens.sign).toHaveBeenCalledWith({ id: user.id, role: "MEMBER" });
-    const { passwordHash: _passwordHash, ...safeUser } = user;
+    expect(tokens.sign).toHaveBeenCalledWith({ id: user.id, role: "MEMBER", sessionVersion: 0 });
+    const { passwordHash: _passwordHash, sessionVersion: _sessionVersion, ...safeUser } = user;
     expect(result).toEqual({ accessToken: "signed-token", tokenType: "Bearer", expiresIn: 3600, user: safeUser });
   });
 

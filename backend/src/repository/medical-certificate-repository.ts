@@ -1,4 +1,5 @@
 import type { MedicalCertificate, Prisma, PrismaClient } from "../generated/prisma/client.js";
+import { medicalCertificateReviewedNotice } from "../model/notification-message.js";
 import type {
   AdminMedicalCertificateListQuery,
   MedicalReviewInput,
@@ -174,10 +175,7 @@ export class MedicalCertificateRepository implements MedicalCertificateRepositor
       });
       const notification: NotificationRecipient = {
         userId: current.memberId,
-        title: input.status === "APPROVED" ? "Apto médico aprobado" : "Apto médico rechazado",
-        message: input.status === "APPROVED"
-          ? "Tu apto médico fue aprobado por un administrador."
-          : `Tu apto médico fue rechazado.${input.reviewComment ? ` Observación: ${input.reviewComment}` : ""}`,
+        ...medicalCertificateReviewedNotice(input.status, input.reviewComment),
         type: "MEDICAL_CERTIFICATE_REVIEWED",
         dedupeKey: `medical-certificate-reviewed:${certificateId}:${input.status}`,
       };

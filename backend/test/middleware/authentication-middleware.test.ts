@@ -67,6 +67,18 @@ describe("authentication middleware", () => {
     expect(controller).not.toHaveBeenCalled();
   });
 
+  test("rejects a signed-in session after its persisted version is revoked", async () => {
+    const { app, repository, tokens, currentUser, controller } = createAccessControlApp();
+    const staleToken = tokens.sign(currentUser);
+    currentUser.sessionVersion += 1;
+    const response = await request(app).post("/private")
+      .set("Authorization", "Bearer " + staleToken);
+    expect(response.status).toBe(401);
+    expect(response.body.code).toBe("UNAUTHORIZED");
+    expect(controller).not.toHaveBeenCalled();
+    expect(repository.findAccessControlUserById).toHaveBeenCalledWith(userId);
+  });
+
   test("rechecks account status for the same JWT on every request without changing the user", async () => {
     const { app, repository, tokens, currentUser, controller } = createAccessControlApp();
     const token = tokens.sign(currentUser);

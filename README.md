@@ -165,3 +165,13 @@ npm run build
 npm run openapi:validate
 npm run prisma:validate
 ```
+
+Notificaciones internas: las decisiones, la evaluación de la generación de avisos
+de cuota, el registro de problemas corregidos y cómo correr las pruebas de
+integración contra una base PostgreSQL local descartable están en
+[`backend/docs/notifications-implementation-notes.md`](./backend/docs/notifications-implementation-notes.md).
+
+```powershell
+npm run test:integration:notifications   # requiere NOTIFICATION_TEST_DATABASE_URL (solo bases locales "test")
+npm run test:coverage:notifications      # cobertura del módulo
+```

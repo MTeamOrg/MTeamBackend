@@ -10,7 +10,12 @@ describe("TokenService", () => {
       const now = Math.floor(Date.now() / 1000);
       const token = service.sign({ id: "test-user-id", role });
       const claims = jwt.verify(token, secret, { algorithms: ["HS256"] }) as jwt.JwtPayload;
-      expect(claims).toEqual({ sub: "test-user-id", role, exp: expect.any(Number) });
+      expect(claims).toEqual({
+        sub: "test-user-id",
+        role,
+        sessionVersion: 0,
+        exp: expect.any(Number),
+      });
       expect(claims.exp).toBeGreaterThanOrEqual(now + 120);
       expect(claims.exp).toBeLessThanOrEqual(Math.floor(Date.now() / 1000) + 120);
     }
@@ -22,5 +27,15 @@ describe("TokenService", () => {
 
   test("rejects empty secrets", () => {
     expect(() => new TokenService("  ", 3600)).toThrow("Invalid JWT configuration");
+  });
+
+  test("treats legacy tokens without a session version as version zero", () => {
+    const token = jwt.sign(
+      { sub: "83cd902e-0475-4c92-943c-129b751dacee", role: "MEMBER" },
+      "legacy-token-test-secret",
+      { algorithm: "HS256", expiresIn: 3600 },
+    );
+    expect(new TokenService("legacy-token-test-secret", 3600).verify(token))
+      .toEqual({ sub: "83cd902e-0475-4c92-943c-129b751dacee", sessionVersion: 0 });
   });
 });

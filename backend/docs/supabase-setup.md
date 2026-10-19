@@ -68,8 +68,8 @@ instancia compartida.
 El bootstrap nunca contiene una contraseña predeterminada. Hay dos formas de
 proveer sus datos:
 
-- copiar `.env.bootstrap.local.example` a `.env.bootstrap.local` y completar
-  todas las variables localmente; o
+- crear `.env.bootstrap.local` localmente y completar las variables de
+  identidad; o
 - definir sólo los datos de identidad en el proceso y ejecutar
   `npm run bootstrap:admin:prepare`. Si no se define
   `BOOTSTRAP_ADMIN_PASSWORD`, el comando genera una contraseña aleatoria y la
@@ -162,12 +162,14 @@ exclusivas del backend y nunca deben usar el prefijo `VITE_`.
 La carga de fotos de perfil requiere las tres variables siguientes:
 
 - `SUPABASE_URL`;
-- `SUPABASE_SERVICE_ROLE_KEY`;
+- `SUPABASE_SECRET_KEY` (recomendada, nueva clave secreta de API);
+- `SUPABASE_SERVICE_ROLE_KEY` (compatibilidad temporal con la clave JWT heredada);
 - `SUPABASE_PROFILE_PHOTO_BUCKET` (bucket público exclusivo para fotos).
 
-`SUPABASE_STORAGE_BUCKET` queda reservado para aptos médicos/documentos
-privados, cuyo módulo todavía no está implementado. La contraseña PostgreSQL
-no reemplaza ninguna de estas credenciales. Valores opcionales vacíos o con
-espacios se normalizan a ausentes, por lo que el backend puede iniciar y los
-módulos sin archivos siguen funcionando; el upload de foto responde `503`
-mientras Storage no esté configurado.
+`SUPABASE_STORAGE_BUCKET` configura el bucket privado de aptos médicos y otros
+documentos. El backend implementa la carga de objetos y la creación de URLs
+firmadas. La integración con buckets, políticas y permisos del proyecto real
+sigue pendiente de validación. La contraseña PostgreSQL no reemplaza estas
+credenciales. Valores opcionales vacíos o con espacios se normalizan a ausentes,
+por lo que el backend puede iniciar; las operaciones de Storage responden `503`
+mientras el almacenamiento no esté configurado.

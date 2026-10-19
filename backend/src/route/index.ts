@@ -90,7 +90,10 @@ import { createAccountRecoveryRouter } from "./account-recovery-route.js";
 export const apiRouter = Router();
 apiRouter.use(createAccountRecoveryRouter(new AccountRecoveryController(new AccountRecoveryService(
   new AccountRecoveryRepository(database), new PasswordService(),
-  new RecoveryEmailService(environment.RESEND_API_KEY, environment.MAIL_FROM), environment.FRONTEND_PUBLIC_URL,
+  new RecoveryEmailService(environment.GOOGLE_SMTP_USER, environment.GOOGLE_APP_PASSWORD, undefined, {
+    appEnvironment: environment.APP_ENV,
+    testAccountEmail: environment.PASSWORD_RECOVERY_LOG_TEST_EMAIL,
+  }), environment.FRONTEND_PUBLIC_URL,
 ))));
 
 const userRepository = new UserRepository(database);
@@ -105,7 +108,7 @@ const adminDashboardController = new AdminDashboardController(
 );
 const profilePhotoStorage = new SupabaseProfilePhotoStorage({
   url: environment.SUPABASE_URL,
-  serviceRoleKey: environment.SUPABASE_SERVICE_ROLE_KEY,
+  apiKey: environment.SUPABASE_SECRET_KEY ?? environment.SUPABASE_SERVICE_ROLE_KEY,
   bucket: environment.SUPABASE_PROFILE_PHOTO_BUCKET,
 });
 const userService = new UserService(userRepository, profilePhotoStorage);
@@ -144,7 +147,7 @@ const medicalCertificateController = new MedicalCertificateController(
     memberMembershipRepository,
     new SupabaseMedicalCertificateStorage({
       url: environment.SUPABASE_URL,
-      serviceRoleKey: environment.SUPABASE_SERVICE_ROLE_KEY,
+      apiKey: environment.SUPABASE_SECRET_KEY ?? environment.SUPABASE_SERVICE_ROLE_KEY,
       bucket: environment.SUPABASE_STORAGE_BUCKET,
     }),
   ),

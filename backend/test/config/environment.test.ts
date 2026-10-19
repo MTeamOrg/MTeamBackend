@@ -4,6 +4,8 @@ async function loadEnvironment(): Promise<Record<string, unknown>> {
   let parsedEnvironment: Record<string, unknown> | undefined;
 
   await jest.isolateModulesAsync(async () => {
+    // Keep a developer's local .env from repopulating variables intentionally removed below.
+    jest.doMock("../../src/config/load-environment-files.js", () => ({ loadEnvironmentFiles: jest.fn() }));
     const environmentModule = await import("../../src/config/environment.js");
     parsedEnvironment = environmentModule.environment;
   });
@@ -30,6 +32,9 @@ describe("environment configuration", () => {
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     delete process.env.SUPABASE_STORAGE_BUCKET;
     delete process.env.SUPABASE_PROFILE_PHOTO_BUCKET;
+    delete process.env.GOOGLE_SMTP_USER;
+    delete process.env.GOOGLE_APP_PASSWORD;
+    delete process.env.PASSWORD_RECOVERY_LOG_TEST_EMAIL;
   });
 
   afterAll(() => {
@@ -74,4 +79,43 @@ describe("environment configuration", () => {
       "Invalid environment configuration",
     );
   });
+
+  test("requires Google SMTP credentials to be configured together", async () => {
+    process.env.GOOGLE_SMTP_USER = "mteam.test@gmail.com";
+
+    await expect(loadEnvironment()).rejects.toThrow(
+      "GOOGLE_SMTP_USER and GOOGLE_APP_PASSWORD must be configured together",
+    );
+  });
+
+  test("accepts a complete Google SMTP configuration", async () => {
+    process.env.GOOGLE_SMTP_USER = "mteam.test@gmail.com";
+    process.env.GOOGLE_APP_PASSWORD = "local-app-password";
+
+    const environment = await loadEnvironment();
+
+    expect(environment.GOOGLE_SMTP_USER).toBe("mteam.test@gmail.com");
+    expect(environment.GOOGLE_APP_PASSWORD).toBe("local-app-password");
+  });
+
+  test("allows a recovery-link log recipient only in staging", async () => {
+    process.env.APP_ENV = "staging";
+    process.env.PASSWORD_RECOVERY_LOG_TEST_EMAIL = "recovery-test@example.com";
+
+    const environment = await loadEnvironment();
+
+    expect(environment.PASSWORD_RECOVERY_LOG_TEST_EMAIL).toBe("recovery-test@example.com");
+  });
+
+  test.each(["development", "test", "production"])(
+    "rejects a recovery-link log recipient when APP_ENV is %s",
+    async appEnvironment => {
+      process.env.APP_ENV = appEnvironment;
+      process.env.PASSWORD_RECOVERY_LOG_TEST_EMAIL = "recovery-test@example.com";
+
+      await expect(loadEnvironment()).rejects.toThrow(
+        "PASSWORD_RECOVERY_LOG_TEST_EMAIL can only be configured when APP_ENV=staging",
+      );
+    },
+  );
 });

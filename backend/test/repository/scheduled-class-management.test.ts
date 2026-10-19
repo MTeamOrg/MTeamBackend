@@ -36,9 +36,14 @@ function setup() {
   const findUnique = jest.fn().mockResolvedValue(record);
   const update = jest.fn().mockResolvedValue(record);
   const deleteClass = jest.fn().mockResolvedValue(record);
+  const branchRecords = [{ id: branchId, name: "Sede Centro" }, { id: otherBranchId, name: "Sede Norte" }];
   const transaction = {
     $queryRaw: queryRaw,
-    branch: { findUnique: branchFindUnique },
+    branch: {
+      findUnique: branchFindUnique,
+      findUniqueOrThrow: jest.fn().mockResolvedValue(branchRecords[0]),
+      findMany: jest.fn().mockResolvedValue(branchRecords),
+    },
     user: { findUnique: userFindUnique },
     notification: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
     weeklySchedule: { upsert },
@@ -264,19 +269,55 @@ describe("ENT-04 class notification recipients", () => {
     expect(notificationCreateMany).toHaveBeenCalledTimes(3);
   });
 
-  test("reassignment notifies the previous and new trainers only", async () => {
+  test("reassignment tells the previous trainer about the removal and the new trainer about the assignment, nobody else", async () => {
     const { repository, update, notificationCreateMany } = setup();
     const newTrainerId = "new-trainer";
     update.mockResolvedValue({ ...record, trainerId: newTrainerId });
     await repository.updateClass(classId, { trainerId: newTrainerId }, now);
+    expect(notificationCreateMany).toHaveBeenCalledTimes(1);
     expect(notificationCreateMany).toHaveBeenCalledWith({ skipDuplicates: true,
-      data: [expect.objectContaining({ userId: trainerId, type: "CLASS_CHANGED" }),
-        expect.objectContaining({ userId: newTrainerId, type: "CLASS_CHANGED" })] });
+      data: [
+        expect.objectContaining({ userId: trainerId, type: "CLASS_CHANGED", title: "Clase reasignada" }),
+        expect.objectContaining({ userId: newTrainerId, type: "CLASS_CHANGED", title: "Clase asignada" }),
+      ] });
+  });
+  test("unassigning a trainer only notifies that trainer", async () => {
+    const { repository, update, notificationCreateMany } = setup();
+    update.mockResolvedValue({ ...record, trainerId: null });
+    await repository.updateClass(classId, { trainerId: null }, now);
+    expect(notificationCreateMany).toHaveBeenCalledWith({ skipDuplicates: true,
+      data: [expect.objectContaining({ userId: trainerId, title: "Clase reasignada" })] });
+  });
+  test("describes what changed for a trainer who keeps the class", async () => {
+    const { repository, update, notificationCreateMany } = setup();
+    update.mockResolvedValue({ ...record, branchId: otherBranchId, startsAt: new Date("2030-09-02T22:30:00.000Z") });
+    await repository.updateClass(classId, { branchId: otherBranchId, startsAt: "2030-09-02T19:30:00-03:00" }, now);
+    const [call] = notificationCreateMany.mock.calls as Array<[{ data: Array<{ userId: string; title: string; message: string }> }]>;
+    expect(call?.[0].data).toEqual([expect.objectContaining({
+      userId: trainerId,
+      title: "Clase modificada",
+      message: "Se modificó la clase de Yoga: el horario cambió del 02/09/2030 a las 10:00 al 02/09/2030 a las 19:30; la sede cambió de Sede Centro a Sede Norte.",
+    })]);
   });
   test("does not notify anyone when the class has no assigned trainer", async () => {
     const { repository, create, notificationCreateMany } = setup();
     create.mockResolvedValue({ ...record, trainerId: null });
     await repository.createClass({ ...input, trainerId: null }, now);
     expect(notificationCreateMany).not.toHaveBeenCalled();
+  });
+  test("a creation notice and a later cancellation notice never share a dedupe key", async () => {
+    const { repository, findUnique, notificationCreateMany } = setup();
+    await repository.createClass(input, now);
+    findUnique.mockResolvedValue({
+      startsAt: record.startsAt, trainerId, activity: "Yoga", branch: { id: branchId, name: "Sede Centro" },
+    });
+    await repository.deleteClass(classId, now);
+
+    const sent = notificationCreateMany.mock.calls.map(([args]) =>
+      (args as { data: Array<{ title: string; dedupeKey: string; message: string }> }).data[0]);
+    expect(sent.map((notice) => notice?.title)).toEqual(["Clase asignada", "Clase cancelada"]);
+    expect(sent[0]?.dedupeKey).toBe(`class-changed:${classId}:created:${trainerId}`);
+    expect(sent[1]?.dedupeKey).toBe(`class-changed:${classId}:deleted:${trainerId}`);
+    expect(sent[1]?.message).toBe("Se canceló la clase de Yoga del 02/09/2030 a las 10:00 en Sede Centro.");
   });
 });

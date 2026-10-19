@@ -44,12 +44,12 @@ export interface UserRepositoryPort {
 export type AuthenticationUser = Pick<
   RegisteredMember,
   "id" | "firstName" | "lastName" | "email" | "role" | "status" | "isPasswordChangeRequired"
-> & { passwordHash: string };
+> & { passwordHash: string; sessionVersion: number };
 
 export type AccessControlUser = Pick<
   RegisteredMember,
   "id" | "role" | "status" | "isPasswordChangeRequired"
->;
+> & { sessionVersion: number };
 
 export interface UserAccessRepositoryPort {
   findAccessControlUserById(id: string): Promise<AccessControlUser | null>;
@@ -768,6 +768,7 @@ export class UserRepository
         role: true,
         status: true,
         isPasswordChangeRequired: true,
+        sessionVersion: true,
       },
     });
   }
@@ -784,6 +785,7 @@ export class UserRepository
         role: true,
         status: true,
         isPasswordChangeRequired: true,
+        sessionVersion: true,
       },
     });
   }
@@ -833,6 +835,7 @@ export class UserRepository
         data: {
           passwordHash,
           isPasswordChangeRequired: true,
+          sessionVersion: { increment: 1 },
         },
       });
       await transaction.userAuditLog.create({

@@ -1,4 +1,4 @@
-const GYM_TIME_ZONE = "America/Argentina/Buenos_Aires";
+export const GYM_TIME_ZONE = "America/Argentina/Buenos_Aires";
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 const localDateFormatter = new Intl.DateTimeFormat("en-US", {
   timeZone: GYM_TIME_ZONE,

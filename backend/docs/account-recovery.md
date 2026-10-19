@@ -4,15 +4,15 @@ Amplía USR-04 del documento de alcance, que describe el restablecimiento admini
 
 ## Configuración y prueba local
 
-En backend/.env.development.local (o el archivo local utilizado por el entorno), configurar:
+En `backend/.env.development.local` (o el archivo local utilizado por el entorno), configurar:
 
 ```dotenv
 FRONTEND_PUBLIC_URL=http://localhost:5173
-RESEND_API_KEY=<clave privada de una cuenta Resend>
-MAIL_FROM=M-Team <recuperacion@tu-dominio-verificado.example>
+GOOGLE_SMTP_USER=<cuenta-google-dedicada@gmail.com>
+GOOGLE_APP_PASSWORD=<contraseña-de-aplicación-de-16-caracteres>
 ```
 
-La integración usa https://resend.com/docs/api-reference/emails/send-email sin dependencias adicionales. Requiere una cuenta Resend, API key con permiso de envío y remitente/dominio habilitado. No guardar la clave en Git ni en variables VITE_. En producción usar HTTPS y configurar los tres valores en el gestor de secretos del backend. Desactivar seguimiento de enlaces en el proveedor para evitar reescritura de enlaces sensibles. El frontend público debe servir index.html para /restablecer-contrasena.
+Crear una cuenta Google dedicada, activar la verificación en dos pasos y generar una contraseña de aplicación para Mail. Usar esa contraseña, nunca la contraseña normal de Google. El remitente visible será la cuenta configurada en `GOOGLE_SMTP_USER`. Nodemailer usa la configuración segura de Gmail SMTP. No guardar la contraseña de aplicación en Git ni en variables `VITE_`; configurar ambos secretos solo en el backend y reiniciarlo al cambiarlos. Google puede bloquear inicios de sesión SMTP que considere sospechosos y Gmail tiene límites de envío; por eso esta opción sirve para desarrollo/demostración y no se recomienda para producción. El frontend público debe servir `index.html` para `/restablecer-contrasena`.
 
 En una base **local de desarrollo**, ejecutar desde backend `npm run prisma:generate`, `npm run prisma:migrate:dev`, `npm run dev`. La migración preparada es 20261015150000_account_recovery; no se ejecutó contra producción. Para una implementación futura aprobada aplicar la migración con `npm run prisma:migrate:deploy` en el proceso habitual, antes de activar la nueva versión. Revisar primero DATABASE_URL; nunca usar una base de producción para pruebas.
 
@@ -30,6 +30,16 @@ Iniciar frontend con `npm run dev`. Abrir /iniciar-sesion, solicitar recuperaci�
 - Se conserva el patrón de sesiones del proyecto: JWT stateless sin revocación, incluso en cambios de contraseña existentes. Las sesiones emitidas siguen válidas hasta JWT_EXPIRES_IN; el restablecimiento no inicia una sesión. Revocarlas requeriría ampliar el contrato de sesiones, fuera de este cambio.
 - Límite en memoria: 10 solicitudes por IP/minuto compartido por las dos rutas. En producción con varias instancias agregar límite distribuido en el proxy y configurar IP de cliente con proxies confiables; no habilitar trust proxy indiscriminadamente. El frontend bloquea reenvío un minuto tras éxito o 429. No se invalida un enlace anterior al solicitar otro; todos quedan invalidados cuando se cambia la contraseña.
 - Para mantenimiento, purgar periódicamente filas vencidas de password_recovery_token con la operación habitual de base de datos. No habilitar tareas contra producción desde este cambio.
+
+## Fallback de entrega en Render (solo staging)
+
+Render puede bloquear conexiones SMTP salientes en algunos planes. Para probar la recuperaciÃ³n sin depender de Gmail, se permite registrar el enlace **Ãºnicamente** para una cuenta de prueba autorizada:
+
+1. En el servicio backend de Render, configurar `APP_ENV=staging` y `PASSWORD_RECOVERY_LOG_TEST_EMAIL` con el correo exacto de una cuenta de prueba dedicada.
+2. Desplegar/reiniciar el backend y solicitar la recuperaciÃ³n para esa cuenta.
+3. Buscar en los logs de Render el mensaje `Staging password recovery link for the allowlisted test account` y abrir el valor `link`.
+
+Cuando SMTP funciona, el correo se envÃ­a y el enlace tambiÃ©n aparece en el log de esa cuenta. Si SMTP falla, el log sirve como fallback y la solicitud de esa cuenta de prueba no falla. Para otras cuentas, el enlace nunca se registra y un fallo SMTP conserva la respuesta 503. La variable `PASSWORD_RECOVERY_LOG_TEST_EMAIL` hace que el backend rechace la configuraciÃ³n si `APP_ENV` no es `staging`; no la agregues a producciÃ³n. El enlace contiene un token bearer de un solo uso, vence en 30 minutos y cualquier persona con acceso a los logs podrÃ­a usarlo: usar una cuenta sin datos reales, restringir el acceso a los logs y quitar la variable al terminar las pruebas. Esta excepciÃ³n de staging prevalece sobre la regla general anterior de no registrar enlaces.
 
 ## Contrato
 
