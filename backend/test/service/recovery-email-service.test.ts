@@ -18,9 +18,23 @@ describe("recovery email transport", () => {
     jest.spyOn(globalThis, "fetch").mockRejectedValue(new Error("secret-key and token"));
     await expect(new RecoveryEmailService("secret-key", "sender@example.com").send("recipient@example.com", "link")).rejects.toThrow("No pudimos enviar el correo");
   });
-  test("missing configuration fails without a network request", async () => {
+  test.each([
+    [undefined, undefined],
+    [undefined, "sender@example.com"],
+    ["secret-key", undefined],
+  ])("missing configuration case %# fails without a network request", async (apiKey, from) => {
     const fetchMock = jest.spyOn(globalThis, "fetch");
-    await expect(new RecoveryEmailService(undefined, undefined).send("recipient@example.com", "link")).rejects.toMatchObject({ statusCode: 503 });
+    await expect(new RecoveryEmailService(apiKey, from).send("recipient@example.com", "link")).rejects.toMatchObject({ statusCode: 503 });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+  test.each([{}, { id: "" }, { id: 123 }, null])("rejects an invalid successful receipt: %j", async receipt => {
+    jest.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(receipt), { status: 200 }));
+    await expect(new RecoveryEmailService("secret-key", "sender@example.com").send("recipient@example.com", "link"))
+      .rejects.toMatchObject({ statusCode: 503, code: "SERVICE_UNAVAILABLE" });
+  });
+  test("rejects a successful response containing malformed JSON", async () => {
+    jest.spyOn(globalThis, "fetch").mockResolvedValue(new Response("invalid-json", { status: 200 }));
+    await expect(new RecoveryEmailService("secret-key", "sender@example.com").send("recipient@example.com", "link"))
+      .rejects.toMatchObject({ statusCode: 503, code: "SERVICE_UNAVAILABLE" });
   });
 });

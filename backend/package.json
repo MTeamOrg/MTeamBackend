@@ -8,6 +8,7 @@
         "build": "prisma generate && tsc",
         "start": "node dist/index.js",
         "test": "prisma generate && jest --runInBand",
+        "test:coverage": "prisma generate && jest --runInBand --coverage --config jest.coverage.config.cjs",
         "test:watch": "jest --watch",
         "test:integration:notifications": "prisma generate && node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.integration.postgres.config.cjs --runInBand",
         "test:integration:supabase": "npm run build && jest --config jest.integration.supabase.config.cjs --runInBand",
