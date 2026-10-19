@@ -58,7 +58,7 @@ jobs:
           args: >
             -Dsonar.organization=mteamorg
             -Dsonar.projectKey=MTeamOrg_MTeamBackend
-            -Dsonar.sources=backend/src
-            -Dsonar.tests=backend/test
-            -Dsonar.exclusions=backend/src/generated/**,backend/src/**/*.d.ts
+            -Dsonar.test.inclusions=backend/test/**
+            "-Dsonar.exclusions=backend/src/generated/**,backend/src/**/*.d.ts,docs/M-Team_Modelo_de_Datos.docx,docs/EDT - M-Team.pdf"
             -Dsonar.javascript.lcov.reportPaths=backend/coverage/lcov.info
+            -Dsonar.qualitygate.wait=true
