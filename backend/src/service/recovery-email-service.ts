@@ -53,7 +53,20 @@ export class RecoveryEmailService implements RecoveryEmailSender {
         subject: "Recuperá tu acceso a M-Team",
         text: `Si tenés una cuenta activa en M-Team, usá este enlace para elegir una nueva contraseña. Vence en 30 minutos y se puede usar una sola vez.\n\n${link}\n\nSi no solicitaste este correo, ignoralo.`,
       });
-    } catch {
+    } catch (error) {
+      const providerError = error as {
+        code?: unknown;
+        responseCode?: unknown;
+        command?: unknown;
+      };
+      // Log only non-sensitive SMTP metadata; never log the recipient, link, or credentials.
+      console.error("Password recovery email delivery failed", {
+        code: typeof providerError.code === "string" ? providerError.code : undefined,
+        responseCode: typeof providerError.responseCode === "number"
+          ? providerError.responseCode
+          : undefined,
+        command: typeof providerError.command === "string" ? providerError.command : undefined,
+      });
       // Never propagate provider responses, recipient addresses or credentials to logs.
       throw new ApplicationError(503, ERROR_CODE.SERVICE_UNAVAILABLE,
         "No pudimos enviar el correo. Intentá nuevamente más tarde.");
