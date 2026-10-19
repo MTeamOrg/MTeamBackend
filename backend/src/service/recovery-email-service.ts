@@ -22,18 +22,8 @@ export type RecoveryMailTransportFactory = (
   options: GmailTransportOptions,
 ) => RecoveryMailTransport;
 
-export interface RecoveryLinkLogOptions {
-  appEnvironment: "development" | "test" | "staging" | "production";
-  testAccountEmail?: string | undefined;
-  logRecoveryLink?: (link: string) => void;
-}
-
-const logStagingRecoveryLink = (link: string) => {
-  console.warn("Staging password recovery link for the allowlisted test account", {
-    expiresInMinutes: 30,
-    link,
-  });
-};
+const SMTP_ERROR_CODES = ["EAUTH", "ECONNECTION", "ETIMEDOUT", "ESOCKET", "EDNS", "EENVELOPE", "EMESSAGE"];
+const SMTP_COMMANDS = ["CONN", "EHLO", "HELO", "STARTTLS", "AUTH", "MAIL FROM", "RCPT TO", "DATA", "QUIT"];
 
 export class RecoveryEmailService implements RecoveryEmailSender {
   private readonly transport: RecoveryMailTransport | undefined;
@@ -44,7 +34,6 @@ export class RecoveryEmailService implements RecoveryEmailSender {
     appPassword: string | undefined,
     private readonly createTransport: RecoveryMailTransportFactory = options =>
       nodemailer.createTransport(options),
-    private readonly recoveryLinkLogOptions: RecoveryLinkLogOptions = { appEnvironment: "development" },
   ) {
     this.senderAddress = user;
     if (user && appPassword) {
@@ -59,8 +48,6 @@ export class RecoveryEmailService implements RecoveryEmailSender {
   }
 
   async send(email: string, link: string): Promise<void> {
-    const canLogRecoveryLink = this.canLogRecoveryLink(email);
-    if (canLogRecoveryLink) this.logRecoveryLink(link);
     try {
       if (!this.transport || !this.senderAddress) throw new Error();
       await this.transport.sendMail({
@@ -70,35 +57,26 @@ export class RecoveryEmailService implements RecoveryEmailSender {
         text: `Si tenés una cuenta activa en M-Team, usá este enlace para elegir una nueva contraseña. Vence en 30 minutos y se puede usar una sola vez.\n\n${link}\n\nSi no solicitaste este correo, ignoralo.`,
       });
     } catch (error) {
-      const providerError = error as {
+      const providerError = (typeof error === "object" && error !== null ? error : {}) as {
         code?: unknown;
         responseCode?: unknown;
         command?: unknown;
       };
-      // Log only non-sensitive SMTP metadata here. The recovery link is logged separately
-      // only when the staging environment and exact test-account allowlist both match.
+      // Only known SMTP metadata may reach logs; provider messages and payloads are private.
       console.error("Password recovery email delivery failed", {
-        code: typeof providerError.code === "string" ? providerError.code : undefined,
+        code: typeof providerError.code === "string" && SMTP_ERROR_CODES.includes(providerError.code)
+          ? providerError.code : undefined,
         responseCode: typeof providerError.responseCode === "number"
+          && Number.isInteger(providerError.responseCode)
+          && providerError.responseCode >= 100 && providerError.responseCode <= 599
           ? providerError.responseCode
           : undefined,
-        command: typeof providerError.command === "string" ? providerError.command : undefined,
+        command: typeof providerError.command === "string" && SMTP_COMMANDS.includes(providerError.command)
+          ? providerError.command : undefined,
       });
-      if (canLogRecoveryLink) return;
       // Never propagate provider responses, recipient addresses or credentials to logs.
       throw new ApplicationError(503, ERROR_CODE.SERVICE_UNAVAILABLE,
         "No pudimos enviar el correo. Intentá nuevamente más tarde.");
     }
-  }
-
-  private canLogRecoveryLink(email: string): boolean {
-    const allowedEmail = this.recoveryLinkLogOptions.testAccountEmail?.trim().toLowerCase();
-    return this.recoveryLinkLogOptions.appEnvironment === "staging"
-      && Boolean(allowedEmail)
-      && email.trim().toLowerCase() === allowedEmail;
-  }
-
-  private logRecoveryLink(link: string): void {
-    (this.recoveryLinkLogOptions.logRecoveryLink ?? logStagingRecoveryLink)(link);
   }
 }
