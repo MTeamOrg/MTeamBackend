@@ -3,8 +3,11 @@ import {
   type RecoveryMailTransportFactory,
 } from "../../src/service/recovery-email-service.js";
 import type { SendMailOptions } from "nodemailer";
+import nodemailer from "nodemailer";
 
 describe("recovery email transport", () => {
+  afterEach(() => jest.restoreAllMocks());
+
   test("sends the recovery link through Gmail without including a password", async () => {
     const transportOptions: unknown[] = [];
     const sentMessages: SendMailOptions[] = [];
@@ -38,6 +41,7 @@ describe("recovery email transport", () => {
     expect(sentMessages[0]).not.toHaveProperty("password");
   });
   test("SMTP failures yield a safe recoverable error", async () => {
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
     const createTransport: RecoveryMailTransportFactory = () => ({
       sendMail: async () => { throw new Error("private SMTP credentials and token"); },
     });
@@ -50,6 +54,9 @@ describe("recovery email transport", () => {
       statusCode: 503,
       code: "SERVICE_UNAVAILABLE",
       message: "No pudimos enviar el correo. Intentá nuevamente más tarde.",
+    });
+    expect(consoleError).toHaveBeenCalledWith("Password recovery email delivery failed", {
+      code: undefined, responseCode: undefined, command: undefined,
     });
   });
 
@@ -141,9 +148,72 @@ describe("recovery email transport", () => {
   });
 
   test("missing configuration fails without a network request", async () => {
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
     const createTransport = jest.fn();
     await expect(new RecoveryEmailService(undefined, undefined, createTransport)
       .send("recipient@example.com", "link")).rejects.toMatchObject({ statusCode: 503 });
     expect(createTransport).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    [undefined, "app-password"],
+    ["sender@example.com", undefined],
+  ])("rejects incomplete SMTP configuration case %#", async (user, appPassword) => {
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    const createTransport = jest.fn();
+    await expect(new RecoveryEmailService(user, appPassword, createTransport).send("recipient@example.com", "link"))
+      .rejects.toMatchObject({ statusCode: 503 });
+    expect(createTransport).not.toHaveBeenCalled();
+  });
+
+  test("uses the default Gmail transport without opening a network connection", async () => {
+    const sendMail = jest.fn().mockResolvedValue(undefined);
+    const createTransport = jest.spyOn(nodemailer, "createTransport")
+      .mockReturnValue({ sendMail } as unknown as ReturnType<typeof nodemailer.createTransport>);
+    await new RecoveryEmailService("sender@example.com", "app-password").send("recipient@example.com", "link");
+    expect(createTransport).toHaveBeenCalledTimes(1);
+    expect(sendMail).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([undefined, "", "   "])("does not enable staging fallback without an allowlisted account: %j", async testAccountEmail => {
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    const logRecoveryLink = jest.fn();
+    const createTransport: RecoveryMailTransportFactory = () => ({
+      sendMail: async () => { throw new Error("SMTP unavailable"); },
+    });
+    await expect(new RecoveryEmailService("sender@example.com", "app-password", createTransport, {
+      appEnvironment: "staging", testAccountEmail, logRecoveryLink,
+    }).send("recipient@example.com", "link")).rejects.toMatchObject({ statusCode: 503 });
+    expect(logRecoveryLink).not.toHaveBeenCalled();
+  });
+
+  test("keeps the default staging logger restricted to the normalized allowlisted account", async () => {
+    const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    const createTransport: RecoveryMailTransportFactory = () => ({ sendMail: async () => undefined });
+    const service = new RecoveryEmailService("sender@example.com", "app-password", createTransport, {
+      appEnvironment: "staging", testAccountEmail: "  RECOVERY-TEST@example.com  ",
+    });
+    await service.send(" recovery-test@example.com ", "link");
+    expect(consoleWarn).toHaveBeenCalledTimes(1);
+    expect(consoleWarn).toHaveBeenCalledWith(expect.any(String), { expiresInMinutes: 30, link: "link" });
+    consoleWarn.mockClear();
+    await service.send("member@example.com", "other-link");
+    expect(consoleWarn).not.toHaveBeenCalled();
+  });
+
+  test("logs only SMTP metadata when the provider includes private details", async () => {
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    const createTransport: RecoveryMailTransportFactory = () => ({
+      sendMail: async () => {
+        throw Object.assign(new Error("private provider details"), {
+          code: "EAUTH", responseCode: 535, command: "AUTH", response: "private provider response",
+        });
+      },
+    });
+    await expect(new RecoveryEmailService("sender@example.com", "app-password", createTransport)
+      .send("recipient@example.com", "link")).rejects.toMatchObject({ statusCode: 503 });
+    expect(consoleError).toHaveBeenCalledWith("Password recovery email delivery failed", {
+      code: "EAUTH", responseCode: 535, command: "AUTH",
+    });
   });
 });
