@@ -9,13 +9,33 @@ jobs:
   build:
     name: Build and analyze
     runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+      APP_ENV: test
+      DATABASE_URL: postgresql://mteam:mteam_test_password@localhost:5432/mteam_test
+      DIRECT_URL: postgresql://mteam:mteam_test_password@localhost:5432/mteam_test
+      JWT_SECRET: ci-only-secret
+      JWT_EXPIRES_IN: 3600
+      CORS_ORIGIN: http://localhost:5173
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
-      # This step should build, test and generate coverage reports
-      # - name: Build and test
-      #   run: <build + test + generate coverage reports>
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+      - name: Generate backend test coverage
+        working-directory: backend
+        run: npm run test:coverage
+      - name: Verify coverage report
+        run: |
+          test -s backend/coverage/lcov.info
+          grep -q '^SF:backend/src/' backend/coverage/lcov.info
       - name: Cache SonarQube packages
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
@@ -30,3 +50,7 @@ jobs:
           args: >
             -Dsonar.organization=mteamorg
             -Dsonar.projectKey=MTeamOrg_MTeamBackend
+            -Dsonar.sources=backend/src
+            -Dsonar.tests=backend/test
+            -Dsonar.exclusions=backend/src/generated/**,backend/src/**/*.d.ts
+            -Dsonar.javascript.lcov.reportPaths=backend/coverage/lcov.info
