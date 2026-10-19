@@ -28,7 +28,8 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - name: Install backend dependencies
         working-directory: backend
-        run: npm ci
+        # Native binaries are distributed with the packages. test:coverage generates Prisma explicitly.
+        run: npm ci --ignore-scripts
       - name: Generate backend test coverage
         working-directory: backend
         run: npm run test:coverage
