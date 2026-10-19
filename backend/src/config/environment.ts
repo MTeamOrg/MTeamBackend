@@ -35,6 +35,10 @@ const environmentSchema = z.object({
     z.email().optional(),
   ),
   GOOGLE_APP_PASSWORD: optionalEnvironmentString,
+  PASSWORD_RECOVERY_LOG_TEST_EMAIL: z.preprocess(
+    emptyOptionalValueToUndefined,
+    z.email().optional(),
+  ),
   CORS_ORIGIN: z.url().default("http://localhost:5173"),
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().trim().min(1),
@@ -57,6 +61,12 @@ if (!result.success) {
 if (Boolean(result.data.GOOGLE_SMTP_USER) !== Boolean(result.data.GOOGLE_APP_PASSWORD)) {
   throw new Error(
     "Invalid environment configuration: GOOGLE_SMTP_USER and GOOGLE_APP_PASSWORD must be configured together",
+  );
+}
+
+if (result.data.PASSWORD_RECOVERY_LOG_TEST_EMAIL && result.data.APP_ENV !== "staging") {
+  throw new Error(
+    "PASSWORD_RECOVERY_LOG_TEST_EMAIL can only be configured when APP_ENV=staging",
   );
 }
 

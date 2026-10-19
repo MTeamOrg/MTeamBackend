@@ -34,6 +34,7 @@ describe("environment configuration", () => {
     delete process.env.SUPABASE_PROFILE_PHOTO_BUCKET;
     delete process.env.GOOGLE_SMTP_USER;
     delete process.env.GOOGLE_APP_PASSWORD;
+    delete process.env.PASSWORD_RECOVERY_LOG_TEST_EMAIL;
   });
 
   afterAll(() => {
@@ -96,4 +97,25 @@ describe("environment configuration", () => {
     expect(environment.GOOGLE_SMTP_USER).toBe("mteam.test@gmail.com");
     expect(environment.GOOGLE_APP_PASSWORD).toBe("local-app-password");
   });
+
+  test("allows a recovery-link log recipient only in staging", async () => {
+    process.env.APP_ENV = "staging";
+    process.env.PASSWORD_RECOVERY_LOG_TEST_EMAIL = "recovery-test@example.com";
+
+    const environment = await loadEnvironment();
+
+    expect(environment.PASSWORD_RECOVERY_LOG_TEST_EMAIL).toBe("recovery-test@example.com");
+  });
+
+  test.each(["development", "test", "production"])(
+    "rejects a recovery-link log recipient when APP_ENV is %s",
+    async appEnvironment => {
+      process.env.APP_ENV = appEnvironment;
+      process.env.PASSWORD_RECOVERY_LOG_TEST_EMAIL = "recovery-test@example.com";
+
+      await expect(loadEnvironment()).rejects.toThrow(
+        "PASSWORD_RECOVERY_LOG_TEST_EMAIL can only be configured when APP_ENV=staging",
+      );
+    },
+  );
 });
