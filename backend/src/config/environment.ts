@@ -30,8 +30,11 @@ const environmentSchema = z.object({
       const url = new URL(value);
       return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password && !url.hash && !url.search;
     }, "Use an HTTP(S) frontend URL without credentials, query or fragment").optional()),
-  RESEND_API_KEY: optionalEnvironmentString,
-  MAIL_FROM: optionalEnvironmentString,
+  GOOGLE_SMTP_USER: z.preprocess(
+    emptyOptionalValueToUndefined,
+    z.email().optional(),
+  ),
+  GOOGLE_APP_PASSWORD: optionalEnvironmentString,
   CORS_ORIGIN: z.url().default("http://localhost:5173"),
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().trim().min(1),
@@ -48,6 +51,12 @@ const result = environmentSchema.safeParse(process.env);
 if (!result.success) {
   throw new Error(
     `Invalid environment configuration: ${z.prettifyError(result.error)}`,
+  );
+}
+
+if (Boolean(result.data.GOOGLE_SMTP_USER) !== Boolean(result.data.GOOGLE_APP_PASSWORD)) {
+  throw new Error(
+    "Invalid environment configuration: GOOGLE_SMTP_USER and GOOGLE_APP_PASSWORD must be configured together",
   );
 }
 

@@ -1,26 +1,62 @@
-import { RecoveryEmailService } from "../../src/service/recovery-email-service.js";
+import {
+  RecoveryEmailService,
+  type RecoveryMailTransportFactory,
+} from "../../src/service/recovery-email-service.js";
+import type { SendMailOptions } from "nodemailer";
 
 describe("recovery email transport", () => {
-  afterEach(() => jest.restoreAllMocks());
-  test("uses Resend HTTP API with a text link, no password", async () => {
-    const fetchMock = jest.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ id: "message-id" }), { status: 200 }));
-    await new RecoveryEmailService("test-key", "M-Team <sender@example.com>").send("recipient@example.com", "http://localhost:5173/restablecer-contrasena#token=test");
-    expect(fetchMock).toHaveBeenCalledWith("https://api.resend.com/emails", expect.objectContaining({ method: "POST" }));
-    const body = JSON.parse(fetchMock.mock.calls[0]![1]!.body as string);
-    expect(body.text).toContain("#token=test");
-    expect(body).not.toHaveProperty("password");
+  test("sends the recovery link through Gmail without including a password", async () => {
+    const transportOptions: unknown[] = [];
+    const sentMessages: SendMailOptions[] = [];
+    const createTransport: RecoveryMailTransportFactory = options => {
+      transportOptions.push(options);
+      return {
+        sendMail: async message => { sentMessages.push(message); },
+      };
+    };
+
+    await new RecoveryEmailService(
+      "mteam.test@gmail.com",
+      "abcd efgh ijkl mnop",
+      createTransport,
+    ).send("recipient@example.com", "http://localhost:5173/restablecer-contrasena#token=test");
+
+    expect(transportOptions).toEqual([{
+      service: "gmail",
+      auth: { user: "mteam.test@gmail.com", pass: "abcdefghijklmnop" },
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 10_000,
+    }]);
+    expect(sentMessages).toHaveLength(1);
+    expect(sentMessages[0]).toMatchObject({
+      from: { name: "M-Team", address: "mteam.test@gmail.com" },
+      to: "recipient@example.com",
+      subject: "Recuperá tu acceso a M-Team",
+      text: expect.stringContaining("#token=test"),
+    });
+    expect(sentMessages[0]).not.toHaveProperty("password");
   });
-  test.each([429, 500])("provider status %s yields a safe recoverable error", async status => {
-    jest.spyOn(globalThis, "fetch").mockResolvedValue(new Response("private-provider-details", { status }));
-    await expect(new RecoveryEmailService("secret-key", "sender@example.com").send("recipient@example.com", "link")).rejects.toMatchObject({ statusCode: 503, code: "SERVICE_UNAVAILABLE" });
+  test("SMTP failures yield a safe recoverable error", async () => {
+    const createTransport: RecoveryMailTransportFactory = () => ({
+      sendMail: async () => { throw new Error("private SMTP credentials and token"); },
+    });
+
+    await expect(new RecoveryEmailService(
+      "mteam.test@gmail.com",
+      "application-password",
+      createTransport,
+    ).send("recipient@example.com", "link")).rejects.toMatchObject({
+      statusCode: 503,
+      code: "SERVICE_UNAVAILABLE",
+      message: "No pudimos enviar el correo. Intentá nuevamente más tarde.",
+    });
   });
-  test("network failure never exposes the original error", async () => {
-    jest.spyOn(globalThis, "fetch").mockRejectedValue(new Error("secret-key and token"));
-    await expect(new RecoveryEmailService("secret-key", "sender@example.com").send("recipient@example.com", "link")).rejects.toThrow("No pudimos enviar el correo");
-  });
+
   test("missing configuration fails without a network request", async () => {
-    const fetchMock = jest.spyOn(globalThis, "fetch");
-    await expect(new RecoveryEmailService(undefined, undefined).send("recipient@example.com", "link")).rejects.toMatchObject({ statusCode: 503 });
-    expect(fetchMock).not.toHaveBeenCalled();
+    const createTransport = jest.fn();
+    await expect(new RecoveryEmailService(undefined, undefined, createTransport)
+      .send("recipient@example.com", "link")).rejects.toMatchObject({ statusCode: 503 });
+    expect(createTransport).not.toHaveBeenCalled();
   });
 });

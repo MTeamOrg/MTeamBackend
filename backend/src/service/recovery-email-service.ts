@@ -1,28 +1,58 @@
 import { ApplicationError } from "../error/application-error.js";
 import { ERROR_CODE } from "../error/error-code.js";
+import nodemailer, { type SendMailOptions } from "nodemailer";
 
 export interface RecoveryEmailSender {
   send(email: string, link: string): Promise<void>;
 }
 
+type GmailTransportOptions = {
+  service: "gmail";
+  auth: { user: string; pass: string };
+  connectionTimeout: number;
+  greetingTimeout: number;
+  socketTimeout: number;
+};
+
+type RecoveryMailTransport = {
+  sendMail(options: SendMailOptions): Promise<unknown>;
+};
+
+export type RecoveryMailTransportFactory = (
+  options: GmailTransportOptions,
+) => RecoveryMailTransport;
+
 export class RecoveryEmailService implements RecoveryEmailSender {
-  constructor(private readonly apiKey: string | undefined, private readonly from: string | undefined) {}
+  private readonly transport: RecoveryMailTransport | undefined;
+  private readonly senderAddress: string | undefined;
+
+  constructor(
+    user: string | undefined,
+    appPassword: string | undefined,
+    private readonly createTransport: RecoveryMailTransportFactory = options =>
+      nodemailer.createTransport(options),
+  ) {
+    this.senderAddress = user;
+    if (user && appPassword) {
+      this.transport = this.createTransport({
+        service: "gmail",
+        auth: { user, pass: appPassword.replace(/\s/g, "") },
+        connectionTimeout: 10_000,
+        greetingTimeout: 10_000,
+        socketTimeout: 10_000,
+      });
+    }
+  }
 
   async send(email: string, link: string): Promise<void> {
     try {
-      if (!this.apiKey || !this.from) throw new Error();
-      const response = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          from: this.from, to: [email], subject: "Recuperá tu acceso a M-Team",
-          text: `Si tenés una cuenta activa en M-Team, usá este enlace para elegir una nueva contraseña. Vence en 30 minutos y se puede usar una sola vez.\n\n${link}\n\nSi no solicitaste este correo, ignoralo.`,
-        }),
-        signal: AbortSignal.timeout(10_000),
+      if (!this.transport || !this.senderAddress) throw new Error();
+      await this.transport.sendMail({
+        from: { name: "M-Team", address: this.senderAddress },
+        to: email,
+        subject: "Recuperá tu acceso a M-Team",
+        text: `Si tenés una cuenta activa en M-Team, usá este enlace para elegir una nueva contraseña. Vence en 30 minutos y se puede usar una sola vez.\n\n${link}\n\nSi no solicitaste este correo, ignoralo.`,
       });
-      if (!response.ok) throw new Error();
-      const receipt = await response.json() as { id?: unknown };
-      if (typeof receipt.id !== "string" || !receipt.id) throw new Error();
     } catch {
       // Never propagate provider responses, recipient addresses or credentials to logs.
       throw new ApplicationError(503, ERROR_CODE.SERVICE_UNAVAILABLE,
