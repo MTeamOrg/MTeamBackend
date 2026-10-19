@@ -31,15 +31,11 @@ Iniciar frontend con `npm run dev`. Abrir /iniciar-sesion, solicitar recuperaci�
 - Límite en memoria: 10 solicitudes por IP/minuto compartido por las dos rutas. En producción con varias instancias agregar límite distribuido en el proxy y configurar IP de cliente con proxies confiables; no habilitar trust proxy indiscriminadamente. El frontend bloquea reenvío un minuto tras éxito o 429. No se invalida un enlace anterior al solicitar otro; todos quedan invalidados cuando se cambia la contraseña.
 - Para mantenimiento, purgar periódicamente filas vencidas de password_recovery_token con la operación habitual de base de datos. No habilitar tareas contra producción desde este cambio.
 
-## Fallback de entrega en Render (solo staging)
+## Fallos de entrega y registros
 
-Render puede bloquear conexiones SMTP salientes en algunos planes. Para probar la recuperaciÃ³n sin depender de Gmail, se permite registrar el enlace **Ãºnicamente** para una cuenta de prueba autorizada:
+Los enlaces y tokens de recuperación nunca se registran, tampoco en staging ni para cuentas de prueba. Se eliminó la opción `PASSWORD_RECOVERY_LOG_TEST_EMAIL`; quitarla de la configuración de los entornos donde se hubiera definido. Los fallos de SMTP o la falta de configuración devuelven 503 en todos los entornos. El registro no reemplaza el envío del correo.
 
-1. En el servicio backend de Render, configurar `APP_ENV=staging` y `PASSWORD_RECOVERY_LOG_TEST_EMAIL` con el correo exacto de una cuenta de prueba dedicada.
-2. Desplegar/reiniciar el backend y solicitar la recuperaciÃ³n para esa cuenta.
-3. Buscar en los logs de Render el mensaje `Staging password recovery link for the allowlisted test account` y abrir el valor `link`.
-
-Cuando SMTP funciona, el correo se envÃ­a y el enlace tambiÃ©n aparece en el log de esa cuenta. Si SMTP falla, el log sirve como fallback y la solicitud de esa cuenta de prueba no falla. Para otras cuentas, el enlace nunca se registra y un fallo SMTP conserva la respuesta 503. La variable `PASSWORD_RECOVERY_LOG_TEST_EMAIL` hace que el backend rechace la configuraciÃ³n si `APP_ENV` no es `staging`; no la agregues a producciÃ³n. El enlace contiene un token bearer de un solo uso, vence en 30 minutos y cualquier persona con acceso a los logs podrÃ­a usarlo: usar una cuenta sin datos reales, restringir el acceso a los logs y quitar la variable al terminar las pruebas. Esta excepciÃ³n de staging prevalece sobre la regla general anterior de no registrar enlaces.
+Los logs de errores contienen únicamente códigos SMTP conocidos, comandos sin argumentos y códigos de respuesta numéricos. No incluyen destinatarios, enlaces, tokens, contraseñas ni mensajes o respuestas completas del proveedor.
 
 ## Contrato
 
