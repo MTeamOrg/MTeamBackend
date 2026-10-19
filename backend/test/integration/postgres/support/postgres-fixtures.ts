@@ -5,6 +5,7 @@ import express from "express";
 import jwt from "jsonwebtoken";
 
 import { AdminUserController } from "../../../../src/controller/admin-user-controller.js";
+import { AccessAttemptController } from "../../../../src/controller/access-attempt-controller.js";
 import { AuthController } from "../../../../src/controller/auth-controller.js";
 import { EventController } from "../../../../src/controller/event-controller.js";
 import { MedicalCertificateController } from "../../../../src/controller/medical-certificate-controller.js";
@@ -19,6 +20,7 @@ import { createAuthenticationMiddleware } from "../../../../src/middleware/authe
 import { errorMiddleware } from "../../../../src/middleware/error-middleware.js";
 import { requirePasswordChangeCompleted } from "../../../../src/middleware/password-change-middleware.js";
 import { EventRepository } from "../../../../src/repository/event-repository.js";
+import { AccessAttemptRepository } from "../../../../src/repository/access-attempt-repository.js";
 import { MedicalCertificateRepository } from "../../../../src/repository/medical-certificate-repository.js";
 import { MemberMembershipRepository } from "../../../../src/repository/member-membership-repository.js";
 import { MembershipPriceRepository } from "../../../../src/repository/membership-price-repository.js";
@@ -29,6 +31,7 @@ import { ScheduledClassRepository } from "../../../../src/repository/scheduled-c
 import { UserRepository } from "../../../../src/repository/user-repository.js";
 import { WeeklyScheduleRepository } from "../../../../src/repository/weekly-schedule-repository.js";
 import { createAdminUserRouter } from "../../../../src/route/admin-user-route.js";
+import { createAccessAttemptRouter } from "../../../../src/route/access-attempt-route.js";
 import { createAuthRouter, createProtectedAuthRouter } from "../../../../src/route/auth-route.js";
 import { createEventRouter } from "../../../../src/route/event-route.js";
 import { createMedicalCertificateRouter } from "../../../../src/route/medical-certificate-route.js";
@@ -39,6 +42,7 @@ import { createPaymentRouter } from "../../../../src/route/payment-route.js";
 import { createScheduledClassRouter } from "../../../../src/route/scheduled-class-route.js";
 import { createWeeklyScheduleRouter } from "../../../../src/route/weekly-schedule-route.js";
 import { AdminUserService } from "../../../../src/service/admin-user-service.js";
+import { AccessAttemptService } from "../../../../src/service/access-attempt-service.js";
 import { AuthService } from "../../../../src/service/auth-service.js";
 import { EventService } from "../../../../src/service/event-service.js";
 import { MedicalCertificateService } from "../../../../src/service/medical-certificate-service.js";
@@ -103,6 +107,13 @@ export function createIntegrationApp(options: { now?: () => Date; database?: Pri
     new AdminUserController(new AdminUserService(users, passwordService)),
     authenticate,
     requirePasswordChangeCompleted,
+  ));
+  app.use("/api", createAccessAttemptRouter(
+    new AccessAttemptController(new AccessAttemptService(new AccessAttemptRepository(database))),
+    authenticate,
+    requirePasswordChangeCompleted,
+    tokenService,
+    users,
   ));
   app.use("/api", createNotificationRouter(
     new NotificationController(new NotificationService(new NotificationRepository(database), options.now)),
@@ -175,18 +186,26 @@ export function createFixtures() {
   const eventIds: string[] = [];
   const priceIds: string[] = [];
   const certificateIds: string[] = [];
+  const accessPointIds: string[] = [];
+  const accessLogIds: string[] = [];
   const paymentIds: string[] = [];
   const newsPostIds: string[] = [];
   const bulkRunId = randomUUID().replaceAll("-", "").slice(0, 8);
   let usedBulkMembers = false;
 
-  async function user(role: UserRole, overrides: { status?: "ACTIVE" | "INACTIVE"; isPasswordChangeRequired?: boolean } = {}): Promise<TestUser> {
+  async function user(role: UserRole, overrides: {
+    status?: "ACTIVE" | "INACTIVE";
+    isPasswordChangeRequired?: boolean;
+    firstName?: string;
+    lastName?: string;
+    documentNumber?: string;
+  } = {}): Promise<TestUser> {
     const unique = randomUUID();
     const created = await database.user.create({
       data: {
-        firstName: "Notification",
-        lastName: "Integration",
-        documentNumber: unique.replaceAll("-", "").slice(0, 28),
+        firstName: overrides.firstName ?? "Notification",
+        lastName: overrides.lastName ?? "Integration",
+        documentNumber: overrides.documentNumber ?? unique.replaceAll("-", "").slice(0, 28),
         birthDate: new Date("1990-01-01T00:00:00.000Z"),
         email: `${unique}@example.test`,
         phone: "555-0100",
@@ -220,6 +239,40 @@ export function createFixtures() {
       select: { id: true, name: true },
     });
     branchIds.push(created.id);
+    return created;
+  }
+
+  async function accessPoint(branchId: string, name = "Ingreso principal"): Promise<{ id: string; name: string }> {
+    const created = await database.accessPoint.create({
+      data: { branchId, name, qrToken: `fixture-${randomUUID()}` },
+      select: { id: true, name: true },
+    });
+    accessPointIds.push(created.id);
+    return created;
+  }
+
+  async function accessAttempt(input: {
+    userId: string;
+    roleAtAttempt: "MEMBER" | "TRAINER";
+    branchId?: string | null;
+    accessPointId?: string | null;
+    result: "ALLOWED" | "DENIED";
+    denialReason?: "INVALID_QR" | "INACTIVE_USER" | "INACTIVE_BRANCH" | "INACTIVE_ACCESS_POINT" | "EXPIRED_MEMBERSHIP" | "MEDICAL_CERTIFICATE_REQUIRED" | null;
+    attemptedAt: string;
+  }): Promise<{ id: string }> {
+    const created = await database.accessLog.create({
+      data: {
+        userId: input.userId,
+        roleAtAttempt: input.roleAtAttempt,
+        branchId: input.branchId ?? null,
+        accessPointId: input.accessPointId ?? null,
+        result: input.result,
+        denialReason: input.denialReason ?? null,
+        attemptedAt: new Date(input.attemptedAt),
+      },
+      select: { id: true },
+    });
+    accessLogIds.push(created.id);
     return created;
   }
 
@@ -325,13 +378,25 @@ export function createFixtures() {
     for (const item of found) if (!newsPostIds.includes(item.id)) newsPostIds.push(item.id);
   }
 
-  async function pendingCertificate(memberId: string) {
+  async function medicalCertificate(memberId: string, input: {
+    status?: "PENDING" | "APPROVED" | "REJECTED";
+    uploadedAt?: string;
+  } = {}) {
     const created = await database.medicalCertificate.create({
-      data: { memberId, fileUrl: `${memberId}/fixture.pdf`, status: "PENDING" },
+      data: {
+        memberId,
+        fileUrl: `${memberId}/fixture.pdf`,
+        status: input.status ?? "PENDING",
+        uploadedAt: input.uploadedAt ? new Date(input.uploadedAt) : new Date(),
+      },
       select: { id: true },
     });
     certificateIds.push(created.id);
     return created;
+  }
+
+  async function pendingCertificate(memberId: string) {
+    return medicalCertificate(memberId);
   }
 
   async function accreditedPayment(memberId: string, adminId: string, accreditedAt: string, expiresAt: string) {
@@ -372,6 +437,8 @@ export function createFixtures() {
 
   async function cleanup(): Promise<void> {
     await removeBulkMembers();
+    if (accessLogIds.length) await database.accessLog.deleteMany({ where: { id: { in: accessLogIds } } });
+    if (accessPointIds.length) await database.accessPoint.deleteMany({ where: { id: { in: accessPointIds } } });
     if (userIds.length) await database.notification.deleteMany({ where: { userId: { in: userIds } } });
     if (certificateIds.length) await database.medicalCertificate.deleteMany({ where: { id: { in: certificateIds } } });
     if (userIds.length) await database.medicalCertificate.deleteMany({ where: { memberId: { in: userIds } } });
@@ -390,11 +457,11 @@ export function createFixtures() {
       await database.memberProfile.deleteMany({ where: { userId: { in: userIds } } });
       await database.user.deleteMany({ where: { id: { in: userIds } } });
     }
-    for (const list of [userIds, branchIds, scheduleIds, classIds, eventIds, priceIds, certificateIds, paymentIds, newsPostIds]) list.length = 0;
+    for (const list of [userIds, branchIds, scheduleIds, classIds, eventIds, priceIds, certificateIds, paymentIds, newsPostIds, accessPointIds, accessLogIds]) list.length = 0;
   }
 
   return {
-    user, bulkActiveMembers, branch, scheduledClass, trackClassesOf, event, trackEventsBy, price, trackPricesBy,
-    newsPost, trackNewsPostsBy, pendingCertificate, accreditedPayment, cleanup,
+    user, bulkActiveMembers, branch, accessPoint, accessAttempt, scheduledClass, trackClassesOf, event, trackEventsBy, price, trackPricesBy,
+    newsPost, trackNewsPostsBy, medicalCertificate, pendingCertificate, accreditedPayment, cleanup,
   };
 }
