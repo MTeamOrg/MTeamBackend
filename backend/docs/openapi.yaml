@@ -2613,11 +2613,7 @@ components:
         newPassword: { type: string, format: password, minLength: 8, maxLength: 72 }
     UpdateProfileRequest:
       type: object
-      additionalProperties: false
-      description: Especialidad y descripción solo para TRAINER; contacto de emergencia solo para MEMBER. Los textos se recortan y no pueden quedar vacíos. Los demás roles reciben 400 si envían campos profesionales.
       properties:
-        specialty: { type: string, minLength: 1, maxLength: 150 }
-        description: { type: string, minLength: 1 }
         email: { type: string, format: email }
         phone: { type: string }
         emergencyContactName: { type: string }

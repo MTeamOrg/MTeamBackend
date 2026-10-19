@@ -71,8 +71,6 @@ export interface OwnProfile extends RegisteredMember {
 }
 
 export interface UpdateOwnProfileData {
-  specialty?: string;
-  description?: string;
   email?: string;
   phone?: string;
   emergencyContactName?: string;
@@ -884,12 +882,6 @@ export class UserRepository
     try {
       return await this.database.$transaction(async (transaction) => {
         const userData: Prisma.UserUpdateInput = {};
-        if (role === "TRAINER" && (data.specialty !== undefined || data.description !== undefined)) {
-          userData.trainerProfile = { update: {
-            ...(data.specialty === undefined ? {} : { specialty: data.specialty }),
-            ...(data.description === undefined ? {} : { description: data.description }),
-          } };
-        }
         if (data.email !== undefined) userData.email = data.email;
         if (data.phone !== undefined) userData.phone = data.phone;
         if (role === "MEMBER") {

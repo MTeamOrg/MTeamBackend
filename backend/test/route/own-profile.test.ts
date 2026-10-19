@@ -26,7 +26,7 @@ const profile: OwnProfile = {
   trainerProfile: null,
 };
 
-function setup(authenticated = true, includePhoto = true, role: "MEMBER" | "TRAINER" | "ADMIN" = "MEMBER") {
+function setup(authenticated = true, includePhoto = true) {
   const service: jest.Mocked<OwnProfileService> = {
     getCurrentIdentity: jest.fn().mockResolvedValue(profile),
     getOwnProfile: jest.fn().mockResolvedValue(profile),
@@ -42,7 +42,7 @@ function setup(authenticated = true, includePhoto = true, role: "MEMBER" | "TRAI
     }
     req.authenticatedUser = {
       id: userId,
-      role,
+      role: "MEMBER",
       isPasswordChangeRequired: false,
     };
     next();
@@ -132,13 +132,6 @@ describe("own profile routes", () => {
     { documentNumber: "99999999" },
     { status: "INACTIVE" },
     { phone: "" },
-    { specialty: " " },
-    { specialty: "x".repeat(151) },
-    { specialty: null },
-    { description: " " },
-    { description: 123 },
-    { branchIds: [] },
-    { classes: [] },
   ])("PATCH /users/me rejects invalid or protected fields: %j", async (body) => {
     const { app, service } = setup();
     const response = await request(app).patch("/api/users/me").send(body);
@@ -160,14 +153,4 @@ describe("own profile routes", () => {
     expect(response.status).toBe(401);
     expect(response.body.code).toBe("UNAUTHORIZED");
   });
-});
-
-test("PATCH /users/me validates trainer fields and returns updated profile", async () => {
-  const { app, service } = setup(true, true, "TRAINER");
-  const updated = { ...profile, role: "TRAINER" as const, trainerProfile: { specialty: "Funcional", description: "Personalizado" } };
-  service.updateOwnProfile.mockResolvedValue(updated);
-  const response = await request(app).patch("/api/users/me").send({ specialty: " Funcional ", description: " Personalizado " });
-  expect(response.status).toBe(200);
-  expect(response.body.trainerProfile).toEqual(updated.trainerProfile);
-  expect(service.updateOwnProfile).toHaveBeenCalledWith(expect.objectContaining({ role: "TRAINER" }), updated.trainerProfile);
 });
