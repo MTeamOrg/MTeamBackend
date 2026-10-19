@@ -381,6 +381,9 @@ export function createFixtures() {
   async function medicalCertificate(memberId: string, input: {
     status?: "PENDING" | "APPROVED" | "REJECTED";
     uploadedAt?: string;
+    reviewedById?: string;
+    reviewedAt?: string;
+    reviewComment?: string;
   } = {}) {
     const created = await database.medicalCertificate.create({
       data: {
@@ -388,6 +391,9 @@ export function createFixtures() {
         fileUrl: `${memberId}/fixture.pdf`,
         status: input.status ?? "PENDING",
         uploadedAt: input.uploadedAt ? new Date(input.uploadedAt) : new Date(),
+        reviewedById: input.reviewedById ?? null,
+        reviewedAt: input.reviewedAt ? new Date(input.reviewedAt) : null,
+        reviewComment: input.reviewComment ?? null,
       },
       select: { id: true },
     });

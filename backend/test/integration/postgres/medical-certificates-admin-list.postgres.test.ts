@@ -29,7 +29,12 @@ describe("administrative medical-certificate listing (PostgreSQL)", () => {
 
     await fixtures.medicalCertificate(member.id, { status: "PENDING", uploadedAt: "2026-10-10T12:00:00.000Z" });
     await fixtures.medicalCertificate(member.id, { status: "PENDING", uploadedAt: "2026-10-11T12:00:00.000Z" });
-    await fixtures.medicalCertificate(otherMember.id, { status: "APPROVED", uploadedAt: "2026-10-10T13:00:00.000Z" });
+    await fixtures.medicalCertificate(otherMember.id, {
+      status: "APPROVED",
+      uploadedAt: "2026-10-10T13:00:00.000Z",
+      reviewedById: administrator.id,
+      reviewedAt: "2026-10-10T14:00:00.000Z",
+    });
 
     const filtered = await request(app).get("/api/medical-certificates")
       .query({
