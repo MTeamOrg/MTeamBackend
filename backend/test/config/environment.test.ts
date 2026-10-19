@@ -30,6 +30,8 @@ describe("environment configuration", () => {
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     delete process.env.SUPABASE_STORAGE_BUCKET;
     delete process.env.SUPABASE_PROFILE_PHOTO_BUCKET;
+    delete process.env.GOOGLE_SMTP_USER;
+    delete process.env.GOOGLE_APP_PASSWORD;
   });
 
   afterAll(() => {
@@ -73,5 +75,23 @@ describe("environment configuration", () => {
     await expect(loadEnvironment()).rejects.toThrow(
       "Invalid environment configuration",
     );
+  });
+
+  test("requires Google SMTP credentials to be configured together", async () => {
+    process.env.GOOGLE_SMTP_USER = "mteam.test@gmail.com";
+
+    await expect(loadEnvironment()).rejects.toThrow(
+      "GOOGLE_SMTP_USER and GOOGLE_APP_PASSWORD must be configured together",
+    );
+  });
+
+  test("accepts a complete Google SMTP configuration", async () => {
+    process.env.GOOGLE_SMTP_USER = "mteam.test@gmail.com";
+    process.env.GOOGLE_APP_PASSWORD = "local-app-password";
+
+    const environment = await loadEnvironment();
+
+    expect(environment.GOOGLE_SMTP_USER).toBe("mteam.test@gmail.com");
+    expect(environment.GOOGLE_APP_PASSWORD).toBe("local-app-password");
   });
 });

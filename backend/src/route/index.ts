@@ -90,7 +90,7 @@ import { createAccountRecoveryRouter } from "./account-recovery-route.js";
 export const apiRouter = Router();
 apiRouter.use(createAccountRecoveryRouter(new AccountRecoveryController(new AccountRecoveryService(
   new AccountRecoveryRepository(database), new PasswordService(),
-  new RecoveryEmailService(environment.RESEND_API_KEY, environment.MAIL_FROM), environment.FRONTEND_PUBLIC_URL,
+  new RecoveryEmailService(environment.GOOGLE_SMTP_USER, environment.GOOGLE_APP_PASSWORD), environment.FRONTEND_PUBLIC_URL,
 ))));
 
 const userRepository = new UserRepository(database);

@@ -4,15 +4,15 @@ Amplía USR-04 del documento de alcance, que describe el restablecimiento admini
 
 ## Configuración y prueba local
 
-En backend/.env.development.local (o el archivo local utilizado por el entorno), configurar:
+En `backend/.env.development.local` (o el archivo local utilizado por el entorno), configurar:
 
 ```dotenv
 FRONTEND_PUBLIC_URL=http://localhost:5173
-RESEND_API_KEY=<clave privada de una cuenta Resend>
-MAIL_FROM=M-Team <recuperacion@tu-dominio-verificado.example>
+GOOGLE_SMTP_USER=<cuenta-google-dedicada@gmail.com>
+GOOGLE_APP_PASSWORD=<contraseña-de-aplicación-de-16-caracteres>
 ```
 
-La integración usa https://resend.com/docs/api-reference/emails/send-email sin dependencias adicionales. Requiere una cuenta Resend, API key con permiso de envío y remitente/dominio habilitado. No guardar la clave en Git ni en variables VITE_. En producción usar HTTPS y configurar los tres valores en el gestor de secretos del backend. Desactivar seguimiento de enlaces en el proveedor para evitar reescritura de enlaces sensibles. El frontend público debe servir index.html para /restablecer-contrasena.
+Crear una cuenta Google dedicada, activar la verificación en dos pasos y generar una contraseña de aplicación para Mail. Usar esa contraseña, nunca la contraseña normal de Google. El remitente visible será la cuenta configurada en `GOOGLE_SMTP_USER`. Nodemailer usa la configuración segura de Gmail SMTP. No guardar la contraseña de aplicación en Git ni en variables `VITE_`; configurar ambos secretos solo en el backend y reiniciarlo al cambiarlos. Google puede bloquear inicios de sesión SMTP que considere sospechosos y Gmail tiene límites de envío; por eso esta opción sirve para desarrollo/demostración y no se recomienda para producción. El frontend público debe servir `index.html` para `/restablecer-contrasena`.
 
 En una base **local de desarrollo**, ejecutar desde backend `npm run prisma:generate`, `npm run prisma:migrate:dev`, `npm run dev`. La migración preparada es 20261015150000_account_recovery; no se ejecutó contra producción. Para una implementación futura aprobada aplicar la migración con `npm run prisma:migrate:deploy` en el proceso habitual, antes de activar la nueva versión. Revisar primero DATABASE_URL; nunca usar una base de producción para pruebas.
 
