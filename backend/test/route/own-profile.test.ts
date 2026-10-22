@@ -26,7 +26,7 @@ const profile: OwnProfile = {
   trainerProfile: null,
 };
 
-function setup(authenticated = true, includePhoto = true) {
+function setup(authenticated = true, includePhoto = true, role: "MEMBER" | "TRAINER" = "MEMBER") {
   const service: jest.Mocked<OwnProfileService> = {
     getCurrentIdentity: jest.fn().mockResolvedValue(profile),
     getOwnProfile: jest.fn().mockResolvedValue(profile),
@@ -42,7 +42,7 @@ function setup(authenticated = true, includePhoto = true) {
     }
     req.authenticatedUser = {
       id: userId,
-      role: "MEMBER",
+      role,
       isPasswordChangeRequired: false,
     };
     next();
@@ -139,6 +139,30 @@ describe("own profile routes", () => {
     expect(response.status).toBe(400);
     expect(response.body.code).toBe("VALIDATION_ERROR");
     expect(service.updateOwnProfile).not.toHaveBeenCalled();
+  });
+
+  describe.each(["MEMBER", "TRAINER"] as const)("contact validation for %s", (role) => {
+    test.each(["1122334455", "11 2233-4455", "+54 (11) 2233-4455", "+54 9 11 2233-4455"])("accepts %s", async (phone) => {
+      const { app, service } = setup(true, true, role);
+      const body = { email: " ana@example.com ", phone, ...(role === "MEMBER" ? { emergencyContactPhone: phone } : {}) };
+      const response = await request(app).patch("/api/users/me").send(body);
+      expect(response.status).toBe(200);
+      expect(service.updateOwnProfile).toHaveBeenCalledWith(expect.objectContaining({ role }), { ...body, email: "ana@example.com" });
+    });
+
+    test.each([
+      { email: "anaexample.com" }, { email: "ana@example" }, { email: "ana@example." },
+      { email: "ana@.com" }, { email: "ana @example.com" },
+      { phone: "11abc34455" }, { phone: "112233" }, { phone: "+55 11 2233-4455" },
+      { phone: "541122334455" }, { emergencyContactPhone: "abc" },
+      { emergencyContactPhone: "1122" }, { emergencyContactPhone: "+55 11 2233-4455" },
+    ])("rejects malformed contact %j without updating", async (body) => {
+      const { app, service } = setup(true, true, role);
+      const response = await request(app).patch("/api/users/me").send(body);
+      expect(response.status).toBe(400);
+      expect(response.body.code).toBe("VALIDATION_ERROR");
+      expect(service.updateOwnProfile).not.toHaveBeenCalled();
+    });
   });
 
   test.each([

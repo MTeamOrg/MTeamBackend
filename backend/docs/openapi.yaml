@@ -2615,9 +2615,19 @@ components:
       type: object
       properties:
         email: { type: string, format: email }
-        phone: { type: string }
+        phone:
+          type: string
+          minLength: 1
+          maxLength: 30
+          description: Teléfono argentino de 10 dígitos nacionales, o +54 y 10 dígitos, con 9 opcional para celulares. Se permiten espacios, guiones y paréntesis; se recortan espacios exteriores.
+          examples: ["11 2233-4455", "+54 (11) 2233-4455", "+54 9 11 2233-4455"]
         emergencyContactName: { type: string }
-        emergencyContactPhone: { type: string }
+        emergencyContactPhone:
+          type: string
+          minLength: 1
+          maxLength: 30
+          description: Teléfono argentino de 10 dígitos nacionales, o +54 y 10 dígitos, con 9 opcional para celulares. Se permiten espacios, guiones y paréntesis; se recortan espacios exteriores.
+          examples: ["11 2233-4455", "+54 (11) 2233-4455", "+54 9 11 2233-4455"]
       minProperties: 1
     CreateUserRequest:
       type: object
