@@ -43,7 +43,10 @@ if (
 ) {
   throw new Error("SMOKE_API_URL must be an HTTP(S) base URL without credentials, query, or fragment");
 }
-const apiBasePath = apiBaseUrl.pathname.replace(/\/+$/, "");
+let apiBasePath = apiBaseUrl.pathname;
+while (apiBasePath.endsWith("/")) {
+  apiBasePath = apiBasePath.slice(0, -1);
+}
 const verifyOnly = process.env.SMOKE_VERIFY_ONLY === "true";
 const marker = "TEST-SUPABASE-SMOKE-20260925";
 
@@ -71,6 +74,10 @@ function resolveApiRequestUrl(path) {
   }
 
   return requestUrl;
+}
+
+function sanitizeLogText(value) {
+  return value.replaceAll("\r", "\\r").replaceAll("\n", "\\n");
 }
 
 const member = {
@@ -131,7 +138,7 @@ async function request(path, { method = "GET", token, body, expected = [200] } =
     }
   }
   if (!expected.includes(response.status)) {
-    throw new Error(`${method} ${path} returned unexpected status ${response.status}`);
+    throw new Error(`Smoke API request returned unexpected status ${response.status}`);
   }
   return { status: response.status, payload };
 }
@@ -376,6 +383,8 @@ try {
   summary.persistence = verifyOnly ? "confirmed" : "pending-restart-check";
   console.log(JSON.stringify(summary, null, 2));
 } catch (error) {
-  console.error(error instanceof Error ? error.message : "Supabase smoke verification failed");
+  const message =
+    error instanceof Error ? error.message : "Supabase smoke verification failed";
+  console.error({ message: sanitizeLogText(message) });
   process.exitCode = 1;
 }
