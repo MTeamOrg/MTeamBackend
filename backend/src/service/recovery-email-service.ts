@@ -7,7 +7,9 @@ export interface RecoveryEmailSender {
 }
 
 type GmailTransportOptions = {
-  service: "gmail";
+  host: "smtp.gmail.com";
+  port: 465;
+  secure: true;
   auth: { user: string; pass: string };
   connectionTimeout: number;
   greetingTimeout: number;
@@ -38,7 +40,9 @@ export class RecoveryEmailService implements RecoveryEmailSender {
     this.senderAddress = user;
     if (user && appPassword) {
       this.transport = this.createTransport({
-        service: "gmail",
+        host: "smtp.gmail.com",
+        port: 465,
+        secure: true,
         auth: { user, pass: appPassword.replace(/\s/g, "") },
         connectionTimeout: 10_000,
         greetingTimeout: 10_000,

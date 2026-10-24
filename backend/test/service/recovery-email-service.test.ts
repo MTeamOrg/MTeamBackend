@@ -36,7 +36,9 @@ describe("recovery email transport", () => {
     ).send("recipient@example.com", "http://localhost:5173/restablecer-contrasena#token=test");
 
     expect(transportOptions).toEqual([{
-      service: "gmail",
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
       auth: { user: "mteam.test@gmail.com", pass: "abcdefghijklmnop" },
       connectionTimeout: 10_000,
       greetingTimeout: 10_000,
