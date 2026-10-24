@@ -33,9 +33,45 @@ if (!validation.success) {
 }
 
 const environment = validation.data;
-const apiBaseUrl = environment.SMOKE_API_URL.replace(/\/$/, "");
+const apiBaseUrl = new URL(environment.SMOKE_API_URL);
+if (
+  !["http:", "https:"].includes(apiBaseUrl.protocol) ||
+  apiBaseUrl.username ||
+  apiBaseUrl.password ||
+  apiBaseUrl.search ||
+  apiBaseUrl.hash
+) {
+  throw new Error("SMOKE_API_URL must be an HTTP(S) base URL without credentials, query, or fragment");
+}
+const apiBasePath = apiBaseUrl.pathname.replace(/\/+$/, "");
 const verifyOnly = process.env.SMOKE_VERIFY_ONLY === "true";
 const marker = "TEST-SUPABASE-SMOKE-20260925";
+
+function resolveApiRequestUrl(path) {
+  if (
+    typeof path !== "string" ||
+    !path.startsWith("/") ||
+    path.startsWith("//") ||
+    path.includes("\\") ||
+    path.includes("#")
+  ) {
+    throw new Error("Smoke API paths must be relative paths under the configured API base URL");
+  }
+
+  const requestUrl = new URL(
+    `${apiBasePath}/${path.slice(1)}`,
+    apiBaseUrl.origin,
+  );
+  const allowedPathPrefix = apiBasePath ? `${apiBasePath}/` : "/";
+  if (
+    requestUrl.origin !== apiBaseUrl.origin ||
+    !requestUrl.pathname.startsWith(allowedPathPrefix)
+  ) {
+    throw new Error("Smoke API request URL is outside the configured API base URL");
+  }
+
+  return requestUrl;
+}
 
 const member = {
   firstName: "TEST SUPABASE",
@@ -80,7 +116,7 @@ async function request(path, { method = "GET", token, body, expected = [200] } =
   const headers = { accept: "application/json" };
   if (token) headers.authorization = `Bearer ${token}`;
   if (body !== undefined) headers["content-type"] = "application/json";
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const response = await fetch(resolveApiRequestUrl(path), {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
