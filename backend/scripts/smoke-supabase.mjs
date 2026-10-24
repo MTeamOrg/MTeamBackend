@@ -33,9 +33,52 @@ if (!validation.success) {
 }
 
 const environment = validation.data;
-const apiBaseUrl = environment.SMOKE_API_URL.replace(/\/$/, "");
+const apiBaseUrl = new URL(environment.SMOKE_API_URL);
+if (
+  !["http:", "https:"].includes(apiBaseUrl.protocol) ||
+  apiBaseUrl.username ||
+  apiBaseUrl.password ||
+  apiBaseUrl.search ||
+  apiBaseUrl.hash
+) {
+  throw new Error("SMOKE_API_URL must be an HTTP(S) base URL without credentials, query, or fragment");
+}
+let apiBasePath = apiBaseUrl.pathname;
+while (apiBasePath.endsWith("/")) {
+  apiBasePath = apiBasePath.slice(0, -1);
+}
 const verifyOnly = process.env.SMOKE_VERIFY_ONLY === "true";
 const marker = "TEST-SUPABASE-SMOKE-20260925";
+
+function resolveApiRequestUrl(path) {
+  if (
+    typeof path !== "string" ||
+    !path.startsWith("/") ||
+    path.startsWith("//") ||
+    path.includes("\\") ||
+    path.includes("#")
+  ) {
+    throw new Error("Smoke API paths must be relative paths under the configured API base URL");
+  }
+
+  const requestUrl = new URL(
+    `${apiBasePath}/${path.slice(1)}`,
+    apiBaseUrl.origin,
+  );
+  const allowedPathPrefix = apiBasePath ? `${apiBasePath}/` : "/";
+  if (
+    requestUrl.origin !== apiBaseUrl.origin ||
+    !requestUrl.pathname.startsWith(allowedPathPrefix)
+  ) {
+    throw new Error("Smoke API request URL is outside the configured API base URL");
+  }
+
+  return requestUrl;
+}
+
+function sanitizeLogText(value) {
+  return value.replaceAll("\r", "\\r").replaceAll("\n", "\\n");
+}
 
 const member = {
   firstName: "TEST SUPABASE",
@@ -80,7 +123,7 @@ async function request(path, { method = "GET", token, body, expected = [200] } =
   const headers = { accept: "application/json" };
   if (token) headers.authorization = `Bearer ${token}`;
   if (body !== undefined) headers["content-type"] = "application/json";
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const response = await fetch(resolveApiRequestUrl(path), {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -95,7 +138,7 @@ async function request(path, { method = "GET", token, body, expected = [200] } =
     }
   }
   if (!expected.includes(response.status)) {
-    throw new Error(`${method} ${path} returned unexpected status ${response.status}`);
+    throw new Error(`Smoke API request returned unexpected status ${response.status}`);
   }
   return { status: response.status, payload };
 }
@@ -340,6 +383,8 @@ try {
   summary.persistence = verifyOnly ? "confirmed" : "pending-restart-check";
   console.log(JSON.stringify(summary, null, 2));
 } catch (error) {
-  console.error(error instanceof Error ? error.message : "Supabase smoke verification failed");
+  const message =
+    error instanceof Error ? error.message : "Supabase smoke verification failed";
+  console.error({ message: sanitizeLogText(message) });
   process.exitCode = 1;
 }
