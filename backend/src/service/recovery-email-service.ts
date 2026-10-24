@@ -35,7 +35,12 @@ export class RecoveryEmailService implements RecoveryEmailSender {
     user: string | undefined,
     appPassword: string | undefined,
     private readonly createTransport: RecoveryMailTransportFactory = options =>
-      nodemailer.createTransport(options),
+      nodemailer.createTransport({
+        ...options,
+        host: "smtp.gmail.com",
+        port: 465,
+        secure: true,
+      }),
   ) {
     this.senderAddress = user;
     if (user && appPassword) {

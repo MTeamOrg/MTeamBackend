@@ -97,7 +97,11 @@ describe("recovery email transport", () => {
     const createTransport = jest.spyOn(nodemailer, "createTransport")
       .mockReturnValue({ sendMail } as unknown as ReturnType<typeof nodemailer.createTransport>);
     await new RecoveryEmailService("sender@example.com", "app-password").send("recipient@example.com", "link");
-    expect(createTransport).toHaveBeenCalledTimes(1);
+    expect(createTransport).toHaveBeenCalledWith(expect.objectContaining({
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
+    }));
     expect(sendMail).toHaveBeenCalledTimes(1);
   });
 
