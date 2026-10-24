@@ -48,7 +48,8 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: backend/package-lock.json
-      - run: npm ci
+      - run: npm ci --ignore-scripts
+      - run: npm rebuild @prisma/engines prisma bcrypt @swc/core esbuild
       - run: npm run prisma:generate
       - run: npm run prisma:validate
       - run: npm run prisma:migrate:deploy
