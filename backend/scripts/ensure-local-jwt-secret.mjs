@@ -13,12 +13,18 @@ if (!existsSync(environmentPath)) {
 }
 
 let contents = await readFile(environmentPath, "utf8");
-const jwtLinePattern = /^\s*JWT_SECRET\s*=.*$/m;
+const jwtLinePattern = /^[ \t]*JWT_SECRET[ \t]*=[^\r\n]*$/m;
 const jwtLine = contents.match(jwtLinePattern)?.[0];
-const configuredValue = jwtLine
-  ?.replace(/^\s*JWT_SECRET\s*=\s*/, "")
-  .trim()
-  .replace(/^(["'])(.*)\1$/, "$2");
+const rawConfiguredValue = jwtLine
+  ?.slice(jwtLine.indexOf("=") + 1)
+  .trim();
+const isQuotedValue = rawConfiguredValue !== undefined && rawConfiguredValue.length >= 2 && (
+  (rawConfiguredValue.startsWith('"') && rawConfiguredValue.endsWith('"')) ||
+  (rawConfiguredValue.startsWith("'") && rawConfiguredValue.endsWith("'"))
+);
+const configuredValue = isQuotedValue
+  ? rawConfiguredValue.slice(1, -1)
+  : rawConfiguredValue;
 
 if (configuredValue) {
   console.log(`JWT_SECRET already configured in ${environmentPath}`);
