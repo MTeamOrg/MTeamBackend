@@ -38,12 +38,30 @@ if (!existsSync(composeFile) || !existsSync(migrationsDirectory)) {
   throw new Error("Run this script from the backend directory containing docker-compose.test.yml and prisma/migrations.");
 }
 
+const dockerCliCandidates = process.platform === "win32"
+  ? ["C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe"]
+  : process.platform === "darwin"
+    ? ["/Applications/Docker.app/Contents/Resources/bin/docker"]
+    : ["/usr/bin/docker", "/usr/local/bin/docker"];
+const dockerCliPath = dockerCliCandidates.find(existsSync);
+if (!dockerCliPath) {
+  throw new Error("Docker CLI was not found in a supported system installation directory.");
+}
+
+const safePath = process.platform === "win32"
+  ? "C:\\Windows\\System32;C:\\Windows"
+  : "/usr/bin:/bin:/usr/sbin:/sbin";
+
 function runPsql(sql) {
-  const result = spawnSync("docker", [
+  const result = spawnSync(dockerCliPath, [
     "compose", "-f", composeFile, "exec", "-T", "postgres-test", "psql",
     "-v", "ON_ERROR_STOP=1", "-A", "-t", "-F", "|",
     "-U", "mteam_test", "-d", "mteam_test", "-f", "-",
-  ], { input: sql, encoding: "utf8", env: process.env });
+  ], {
+    input: sql,
+    encoding: "utf8",
+    env: { ...process.env, PATH: safePath },
+  });
 
   if (result.error) throw result.error;
   if (result.status !== 0) {
