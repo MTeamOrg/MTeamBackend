@@ -84,7 +84,7 @@ runPsql(`CREATE TABLE IF NOT EXISTS _prisma_migrations (
 const migrations = readdirSync(migrationsDirectory, { withFileTypes: true })
   .filter((entry) => entry.isDirectory() && /^\d{14}_[a-z0-9_]+$/.test(entry.name))
   .map((entry) => entry.name)
-  .sort();
+  .sort((left, right) => left.localeCompare(right));
 
 for (const migrationName of migrations) {
   const migrationPath = resolve(migrationsDirectory, migrationName, "migration.sql");
