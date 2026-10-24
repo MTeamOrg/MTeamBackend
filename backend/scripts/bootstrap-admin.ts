@@ -39,7 +39,7 @@ if (!validation.success) {
     ...new Set(
       validation.error.issues.map((issue) => String(issue.path[0] ?? "unknown")),
     ),
-  ].sort();
+  ].sort((left, right) => left.localeCompare(right));
   console.error(`Invalid or missing local bootstrap variables: ${fields.join(", ")}`);
   process.exit(1);
 }

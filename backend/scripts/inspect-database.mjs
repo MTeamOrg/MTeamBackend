@@ -61,7 +61,9 @@ function describeConnection(value) {
       hasUsername: Boolean(url.username),
       hasPassword: Boolean(url.password),
       hasDatabaseName: url.pathname.length > 1,
-      queryParameters: [...url.searchParams.keys()].sort(),
+      queryParameters: [...url.searchParams.keys()].sort((left, right) =>
+        left.localeCompare(right),
+      ),
     };
   } catch {
     return { configured: true, validUrl: false };
