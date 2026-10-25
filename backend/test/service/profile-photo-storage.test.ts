@@ -20,15 +20,40 @@ describe("SupabaseProfilePhotoStorage", () => {
       mimeType: "image/png",
     });
 
-    expect(result).toBe(
-      `https://project.supabase.co/storage/v1/object/public/profile-photos/profile-photo/${userId}`,
-    );
+    const publicUrl = new URL(result);
+    expect(publicUrl.origin).toBe("https://project.supabase.co");
+    expect(publicUrl.pathname).toBe(`/storage/v1/object/public/profile-photos/profile-photo/${userId}`);
+    expect(publicUrl.searchParams.get("v")).toMatch(/^[0-9a-f-]{36}$/);
     expect(fetchMock).toHaveBeenCalledWith(
       new URL(
         `https://project.supabase.co/storage/v1/object/profile-photos/profile-photo/${userId}`,
       ),
       expect.objectContaining({ method: "POST" }),
     );
+  });
+
+  test("returns a new URL version when replacing the same stored object", async () => {
+    const fetchMock = jest
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(null, { status: 200 }));
+    const storage = new SupabaseProfilePhotoStorage({
+      url: "https://project.supabase.co",
+      apiKey: "test-service-role-key",
+      bucket: "profile-photos",
+    });
+
+    const firstUrl = await storage.upload(userId, {
+      buffer: Buffer.from("first synthetic photo"),
+      mimeType: "image/png",
+    });
+    const secondUrl = await storage.upload(userId, {
+      buffer: Buffer.from("second synthetic photo"),
+      mimeType: "image/png",
+    });
+
+    expect(new URL(firstUrl).pathname).toBe(new URL(secondUrl).pathname);
+    expect(new URL(firstUrl).searchParams.get("v")).not.toBe(new URL(secondUrl).searchParams.get("v"));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   test("sends a new secret API key on apikey without a Bearer JWT header", async () => {

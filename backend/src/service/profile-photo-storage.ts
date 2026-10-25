@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { ApplicationError } from "../error/application-error.js";
 import { ERROR_CODE } from "../error/error-code.js";
 import { supabaseStorageAuthHeaders } from "./supabase-storage-headers.js";
@@ -54,9 +56,13 @@ export class SupabaseProfilePhotoStorage implements ProfilePhotoStorage {
       );
     }
 
-    return new URL(
+    const publicUrl = new URL(
       `/storage/v1/object/public/${encodeURIComponent(bucket)}/${objectPath}`,
       url,
-    ).toString();
+    );
+    // The object is intentionally upserted at a stable path per user. Persist a
+    // fresh URL version so browsers and CDNs cannot reuse the previous image.
+    publicUrl.searchParams.set("v", randomUUID());
+    return publicUrl.toString();
   }
 }
