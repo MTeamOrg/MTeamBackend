@@ -1,0 +1,11 @@
+import { defineConfig, env } from "prisma/config";
+
+import { loadEnvironmentFiles } from "./src/config/load-environment-files.js";
+
+loadEnvironmentFiles();
+
+export default defineConfig({
+  schema: "prisma/schema.prisma",
+  migrations: { path: "prisma/migrations" },
+  datasource: { url: env("DIRECT_URL") },
+});

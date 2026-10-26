@@ -4,6 +4,19 @@
 
 M-Team es una plataforma web diseñada para centralizar la administración del gimnasio. Permitirá gestionar socios, entrenadores, pagos, la cuota mensual, aptos médicos, sedes, clases y accesos mediante códigos QR fijos.
 
+## Documentación de la API
+
+La especificación inicial de la API REST se encuentra en
+[`backend/docs/openapi.yaml`](./backend/docs/openapi.yaml).
+
+El contrato documenta los endpoints, parámetros, cuerpos, respuestas,
+autenticación JWT y permisos necesarios para integrar el frontend con el
+backend. Swagger UI está disponible localmente en
+`http://localhost:3000/api/docs` cuando el backend está en ejecución.
+
+La especificación representa el contrato objetivo del sistema. Los endpoints
+se implementan incrementalmente conforme avanza cada requerimiento.
+
 ## ✨ Características
 
 - 👥 Gestión de usuarios con roles (Socio, Entrenador y Administrador).
@@ -118,3 +131,47 @@ El proyecto no incluye:
 - Planes de membresía.
 
 Estas características no deben incorporarse durante la implementación del alcance vigente.
+
+## Ejecución local del backend
+
+Requisitos: Node.js, npm y una base PostgreSQL disponible.
+
+```powershell
+cd backend
+npm ci
+Copy-Item .env.example .env
+npm run local:ensure-jwt-secret
+npm run prisma:validate
+npm run prisma:migrate:deploy
+npm run build
+npm run dev
+```
+
+Antes de iniciar, completá localmente las URLs y credenciales del ambiente. Los
+archivos `.env` locales no deben versionarse. Para Supabase, seguridad de Data
+API, bootstrap del primer administrador y smoke real, seguí
+[`backend/docs/supabase-setup.md`](./backend/docs/supabase-setup.md).
+Swagger UI quedará disponible en `http://localhost:3000/api/docs`.
+
+Para las fotografías de perfil se debe crear en Supabase Storage un bucket
+público exclusivo y asignar su nombre a `SUPABASE_PROFILE_PHOTO_BUCKET`. Los
+aptos médicos utilizarán un bucket privado diferente.
+
+Validaciones del proyecto:
+
+```powershell
+npm test
+npm run build
+npm run openapi:validate
+npm run prisma:validate
+```
+
+Notificaciones internas: las decisiones, la evaluación de la generación de avisos
+de cuota, el registro de problemas corregidos y cómo correr las pruebas de
+integración contra una base PostgreSQL local descartable están en
+[`backend/docs/notifications-implementation-notes.md`](./backend/docs/notifications-implementation-notes.md).
+
+```powershell
+npm run test:integration:notifications   # requiere NOTIFICATION_TEST_DATABASE_URL (solo bases locales "test")
+npm run test:coverage:notifications      # cobertura del módulo
+```
