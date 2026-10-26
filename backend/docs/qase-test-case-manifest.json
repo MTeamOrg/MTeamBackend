@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "project": "MTEAM",
+  "cases": [
+    {
+      "qaseId": 119,
+      "locator": "backend/test/service/membership-price-management.test.ts#membership price management > accepts a scheduled price and retains its administrator and effective date",
+      "fields": [
+        "description",
+        "preconditions",
+        "postconditions",
+        "steps"
+      ],
+      "source": "user-provided-existing-case"
+    }
+  ]
+}
