@@ -1,37 +1,6 @@
 module.exports = {
-  extensionsToTreatAsEsm: [".ts"],
-  moduleNameMapper: {
-    "^(\\.{1,2}/.*)\\.js$": "$1",
-  },
-  testEnvironment: "node",
-  reporters: process.env.QASE_MODE === "testops"
-    ? [
-        "default",
-        ["jest-qase-reporter", {
-          mode: "testops",
-          testops: {
-            api: { token: process.env.QASE_TESTOPS_API_TOKEN },
-            project: process.env.QASE_TESTOPS_PROJECT,
-            run: {
-              title: process.env.QASE_TESTOPS_RUN_TITLE,
-              complete: true,
-            },
-          },
-        }],
-      ]
-    : ["default"],
+  ...require("./jest.config.cjs"),
   testMatch: ["<rootDir>/test/integration/supabase/**/*.integration.ts"],
+  testPathIgnorePatterns: [],
   testTimeout: 120000,
-  transform: {
-    "^.+\\.tsx?$": [
-      "@swc/jest",
-      {
-        jsc: {
-          parser: { syntax: "typescript" },
-          target: "es2022",
-        },
-        module: { type: "es6" },
-      },
-    ],
-  },
 };
