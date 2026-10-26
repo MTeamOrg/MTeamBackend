@@ -19,22 +19,6 @@ Sin ambas variables los reporters quedan desactivados y los tests corren como an
 
 Los resultados automatizados se identifican inicialmente por suite/título. Para vincular una prueba con un caso manual existente en Qase, agregá a la prueba el ID numérico de Qase usando el helper `qase(...)` del reporter correspondiente. No inventes IDs antes de crear los casos en Qase.
 
-## Documentación segura de casos existentes
-
-El reporter de Jest está configurado para enviar resultados de ejecución. La documentación de casos existentes se analiza y sincroniza por separado para no confundir un reporte de resultados con una actualización de campos del caso.
-
-Desde `backend/`, la vista previa local es el modo predeterminado:
-
-```powershell
-npm run qase:docs:preview
-```
-
-El script analiza los tests `backend/test/**/*.test.ts`, genera la propuesta completa en `backend/docs/qase-test-documentation-preview.json` y un informe resumido en `backend/docs/qase-test-documentation-report.md`. Clasifica las pruebas como unitarias, API, integración o seguridad/autorización; las pruebas de rutas no se consideran E2E automáticamente.
-
-Los vínculos persistentes se registran en `backend/docs/qase-test-case-manifest.json` con el localizador exacto del test y el ID numérico existente de Qase. El script no usa el título como vínculo automático: sin una entrada del manifiesto o un ID `qase(...)` en el código, el caso queda sin modificar y se marca para revisión humana.
-
-Solo después de revisar la vista previa y autorizar una muestra de hasta cinco casos se puede ejecutar `npm run qase:docs:sync` con `QASE_TESTOPS_API_TOKEN` y `QASE_TESTOPS_PROJECT`. La escritura usa la API oficial de Qase, no crea casos ni suites, no cambia títulos o IDs y completa únicamente campos autorizados que estén vacíos. Los campos ya documentados se conservan. Para una actualización mayor se requiere además `--allow-mass-update` de forma explícita; no se ejecuta desde CI.
-
 ## Ejecutar localmente y enviar resultados
 
 En PowerShell, desde la carpeta del repositorio que contiene el `package.json`:
