@@ -136,6 +136,45 @@ describe("simultaneous administrative operations", () => {
 });
 
 describe("simultaneous openings of the inbox from several devices and server instances", () => {
+  test("forty members opening their own inboxes at once each receive only their own expiring notice", async () => {
+    const admin = await fixtures.user("ADMIN");
+    const members = [];
+    const now = new Date("2036-03-01T15:00:00.000Z");
+    const expiresAt = new Date(now.getTime() + 3 * DAY);
+    const concurrentApp = createIntegrationApp({ now: () => now });
+    for (let index = 0; index < 40; index += 1) {
+      const member = await fixtures.user("MEMBER");
+      members.push(member);
+      await fixtures.accreditedPayment(
+        member.id,
+        admin.id,
+        new Date(expiresAt.getTime() - 30 * DAY).toISOString(),
+        expiresAt.toISOString(),
+      );
+    }
+
+    const responses = await Promise.all(members.map((member) =>
+      request(concurrentApp).get("/api/notifications?limit=100").set(bearer(member))));
+
+    expect(responses.every(({ status }) => status === 200)).toBe(true);
+    for (const [index, response] of responses.entries()) {
+      expect(response.body.unreadCount).toBe(1);
+      expect(response.body.items).toHaveLength(1);
+      expect(response.body.items[0]).toMatchObject({
+        type: "MEMBERSHIP_EXPIRING",
+        userId: members[index]!.id,
+      });
+    }
+
+    const persisted = await database.notification.findMany({
+      where: { userId: { in: members.map(({ id }) => id) } },
+      select: { userId: true, type: true },
+    });
+    expect(persisted).toHaveLength(members.length);
+    expect(new Set(persisted.map(({ userId }) => userId)).size).toBe(members.length);
+    expect(persisted.every(({ type }) => type === "MEMBERSHIP_EXPIRING")).toBe(true);
+  });
+
   test("thirty openings spread over two server instances create a single expiring notice", async () => {
     const admin = await fixtures.user("ADMIN");
     const member = await fixtures.user("MEMBER");
