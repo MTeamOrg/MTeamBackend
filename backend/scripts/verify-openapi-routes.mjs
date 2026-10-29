@@ -14,7 +14,7 @@ if (!appSource.includes('app.use("/api", apiRouter)')) {
 }
 
 const document = parse(readFileSync(openApiPath, "utf8"));
-const serverPath = new URL(document.servers?.[0]?.url ?? "http://invalid").pathname
+const serverPath = new URL(document.servers?.[0]?.url ?? "https://invalid").pathname
   .replace(/\/$/, "");
 if (serverPath !== "/api") {
   throw new Error("Expected the OpenAPI server path to be /api, got " + (serverPath || "/"));
