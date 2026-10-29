@@ -12,6 +12,8 @@ flowchart LR
     APT["«Component»<br/>Aptos Médicos"]
     SED["«Component»<br/>Sedes"]
     CLA["«Component»<br/>Clases y Entrenadores"]
+    COM["«Component»<br/>Eventos, Novedades y Notificaciones"]
+    MAIL["«External»<br/>Gmail SMTP"]
     MAP["«External»<br/>Google Maps API"]
 
     I18((Interfaz)) --> ACC
@@ -25,6 +27,8 @@ flowchart LR
     I36((Interfaz)) --> SED
     I36 -->|ISedes| CLA
     SED -->|consulta ubicación| MAP
+    AUTH -->|recuperación de cuenta| MAIL
+    COM -->|avisos internos| AUTH
 ```
 
 **Nota:** Los nodos de «Interfaz» representan conectores de interfaz UML del archivo de origen; las flechas de Mermaid muestran vínculos y no implican necesariamente dirección de invocación o dependencia. No se incluyeron relaciones que no aparecen en el archivo.
@@ -39,7 +43,9 @@ flowchart LR
 | Componente | Aptos Médicos |
 | Componente | Sedes |
 | Componente | Clases y Entrenadores |
+| Componente | Eventos, Novedades y Notificaciones |
 | Externo | Google Maps API |
+| Externo | Gmail SMTP |
 
 ## Interfaces y vínculos identificados
 
@@ -56,5 +62,7 @@ flowchart LR
 | Conector de interfaz 36 | Sedes | — |
 | Conector de interfaz 36 | Clases y Entrenadores | `ISedes` |
 | Sedes | Google Maps API | consulta ubicación |
+| Usuarios y Autenticación | Gmail SMTP | recuperación de cuenta |
+| Eventos, Novedades y Notificaciones | Usuarios y Autenticación | avisos internos por usuario |
 
 *El archivo original utiliza la notación visual UML de interfaces proporcionadas/requeridas. Mermaid la representa aquí mediante nodos auxiliares, sin reproducir exactamente su simbología.*

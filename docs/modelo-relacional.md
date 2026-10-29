@@ -19,6 +19,7 @@ erDiagram
         UserRole role
         UserStatus status
         boolean is_password_change_required
+        integer session_version
         timestamptz created_at
         timestamptz updated_at
     }
@@ -39,6 +40,7 @@ erDiagram
 
     membership_price {
         uuid id PK
+        uuid idempotency_key UK "nullable"
         numeric amount
         timestamptz effective_from
         uuid created_by_id FK
@@ -47,6 +49,7 @@ erDiagram
 
     payment {
         uuid id PK
+        uuid idempotency_key UK "nullable"
         uuid member_id FK
         numeric amount
         varchar method
@@ -169,10 +172,17 @@ erDiagram
         timestamptz read_at "nullable"
     }
 
+    password_recovery_token {
+        varchar token_hash PK
+        uuid user_id FK
+        varchar password_fingerprint
+        timestamptz expires_at
+    }
+
     user ||--o| member_profile : has
     user ||--o| trainer_profile : has
-    member_profile ||--o{ payment : owns
-    member_profile ||--o{ medical_certificate : uploads
+    user ||--o{ payment : member
+    user ||--o{ medical_certificate : uploads
     user ||--o{ membership_price : creates
     user ||--o{ payment : creates
     user ||--o{ payment : confirms
@@ -193,6 +203,7 @@ erDiagram
     user ||--o{ event : creates
     user ||--o{ news_post : creates
     user ||--o{ notification : receives
+    user ||--o{ password_recovery_token : owns
 ```
 
 ## Enumeraciones
@@ -233,6 +244,8 @@ Los nombres de las enumeraciones utilizan PascalCase y sus valores, UPPER_SNAKE_
 - `trainer_branch` utiliza `id` como clave primaria y una restricción única compuesta sobre `(trainer_id, branch_id)` para evitar asignaciones duplicadas.
 - Los estados de cuota `CURRENT`, `EXPIRING_SOON` y `EXPIRED` se calculan y no se persisten como columna.
 - `notification.dedupe_key` identifica el evento de dominio que originó el aviso (por ejemplo `event-cancelled:{evento}:{usuario}`) y es único. Es una columna de implementación, nullable, que impide que el reintento o la ejecución simultánea de una misma operación duplique el aviso; ver `backend/docs/notifications-implementation-notes.md`.
+- `membership_price.idempotency_key` y `payment.idempotency_key` son UUID únicos opcionales; un reintento con la misma clave devuelve la operación persistida y no crea un segundo registro.
+- `password_recovery_token.token_hash` es la clave primaria; el token en claro solo vive durante la solicitud, expira a los 30 minutos y se elimina al consumirse. El cambio de contraseña incrementa `user.session_version` para invalidar sesiones anteriores.
 - Los registros históricos no se eliminan al desactivar usuarios, entrenadores, sedes o puntos de acceso.
 
 ## Índices recomendados
@@ -241,7 +254,7 @@ Los nombres de las enumeraciones utilizan PascalCase y sus valores, UPPER_SNAKE_
 |---|---|
 | `user` | `(role, status)`, `last_name`, `first_name` |
 | `membership_price` | `effective_from DESC` |
-| `payment` | `(member_id, accredited_at DESC)`, `(status, accredited_at)`, `receipt_number` |
+| `payment` | `(member_id, accredited_at DESC)`, `(status, accredited_at)`, `receipt_number`, `idempotency_key` único |
 | `medical_certificate` | `(member_id, uploaded_at DESC)`, `(status, uploaded_at)` |
 | `access_log` | `(user_id, attempted_at DESC)`, `(branch_id, attempted_at DESC)`, `(result, attempted_at)` |
 | `scheduled_class` | `(schedule_id, starts_at)`, `(trainer_id, starts_at)`, `(branch_id, starts_at)` |
@@ -249,6 +262,7 @@ Los nombres de las enumeraciones utilizan PascalCase y sus valores, UPPER_SNAKE_
 | `event` | `(status, starts_at)` |
 | `news_post` | `(status, audience, published_at DESC)` |
 | `notification` | `(user_id, created_at DESC)`, `(user_id, read_at)` |
+| `password_recovery_token` | `(user_id)`, `(expires_at)` |
 
 ## Decisiones para la traducción a Prisma
 

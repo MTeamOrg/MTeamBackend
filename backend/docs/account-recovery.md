@@ -1,6 +1,6 @@
 # Recuperación de cuenta por correo — USR-04
 
-Amplía USR-04 del documento de alcance, que describe el restablecimiento administrativo. ADM-04 y el flujo de contraseña temporal permanecen intactos. No se inventó un identificador nuevo.
+Amplía USR-04 del documento de alcance con recuperación autónoma por correo. El restablecimiento administrativo de ADM-04 y el flujo de contraseña temporal permanecen disponibles como mecanismo separado. No se inventó un identificador nuevo.
 
 ## Configuración y prueba local
 
@@ -27,7 +27,7 @@ Iniciar frontend con `npm run dev`. Abrir /iniciar-sesion, solicitar recuperaci�
 - La respuesta 202 es idéntica para cuentas existentes, inexistentes e inactivas. Para que los errores y tiempos del proveedor tampoco revelen cuentas, **se envía el mismo correo a toda dirección válida**, pero solo se almacena un token utilizable para una cuenta activa. Los enlaces de otras direcciones son inválidos. Esto tiene costo de envío; limitar tráfico en infraestructura y usar un dominio habilitado. No registrar cuerpos de solicitudes/respuestas en proxies ni herramientas de observabilidad de estas rutas.
 - Fallos del proveedor se devuelven como 503 en ambos casos y eliminan el token recién emitido. Ante fallos de base se suprime el error técnico para no registrar argumentos sensibles. No se envían contraseñas ni se exponen respuestas del proveedor.
 - Cada cambio exitoso invalida todos los enlaces anteriores. Cambios administrativos o autenticados también los invalidan mediante una huella del hash de contraseña, comprobada nuevamente dentro de la transacción. No se alteran roles, estados o permisos.
-- Se conserva el patrón de sesiones del proyecto: JWT stateless sin revocación, incluso en cambios de contraseña existentes. Las sesiones emitidas siguen válidas hasta JWT_EXPIRES_IN; el restablecimiento no inicia una sesión. Revocarlas requeriría ampliar el contrato de sesiones, fuera de este cambio.
+- El JWT incluye `sessionVersion` y el backend compara ese valor con el de `User`. El restablecimiento de contraseña incrementa la versión dentro de la misma operación que consume el token, por lo que invalida las sesiones anteriores; el flujo no inicia una sesión nueva. Los cambios administrativos de contraseña aplican la misma invalidación.
 - Límite en memoria: 10 solicitudes por IP/minuto compartido por las dos rutas. En producción con varias instancias agregar límite distribuido en el proxy y configurar IP de cliente con proxies confiables; no habilitar trust proxy indiscriminadamente. El frontend bloquea reenvío un minuto tras éxito o 429. No se invalida un enlace anterior al solicitar otro; todos quedan invalidados cuando se cambia la contraseña.
 - Para mantenimiento, purgar periódicamente filas vencidas de password_recovery_token con la operación habitual de base de datos. No habilitar tareas contra producción desde este cambio.
 

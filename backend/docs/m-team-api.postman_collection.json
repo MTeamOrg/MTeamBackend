@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "M-Team API",
-    "description": "Coleccion generada para las operaciones montadas y documentadas en backend/docs/openapi.yaml. Usa el entorno M-Team local y no contiene credenciales reales.",
+    "description": "Coleccion local para las 69 operaciones montadas y documentadas en backend/docs/openapi.yaml. Secuencia recomendada: getHealth, registerMember o provisionar datos sintéticos, login, getCurrentIdentity y luego las carpetas por rol. Las escrituras y cambios de estado deben ejecutarse sólo contra una base local descartable. Usa el entorno M-Team local, no apunta a proveedores productivos y no contiene credenciales reales.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -14,6 +14,25 @@
       }
     ]
   },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const documentedStatuses = [200, 201, 202, 204, 400, 401, 403, 404, 409, 429, 500, 502, 503];",
+          "const expectedSuccessStatuses = { getOwnMembership: [200], getCurrentMembershipPrice: [200], createMembershipPrice: [201], createBranch: [201], updateBranch: [200], listAdminBranches: [200], listEvents: [200], createEvent: [201], getEvent: [200], updateEvent: [200], updateEventStatus: [200], listNewsPosts: [200], createNewsPost: [201], getNewsPost: [200], updateNewsPost: [200], updateNewsPostStatus: [200], createPayment: [201] };",
+          "const requestName = pm.info.requestName;",
+          "pm.test('HTTP status is documented by the API contract', function () { pm.expect(documentedStatuses).to.include(pm.response.code); });",
+          "if (expectedSuccessStatuses[requestName]) { pm.test('HTTP status matches the documented success response', function () { pm.expect(expectedSuccessStatuses[requestName]).to.include(pm.response.code); }); }",
+          "const requestUrl = pm.request.url.toString().toLowerCase();",
+          "pm.test('Request is not configured for a production provider', function () { pm.expect(requestUrl).to.not.match(/render\\.com|supabase\\.co/); });",
+          "if (pm.response.code >= 200 && pm.response.code < 300 && pm.response.text()) { pm.test('Successful response is JSON', function () { pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'); }); }",
+          "if (pm.response.text()) { try { const body = pm.response.json(); if (body && Array.isArray(body.items)) { pm.test('Paginated responses expose pagination metadata', function () { pm.expect(body).to.have.property('page'); pm.expect(body).to.have.property('limit'); pm.expect(body).to.have.property('total'); }); } } catch (error) { if (pm.response.code >= 200 && pm.response.code < 300) { pm.test('Response body is valid JSON', function () { throw error; }); } } }"
+        ]
+      }
+    }
+  ],
   "item": [
     {
       "name": "System and authentication",
@@ -60,7 +79,20 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": { "mode": "raw", "raw": "{\"email\":\"member@example.test\",\"password\":\"ChangeMe123!\"}" },
             "url": "{{baseUrl}}/auth/login"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Login returns an access token', function () { pm.expect(body.accessToken).to.be.a('string').and.not.empty; });",
+                  "if (body.accessToken) pm.environment.set('token', body.accessToken);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "logout",
@@ -163,7 +195,7 @@
         },
         {
           "name": "listMembers",
-          "request": { "method": "GET", "url": "{{baseUrl}}/members" }
+          "request": { "method": "GET", "url": "{{baseUrl}}/members?page={{page}}&limit={{limit}}&search={{search}}&membershipStatus={{membershipStatus}}" }
         }
       ]
     },
@@ -186,7 +218,7 @@
           "name": "createMembershipPrice",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }],
             "body": { "mode": "raw", "raw": "{\"amount\":10000.00,\"effectiveFrom\":\"2030-01-01T00:00:00.000Z\"}" },
             "url": "{{baseUrl}}/membership-prices"
           }
@@ -327,7 +359,7 @@
         },
         {
           "name": "listAdminBranches",
-          "request": { "method": "GET", "url": "{{baseUrl}}/admin/branches?page={{page}}&limit={{limit}}" }
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/branches?page={{page}}&limit={{limit}}&search={{search}}&isActive={{isActive}}" }
         },
         {
           "name": "getAdminBranch",
@@ -387,7 +419,7 @@
         },
         {
           "name": "listEvents",
-          "request": { "method": "GET", "url": "{{baseUrl}}/events" }
+          "request": { "method": "GET", "url": "{{baseUrl}}/events?search={{search}}&status={{eventStatus}}&page={{page}}&limit={{limit}}" }
         },
         {
           "name": "createEvent",
@@ -422,7 +454,7 @@
         },
         {
           "name": "listNewsPosts",
-          "request": { "method": "GET", "url": "{{baseUrl}}/news-posts" }
+          "request": { "method": "GET", "url": "{{baseUrl}}/news-posts?search={{search}}&audience={{audience}}&status={{newsStatus}}&page={{page}}&limit={{limit}}" }
         },
         {
           "name": "createNewsPost",
@@ -457,7 +489,7 @@
         },
         {
           "name": "listNotifications",
-          "request": { "method": "GET", "url": "{{baseUrl}}/notifications" }
+          "request": { "method": "GET", "url": "{{baseUrl}}/notifications?page={{page}}&limit={{limit}}&isRead={{isRead}}" }
         },
         {
           "name": "markAllNotificationsAsRead",

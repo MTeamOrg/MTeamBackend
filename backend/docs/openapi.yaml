@@ -581,17 +581,35 @@ paths:
     get:
       tags: [Members]
       summary: Consultar el estado de la cuota propia
+      description: >-
+        Exclusivo de socios autenticados con el cambio de contraseña temporal completado.
+        El estado se calcula a partir del último pago acreditado válido y del precio vigente.
       operationId: getOwnMembership
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Estado calculado de la cuota del socio autenticado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OwnMembership" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /membership-prices/current:
     get:
       tags: [Membership Prices]
       summary: Consultar el valor vigente de la cuota
+      description: >-
+        Disponible para MEMBER, TRAINER y ADMIN autenticados con el cambio de contraseña
+        temporal completado. El importe se devuelve como string decimal para conservar precisión.
       operationId: getCurrentMembershipPrice
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Valor vigente de la cuota
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MembershipPrice" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /membership-prices:
     get:
@@ -689,6 +707,9 @@ paths:
     post:
       tags: [Payments]
       summary: Registrar y acreditar un pago
+      description: >-
+        Exclusivo de administradores. La clave Idempotency-Key debe ser un UUID y repetirse
+        al reintentar la misma operación. La respuesta no expone la clave de idempotencia.
       operationId: createPayment
       parameters:
         - name: Idempotency-Key
@@ -701,7 +722,11 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/CreatePaymentRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Pago acreditado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Payment" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1044,9 +1069,20 @@ paths:
       summary: Crear una sede
       operationId: createBranch
       requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateBranchRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Sede creada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminBranch" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /branches/{branchId}:
     parameters:
@@ -1069,9 +1105,21 @@ paths:
       summary: Modificar una sede
       operationId: updateBranch
       requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateBranchRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Sede modificada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminBranch" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /branches/{branchId}/status:
     parameters:
@@ -1109,7 +1157,10 @@ paths:
         - $ref: "#/components/parameters/Limit"
         - name: isActive
           in: query
-          schema: { type: boolean }
+          description: Valor textual recibido por Express; usar `true` o `false`.
+          schema:
+            type: string
+            enum: ["true", "false"]
       responses:
         "200":
           description: Sedes filtradas ordenadas por nombre e identificador
@@ -1405,14 +1456,27 @@ paths:
     get:
       tags: [Events]
       summary: Listar eventos visibles
+      description: >-
+        Disponible para MEMBER, TRAINER y ADMIN autenticados con el cambio de contraseña
+        temporal completado. Los roles no administradores sólo reciben eventos publicados o cancelados;
+        ADMIN puede filtrar también por estado DRAFT.
       operationId: listEvents
       parameters:
         - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
         - name: status
           in: query
           schema: { $ref: "#/components/schemas/EventStatus" }
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Eventos filtrados y paginados
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventListResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
     post:
       tags: [Events]
       summary: Crear un evento
@@ -1423,7 +1487,14 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/CreateEventRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Evento creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Event" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /events/{eventId}:
     parameters:
@@ -1433,7 +1504,15 @@ paths:
       summary: Consultar un evento
       operationId: getEvent
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Evento solicitado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Event" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
     patch:
       tags: [Events]
       summary: Modificar un evento
@@ -1444,7 +1523,15 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/UpdateEventRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Evento modificado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Event" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /events/{eventId}/status:
     parameters:
@@ -1464,15 +1551,45 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/UpdateEventStatusRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Estado del evento actualizado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Event" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /news-posts:
     get:
       tags: [News Posts]
       summary: Listar novedades visibles para la audiencia
+      description: >-
+        Disponible para MEMBER, TRAINER y ADMIN autenticados con el cambio de contraseña
+        temporal completado. Los roles no administradores reciben sólo publicaciones publicadas
+        y filtradas por su audiencia; ADMIN puede filtrar audiencia y estado.
       operationId: listNewsPosts
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - name: audience
+          in: query
+          schema: { $ref: "#/components/schemas/PublicationAudience" }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/PublicationStatus" }
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Novedades filtradas y paginadas
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NewsPostListResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
     post:
       tags: [News Posts]
       summary: Crear una novedad
@@ -1483,7 +1600,14 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/CreateNewsPostRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Novedad creada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NewsPost" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /news-posts/{newsPostId}:
     parameters:
@@ -1493,7 +1617,15 @@ paths:
       summary: Consultar una novedad
       operationId: getNewsPost
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Novedad solicitada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NewsPost" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
     patch:
       tags: [News Posts]
       summary: Modificar una novedad
@@ -1504,7 +1636,15 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/UpdateNewsPostRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Novedad modificada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NewsPost" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /news-posts/{newsPostId}/status:
     parameters:
@@ -1519,7 +1659,16 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/UpdateNewsPostStatusRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Estado de la novedad actualizado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NewsPost" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /notifications:
     get:
@@ -1546,8 +1695,10 @@ paths:
         - $ref: "#/components/parameters/Limit"
         - name: isRead
           in: query
-          description: "`true` devuelve solo las leídas y `false` solo las no leídas; sin el parámetro, todas."
-          schema: { type: boolean }
+          description: "Valor textual recibido por Express: `true` devuelve solo las leídas y `false` solo las no leídas; sin el parámetro, todas."
+          schema:
+            type: string
+            enum: ["true", "false"]
       responses:
         "200":
           description: Notificaciones propias ordenadas de la más reciente a la más antigua
@@ -1808,6 +1959,26 @@ components:
       type: string
       description: Estado calculado; no se almacena en la base de datos.
       enum: [CURRENT, EXPIRING_SOON, EXPIRED]
+    MembershipPrice:
+      type: object
+      additionalProperties: false
+      required: [id, amount, effectiveFrom, createdAt, createdById]
+      properties:
+        id: { type: string, format: uuid }
+        amount: { type: string, description: Importe decimal expresado sin pérdida de precisión }
+        effectiveFrom: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        createdById: { type: string, format: uuid }
+    OwnMembership:
+      type: object
+      additionalProperties: false
+      required: [currentPrice, lastPaymentAt, expiresAt, daysRemaining, status]
+      properties:
+        currentPrice: { type: [string, "null"], description: Precio vigente expresado como decimal exacto }
+        lastPaymentAt: { type: [string, "null"], format: date-time }
+        expiresAt: { type: [string, "null"], format: date-time }
+        daysRemaining: { type: integer, minimum: 0 }
+        status: { $ref: "#/components/schemas/MembershipStatus" }
     MemberListItem:
       type: object
       additionalProperties: false
@@ -1836,6 +2007,25 @@ components:
     PaymentStatus:
       type: string
       enum: [ACCREDITED, VOIDED]
+    Payment:
+      type: object
+      additionalProperties: false
+      required: [id, memberId, amount, method, receiptNumber, status, createdById, createdAt, confirmedById, accreditedAt, expiresAt, voidedById, voidedAt, voidReason]
+      properties:
+        id: { type: string, format: uuid }
+        memberId: { type: string, format: uuid }
+        amount: { type: string, description: Importe decimal expresado sin pérdida de precisión }
+        method: { type: string }
+        receiptNumber: { type: [string, "null"] }
+        status: { $ref: "#/components/schemas/PaymentStatus" }
+        createdById: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        confirmedById: { type: string, format: uuid }
+        accreditedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        voidedById: { type: [string, "null"], format: uuid }
+        voidedAt: { type: [string, "null"], format: date-time }
+        voidReason: { type: [string, "null"] }
     PaymentHistoryItem:
       type: object
       additionalProperties: false
@@ -1974,6 +2164,34 @@ components:
         scheduledClasses:
           type: array
           items: { $ref: "#/components/schemas/PublicBranchScheduledClass" }
+    CreateBranchRequest:
+      type: object
+      additionalProperties: false
+      required: [name, address, openingHours, phone, description, imageUrl]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 150 }
+        address: { type: string, minLength: 1, maxLength: 255 }
+        openingHours: { type: string, minLength: 1, maxLength: 255 }
+        phone: { type: string, minLength: 1, maxLength: 30 }
+        description: { type: string, minLength: 1 }
+        imageUrl: { type: string, format: uri, maxLength: 2048 }
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+      description: Latitude and longitude must be provided together or both omitted.
+    UpdateBranchRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 150 }
+        address: { type: string, minLength: 1, maxLength: 255 }
+        openingHours: { type: string, minLength: 1, maxLength: 255 }
+        phone: { type: string, minLength: 1, maxLength: 30 }
+        description: { type: string, minLength: 1 }
+        imageUrl: { type: string, format: uri, maxLength: 2048 }
+        latitude: { type: [number, "null"], minimum: -90, maximum: 90 }
+        longitude: { type: [number, "null"], minimum: -180, maximum: 180 }
+      description: Latitude and longitude must be provided together and must both be null when clearing them.
     UpdateBranchStatusRequest:
       type: object
       additionalProperties: false
@@ -2241,6 +2459,17 @@ components:
         status: { $ref: "#/components/schemas/EventStatus" }
         displayStatus: { $ref: "#/components/schemas/EventDisplayStatus" }
         createdById: { type: string, format: uuid }
+    EventListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Event" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
     CreateEventRequest:
       type: object
       additionalProperties: false
@@ -2287,6 +2516,17 @@ components:
         status: { $ref: "#/components/schemas/PublicationStatus" }
         publishedAt: { type: [string, "null"], format: date-time }
         createdById: { type: string, format: uuid }
+    NewsPostListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/NewsPost" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
     CreateNewsPostRequest:
       type: object
       additionalProperties: false

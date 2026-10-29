@@ -17,6 +17,7 @@ class User {
   - role: UserRole
   - status: UserStatus
   - isPasswordChangeRequired: Boolean
+  - sessionVersion: Integer
   - createdAt: DateTime
   - updatedAt: DateTime
   + updateContact(email: String, phone: String) void
@@ -26,6 +27,14 @@ class User {
   + activate() void
   + deactivate() void
   + canAuthenticate() Boolean
+}
+
+class PasswordRecoveryToken {
+  - tokenHash: String
+  - userId: UUID
+  - passwordFingerprint: String
+  - expiresAt: DateTime
+  + consume() void
 }
 
 class MemberProfile {
@@ -53,6 +62,7 @@ class UserAuditLog {
 
 class MembershipPrice {
   - id: UUID
+  - idempotencyKey: UUID [0..1]
   - amount: Decimal
   - effectiveFrom: DateTime
   - createdAt: DateTime
@@ -60,6 +70,7 @@ class MembershipPrice {
 
 class Payment {
   - id: UUID
+  - idempotencyKey: UUID [0..1]
   - amount: Decimal
   - method: String
   - receiptNumber: String [0..1]
@@ -175,6 +186,8 @@ class NewsPost {
 
 class Notification {
   - id: UUID
+  - userId: UUID
+  - dedupeKey: String [0..1]
   - title: String
   - message: String
   - type: NotificationType
@@ -188,8 +201,8 @@ User "1" -- "0..1" MemberProfile : has
 User "1" -- "0..1" TrainerProfile : has
 User "1" -- "0..*" UserAuditLog : auditedUser
 User "1" -- "0..*" UserAuditLog : performedBy
-MemberProfile "1" -- "0..*" Payment : has
-MemberProfile "1" -- "0..*" MedicalCertificate : submits
+User "1" -- "0..*" Payment : member
+User "1" -- "0..*" MedicalCertificate : submits
 User "1" -- "0..*" MembershipPrice : creates
 User "1" -- "0..*" Payment : creates
 User "1" -- "0..*" Payment : confirms
@@ -206,5 +219,8 @@ TrainerProfile "0..1" -- "0..*" ScheduledClass : teaches
 User "1" -- "0..*" Event : creates
 User "1" -- "0..*" NewsPost : creates
 User "1" -- "0..*" Notification : receives
+User "1" -- "0..*" PasswordRecoveryToken : owns
 Branch "0..1" -- "0..*" AccessLog : receives
 ```
+
+Las relaciones de pagos y aptos distinguen el rol lógico de socio mediante `memberId`, pero la clave foránea física referencia `User.id`; `MemberProfile` contiene solamente los datos específicos del perfil. `sessionVersion` forma parte del contrato de sesión y `dedupeKey`/las claves de idempotencia son campos técnicos persistentes.

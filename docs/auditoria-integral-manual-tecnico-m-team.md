@@ -5,6 +5,8 @@
 **Modo:** lectura; no se modificó código, configuración, ramas, bases de datos ni servicios externos.  
 **Resultado:** informe técnico de evidencia para completar el manual; no es una implementación ni una certificación de producción.
 
+> **Nota de vigencia:** este archivo conserva el snapshot de hallazgos previo al cierre documental. Las inconsistencias que enumera fueron corregidas o reclasificadas en [`cierre-manual-tecnico-m-team.md`](./cierre-manual-tecnico-m-team.md); la matriz de evidencias externa permanece pendiente hasta que el equipo adjunte los comprobantes de cada plataforma.
+
 ## Convenciones de evidencia
 
 - **CONFIRMADO:** demostrado por código, configuración, lockfile, validación local estática o ejecución histórica identificable.
@@ -426,12 +428,12 @@ Código confirmado:
 
 No se enviaron emails reales. No hay un test de aceptación que demuestre que Gmail aceptó y entregó un mensaje. La evidencia permite afirmar que el flujo está implementado con esa estrategia, no que el proveedor o la bandeja estén operativos en cada ambiente.
 
-Documentación que debe corregirse:
+Hallazgos documentales identificados en este snapshot y tratados en la rama de cierre:
 
-- `backend/docs/account-recovery.md:30` todavía afirma que JWT no tiene revocación; contradice `sessionVersion` y el repositorio actual.
-- `MTeamFrontend/docs/account-recovery.md:7,17` menciona `RESEND_API_KEY`, `MAIL_FROM` y Resend; el backend actual usa `GOOGLE_SMTP_USER`/`GOOGLE_APP_PASSWORD`.
-- `docs/diagramas-de-secuencia.md:32` dice que la recuperación por correo está fuera de alcance; ya existe.
-- `docs/matriz-de-trazabilidad.md:18` todavía describe recovery como administrativo sin correo.
+- `backend/docs/account-recovery.md:30` afirmaba que JWT no tenía revocación; el cierre lo alineó con `sessionVersion`.
+- `MTeamFrontend/docs/account-recovery.md:7,17` mencionaba `RESEND_API_KEY`, `MAIL_FROM` y Resend; el cierre lo alineó con `GOOGLE_SMTP_USER`/`GOOGLE_APP_PASSWORD`.
+- `docs/diagramas-de-secuencia.md:32` dejaba la recuperación por correo fuera de alcance; el cierre incorporó Gmail SMTP.
+- `docs/matriz-de-trazabilidad.md:18` describía recovery como administrativo sin correo; el cierre incorporó el flujo autónomo y mantuvo el mecanismo administrativo complementario.
 
 ## E. Inconsistencias documentales
 
@@ -456,7 +458,7 @@ La secuencia de recovery y la matriz USR-04 están obsoletas. Las secuencias de 
 
 ### E.4 README y guías de ambientes
 
-El README backend describe las tecnologías y comandos principales, pero la disponibilidad de dominios, Supabase y SMTP sigue siendo dependiente de configuración externa. `docs/ambientes.md` es útil como política de separación, pero conserva frases de etapa previa y no incorpora las variables Gmail en su tabla principal. El README frontend indica que la mayoría de E2E simula API, lo cual debe quedar visible para no confundir cobertura de UI con integración real; también contiene una sección de integraciones que enumera como pendientes eventos/novedades/acceso aunque el backend y `backend-api.ts` ya los consumen.
+El README backend describe las tecnologías y comandos principales, pero la disponibilidad de dominios, Supabase y SMTP sigue siendo dependiente de configuración externa. `docs/ambientes.md` era útil como política de separación, pero conservaba frases de etapa previa y no incorporaba las variables Gmail en su tabla principal; el cierre lo actualizó. El README frontend mantiene visible que la mayoría de E2E simula API, para no confundir cobertura de UI con integración real; la sección de integraciones ahora distingue APIs integradas de la consulta pública aún pendiente.
 
 ## F. Pendientes externos y exactamente qué consultar
 

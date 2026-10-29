@@ -37,7 +37,7 @@ verificarse de punta a punta. La columna de frontend queda separada deliberadame
 |---|---|---|---|---|
 | USR-01 | Registro público, validación y unicidad | Usuario, perfil y auditoría persistidos; duplicados `409` | COMPLETO | Pendiente de integración |
 | USR-02 | Login y error genérico | Login válido, credenciales inválidas `401` | COMPLETO | Pendiente de integración |
-| USR-04 | Reset administrativo y cambio obligatorio | Clave temporal, bloqueo de rutas y cambio posterior verificados | COMPLETO | Pendiente de integración |
+| USR-04 | Recuperación por Gmail SMTP y reset administrativo | Token hashado, expiración, consumo único, `sessionVersion` y flujo de clave temporal verificados; aceptación SMTP externa pendiente | PARCIAL | Pendiente de integración |
 | USR-05 | Middleware por rol | Casos `401` y `403` con MEMBER, TRAINER y ADMIN | COMPLETO | Pendiente de integración |
 | USR-06 | Lectura y edición de contacto/contraseña; endpoint de foto | Contacto y contraseña verificados; foto responde `503` sin Storage | PARCIAL | Pendiente de integración |
 | USR-07 | Estado consultado en login y en cada request | Login y token existente bloqueados al desactivar; reactivación verificada | COMPLETO | Pendiente de integración |
