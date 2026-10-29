@@ -55,12 +55,18 @@ for (const [path, pathItem] of Object.entries(document.paths ?? {})) {
   }
 }
 
+function compareOperations(left, right) {
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
+}
+
 const documentedWithoutRoute = [...openApiOperations]
   .filter((operation) => !routeOperations.has(operation))
-  .sort();
+  .sort(compareOperations);
 const routeWithoutDocumentation = [...routeOperations]
   .filter((operation) => !openApiOperations.has(operation))
-  .sort();
+  .sort(compareOperations);
 
 if (documentedWithoutRoute.length || routeWithoutDocumentation.length) {
   const report = [
