@@ -7,7 +7,7 @@ module.exports = {
   reporters: process.env.QASE_MODE === "testops"
     ? [
         "default",
-        ["jest-qase-reporter", {
+        ["<rootDir>/jest-qase-reporter-awaitable.cjs", {
           mode: "testops",
           testops: {
             api: { token: process.env.QASE_TESTOPS_API_TOKEN },
