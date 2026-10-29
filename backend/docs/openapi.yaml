@@ -19,7 +19,6 @@ tags:
   - name: Payments
   - name: Medical Certificates
   - name: Access Attempts
-  - name: Access Points
   - name: Branches
   - name: Weekly Schedules
   - name: Scheduled Classes
@@ -236,13 +235,31 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
-  /dashboard:
+  /admin/dashboard/metrics:
     get:
       tags: [Dashboard]
-      summary: Obtener el panel correspondiente al rol autenticado
-      operationId: getDashboard
+      summary: Obtener las metricas del panel administrativo
+      description: Operacion exclusiva de administradores. Devuelve conteos calculados sobre socios, cuotas y aptos medicos.
+      operationId: getAdminDashboardMetrics
+      security:
+        - bearerAuth: []
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Metricas actuales del panel administrativo
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminDashboardMetrics" }
+              example:
+                activeMembers: 42
+                inactiveMembers: 3
+                currentMemberships: 35
+                expiringMemberships: 4
+                expiredMemberships: 6
+                pendingMedicalCertificates: 2
+                rejectedMedicalCertificates: 1
+                initialPeriodMembers: 5
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /users:
     get:
@@ -264,6 +281,13 @@ paths:
         - name: status
           in: query
           schema: { $ref: "#/components/schemas/UserStatus" }
+        - name: membershipStatus
+          in: query
+          schema: { $ref: "#/components/schemas/MembershipStatus" }
+        - name: initialPeriod
+          in: query
+          description: Filtra socios cuyo primer periodo de acceso medico aun esta vigente.
+          schema: { type: string, enum: ["true", "false"] }
       responses:
         "200":
           description: Listado paginado de usuarios
@@ -437,6 +461,47 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /users/{userId}/trainer-branches:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    put:
+      tags: [Users]
+      summary: Reemplazar las sedes asignadas a un entrenador
+      description: >-
+        Operacion exclusiva de administradores. El usuario indicado debe tener
+        rol TRAINER y todas las sedes deben existir y estar activas. Un arreglo
+        vacio quita todas las asignaciones.
+      operationId: updateTrainerBranches
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateTrainerBranchesRequest" }
+            example:
+              branchIds:
+                - 83cd902e-0475-4c92-943c-129b751dacee
+      responses:
+        "200":
+          description: Detalle actualizado del entrenador
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserDetail" }
+        "400":
+          description: Identificador o cuerpo invalido, o el usuario no es entrenador
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Una o mas sedes no existen o estan desactivadas
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
 
   /users/{userId}/password-resets:
     parameters:
@@ -695,17 +760,6 @@ paths:
         "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
-
-  /payments/{paymentId}:
-    parameters:
-      - $ref: "#/components/parameters/PaymentId"
-    get:
-      tags: [Payments]
-      summary: Consultar un pago
-      operationId: getPayment
-      responses:
-        "200": { $ref: "#/components/responses/Success" }
-        "404": { $ref: "#/components/responses/NotFound" }
 
   /payments/{paymentId}/voids:
     parameters:
@@ -967,44 +1021,6 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
-  /access-attempts/{attemptId}:
-    parameters:
-      - $ref: "#/components/parameters/AttemptId"
-    get:
-      tags: [Access Attempts]
-      summary: Consultar un intento de ingreso
-      operationId: getAccessAttempt
-      responses:
-        "200": { $ref: "#/components/responses/Success" }
-
-  /access-points:
-    get:
-      tags: [Access Points]
-      summary: Listar puntos de acceso
-      operationId: listAccessPoints
-      responses:
-        "200": { $ref: "#/components/responses/Paginated" }
-    post:
-      tags: [Access Points]
-      summary: Crear un punto de acceso
-      operationId: createAccessPoint
-      requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
-      responses:
-        "201": { $ref: "#/components/responses/Created" }
-
-  /access-points/{accessPointId}:
-    parameters:
-      - $ref: "#/components/parameters/AccessPointId"
-    patch:
-      tags: [Access Points]
-      summary: Modificar o cambiar el estado de un punto de acceso
-      operationId: updateAccessPoint
-      requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
-      responses:
-        "200": { $ref: "#/components/responses/Success" }
-
   /branches:
     get:
       tags: [Branches]
@@ -1121,24 +1137,6 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-
-  /branches/{branchId}/access-points:
-    parameters:
-      - $ref: "#/components/parameters/BranchId"
-    get:
-      tags: [Access Points]
-      summary: Listar los puntos de acceso de una sede
-      operationId: listBranchAccessPoints
-      responses:
-        "200": { $ref: "#/components/responses/Paginated" }
-    post:
-      tags: [Access Points]
-      summary: Crear un punto de acceso en una sede
-      operationId: createBranchAccessPoint
-      requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
-      responses:
-        "201": { $ref: "#/components/responses/Created" }
 
   /weekly-schedules:
     get:
@@ -1313,13 +1311,6 @@ paths:
   /scheduled-classes/{classId}:
     parameters:
       - $ref: "#/components/parameters/ClassId"
-    get:
-      tags: [Scheduled Classes]
-      summary: Consultar una clase
-      operationId: getScheduledClass
-      security: []
-      responses:
-        "200": { $ref: "#/components/responses/Success" }
     patch:
       tags: [Scheduled Classes]
       summary: Modificar una clase
@@ -1371,65 +1362,44 @@ paths:
       summary: Listar entrenadores activos
       operationId: listTrainers
       security: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Listado paginado de entrenadores activos
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrainerListResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
 
-  /trainers/me:
-    get:
-      tags: [Trainers]
-      summary: Consultar el perfil profesional propio
-      operationId: getOwnTrainerProfile
-      responses:
-        "200": { $ref: "#/components/responses/Success" }
-    patch:
-      tags: [Trainers]
-      summary: Modificar el perfil profesional propio
-      operationId: updateOwnTrainerProfile
-      requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
-      responses:
-        "200": { $ref: "#/components/responses/Success" }
 
-  /trainers/me/scheduled-classes:
+  /trainer/classes:
     get:
       tags: [Trainers]
       summary: Consultar las clases propias del entrenador
-      operationId: listOwnTrainerClasses
+      description: >-
+        Operacion exclusiva de entrenadores autenticados. Si se omite
+        weekStartsOn se consulta la semana actual de Buenos Aires; si se indica,
+        debe ser un lunes. Solo devuelve las clases asignadas al entrenador.
+      operationId: getOwnTrainerClasses
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: weekStartsOn
+          in: query
+          required: false
+          description: Lunes local; si se omite se usa la semana actual de Buenos Aires.
+          schema: { type: string, format: date, example: "2030-09-02" }
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
-
-  /trainers/{trainerId}:
-    parameters:
-      - $ref: "#/components/parameters/TrainerId"
-    get:
-      tags: [Trainers]
-      summary: Consultar el perfil público de un entrenador
-      operationId: getTrainer
-      security: []
-      responses:
-        "200": { $ref: "#/components/responses/Success" }
-
-  /trainers/{trainerId}/branches:
-    parameters:
-      - $ref: "#/components/parameters/TrainerId"
-    put:
-      tags: [Trainers]
-      summary: Reemplazar las sedes asignadas a un entrenador
-      operationId: replaceTrainerBranches
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [branchIds]
-              properties:
-                branchIds:
-                  type: array
-                  uniqueItems: true
-                  items: { type: string, format: uuid }
-      responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Cronograma semanal filtrado por entrenador
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeeklySchedule" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /events:
     get:
@@ -1701,12 +1671,9 @@ components:
     MemberId: { name: memberId, in: path, required: true, schema: { type: string, format: uuid } }
     PaymentId: { name: paymentId, in: path, required: true, schema: { type: string, format: uuid } }
     CertificateId: { name: certificateId, in: path, required: true, schema: { type: string, format: uuid } }
-    AttemptId: { name: attemptId, in: path, required: true, schema: { type: string, format: uuid } }
-    AccessPointId: { name: accessPointId, in: path, required: true, schema: { type: string, format: uuid } }
     BranchId: { name: branchId, in: path, required: true, schema: { type: string, format: uuid } }
     ScheduleId: { name: scheduleId, in: path, required: true, schema: { type: string, format: uuid } }
     ClassId: { name: classId, in: path, required: true, schema: { type: string, format: uuid } }
-    TrainerId: { name: trainerId, in: path, required: true, schema: { type: string, format: uuid } }
     EventId: { name: eventId, in: path, required: true, schema: { type: string, format: uuid } }
     NewsPostId: { name: newsPostId, in: path, required: true, schema: { type: string, format: uuid } }
     NotificationId: { name: notificationId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1810,6 +1777,27 @@ components:
         page: { type: integer }
         limit: { type: integer }
         total: { type: integer }
+    AdminDashboardMetrics:
+      type: object
+      additionalProperties: false
+      required:
+        - activeMembers
+        - inactiveMembers
+        - currentMemberships
+        - expiringMemberships
+        - expiredMemberships
+        - pendingMedicalCertificates
+        - rejectedMedicalCertificates
+        - initialPeriodMembers
+      properties:
+        activeMembers: { type: integer, minimum: 0 }
+        inactiveMembers: { type: integer, minimum: 0 }
+        currentMemberships: { type: integer, minimum: 0 }
+        expiringMemberships: { type: integer, minimum: 0 }
+        expiredMemberships: { type: integer, minimum: 0 }
+        pendingMedicalCertificates: { type: integer, minimum: 0 }
+        rejectedMedicalCertificates: { type: integer, minimum: 0 }
+        initialPeriodMembers: { type: integer, minimum: 0 }
     UserRole:
       type: string
       enum: [MEMBER, TRAINER, ADMIN]
@@ -2540,6 +2528,38 @@ components:
       properties:
         specialty: { type: string }
         description: { type: string }
+    PublicTrainer:
+      type: object
+      additionalProperties: false
+      required: [id, firstName, lastName, photoUrl, specialty, description, branches]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        photoUrl: { type: [string, "null"], format: uri }
+        specialty: { type: string }
+        description: { type: string }
+        branches:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, address]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              address: { type: string }
+    TrainerListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PublicTrainer" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
     OwnProfile:
       allOf:
         - $ref: "#/components/schemas/User"
@@ -2669,6 +2689,16 @@ components:
       properties:
         status: { $ref: "#/components/schemas/UserStatus" }
         reason: { type: string }
+    UpdateTrainerBranchesRequest:
+      type: object
+      additionalProperties: false
+      required: [branchIds]
+      properties:
+        branchIds:
+          type: array
+          maxItems: 50
+          uniqueItems: true
+          items: { type: string, format: uuid }
     ResetPasswordResponse:
       type: object
       additionalProperties: false

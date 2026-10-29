@@ -1,0 +1,477 @@
+{
+  "info": {
+    "name": "M-Team API",
+    "description": "Coleccion generada para las operaciones montadas y documentadas en backend/docs/openapi.yaml. Usa el entorno M-Team local y no contiene credenciales reales.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "System and authentication",
+      "item": [
+        {
+          "name": "requestPasswordRecovery",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"email\":\"member@example.test\"}" },
+            "url": "{{baseUrl}}/auth/password-recovery"
+          }
+        },
+        {
+          "name": "completePasswordRecovery",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"token\":\"{{recoveryToken}}\",\"newPassword\":\"ChangeMe123!\"}" },
+            "url": "{{baseUrl}}/auth/password-recovery/complete"
+          }
+        },
+        {
+          "name": "getHealth",
+          "request": { "method": "GET", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/health" }
+        },
+        {
+          "name": "registerMember",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"firstName\":\"Test\",\"lastName\":\"Member\",\"documentNumber\":\"TEST-001\",\"birthDate\":\"1990-01-01\",\"email\":\"member@example.test\",\"phone\":\"1122334455\",\"password\":\"ChangeMe123!\"}" },
+            "url": "{{baseUrl}}/auth/register"
+          }
+        },
+        {
+          "name": "login",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"email\":\"member@example.test\",\"password\":\"ChangeMe123!\"}" },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "logout",
+          "request": { "method": "POST", "url": "{{baseUrl}}/auth/logout" }
+        },
+        {
+          "name": "getCurrentIdentity",
+          "request": { "method": "GET", "url": "{{baseUrl}}/auth/me" }
+        },
+        {
+          "name": "changePassword",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"currentPassword\":\"Current123!\",\"newPassword\":\"NewPassword123!\"}" },
+            "url": "{{baseUrl}}/auth/password"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users and administration",
+      "item": [
+        {
+          "name": "getAdminDashboardMetrics",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/dashboard/metrics" }
+        },
+        {
+          "name": "listUsers",
+          "request": { "method": "GET", "url": "{{baseUrl}}/users?page={{page}}&limit={{limit}}" }
+        },
+        {
+          "name": "createUser",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"firstName\":\"Test\",\"lastName\":\"Trainer\",\"documentNumber\":\"TEST-002\",\"birthDate\":\"1990-01-01\",\"email\":\"trainer@example.test\",\"phone\":\"1122334455\",\"password\":\"ChangeMe123!\",\"role\":\"TRAINER\",\"specialty\":\"Yoga\",\"description\":\"Trainer de prueba\"}" },
+            "url": "{{baseUrl}}/users"
+          }
+        },
+        {
+          "name": "getOwnProfile",
+          "request": { "method": "GET", "url": "{{baseUrl}}/users/me" }
+        },
+        {
+          "name": "updateOwnProfile",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"phone\":\"1122334455\"}" },
+            "url": "{{baseUrl}}/users/me"
+          }
+        },
+        {
+          "name": "updateOwnPhoto",
+          "request": {
+            "method": "PUT",
+            "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": "" }] },
+            "url": "{{baseUrl}}/users/me/photo"
+          }
+        },
+        {
+          "name": "getUser",
+          "request": { "method": "GET", "url": "{{baseUrl}}/users/{{userId}}" }
+        },
+        {
+          "name": "updateUser",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"phone\":\"1122334455\",\"reason\":\"Actualizacion de contacto\"}" },
+            "url": "{{baseUrl}}/users/{{userId}}"
+          }
+        },
+        {
+          "name": "updateUserStatus",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"status\":\"ACTIVE\",\"reason\":\"Reactivacion de prueba\"}" },
+            "url": "{{baseUrl}}/users/{{userId}}/status"
+          }
+        },
+        {
+          "name": "updateTrainerBranches",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"branchIds\":[\"{{branchId}}\"]}" },
+            "url": "{{baseUrl}}/users/{{userId}}/trainer-branches"
+          }
+        },
+        {
+          "name": "resetUserPassword",
+          "request": { "method": "POST", "url": "{{baseUrl}}/users/{{userId}}/password-resets" }
+        },
+        {
+          "name": "listUserAuditLogs",
+          "request": { "method": "GET", "url": "{{baseUrl}}/users/{{userId}}/audit-logs?page={{page}}&limit={{limit}}" }
+        },
+        {
+          "name": "listMembers",
+          "request": { "method": "GET", "url": "{{baseUrl}}/members" }
+        }
+      ]
+    },
+    {
+      "name": "Membership and payments",
+      "item": [
+        {
+          "name": "getOwnMembership",
+          "request": { "method": "GET", "url": "{{baseUrl}}/members/me/membership" }
+        },
+        {
+          "name": "getCurrentMembershipPrice",
+          "request": { "method": "GET", "url": "{{baseUrl}}/membership-prices/current" }
+        },
+        {
+          "name": "listMembershipPrices",
+          "request": { "method": "GET", "url": "{{baseUrl}}/membership-prices" }
+        },
+        {
+          "name": "createMembershipPrice",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"amount\":10000.00,\"effectiveFrom\":\"2030-01-01T00:00:00.000Z\"}" },
+            "url": "{{baseUrl}}/membership-prices"
+          }
+        },
+        {
+          "name": "listPayments",
+          "request": { "method": "GET", "url": "{{baseUrl}}/payments?page={{page}}&limit={{limit}}" }
+        },
+        {
+          "name": "createPayment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }],
+            "body": { "mode": "raw", "raw": "{\"memberId\":\"{{memberId}}\",\"amount\":10000.00,\"method\":\"CASH\",\"receiptNumber\":\"TEST-REC-001\"}" },
+            "url": "{{baseUrl}}/payments"
+          }
+        },
+        {
+          "name": "previewPayment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"memberId\":\"{{memberId}}\",\"amount\":10000.00,\"method\":\"CASH\",\"receiptNumber\":\"TEST-REC-001\"}" },
+            "url": "{{baseUrl}}/payments/previews"
+          }
+        },
+        {
+          "name": "getPaymentsSummary",
+          "request": { "method": "GET", "url": "{{baseUrl}}/payments/summary?from={{from}}&to={{to}}" }
+        },
+        {
+          "name": "voidPayment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"reason\":\"Correccion de prueba\"}" },
+            "url": "{{baseUrl}}/payments/{{paymentId}}/voids"
+          }
+        },
+        {
+          "name": "listOwnPayments",
+          "request": { "method": "GET", "url": "{{baseUrl}}/members/me/payments?page={{page}}&limit={{limit}}" }
+        },
+        {
+          "name": "listMemberPayments",
+          "request": { "method": "GET", "url": "{{baseUrl}}/members/{{memberId}}/payments?page={{page}}&limit={{limit}}" }
+        }
+      ]
+    },
+    {
+      "name": "Medical certificates and access",
+      "item": [
+        {
+          "name": "listOwnMedicalCertificates",
+          "request": { "method": "GET", "url": "{{baseUrl}}/members/me/medical-certificates?page={{page}}&limit={{limit}}" }
+        },
+        {
+          "name": "uploadMedicalCertificate",
+          "request": {
+            "method": "POST",
+            "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": "" }] },
+            "url": "{{baseUrl}}/members/me/medical-certificates"
+          }
+        },
+        {
+          "name": "listMedicalCertificates",
+          "request": { "method": "GET", "url": "{{baseUrl}}/medical-certificates?page={{page}}&limit={{limit}}" }
+        },
+        {
+          "name": "getMedicalCertificate",
+          "request": { "method": "GET", "url": "{{baseUrl}}/medical-certificates/{{certificateId}}" }
+        },
+        {
+          "name": "getMedicalCertificateFile",
+          "request": { "method": "GET", "url": "{{baseUrl}}/medical-certificates/{{certificateId}}/file" }
+        },
+        {
+          "name": "reviewMedicalCertificate",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"status\":\"APPROVED\",\"reviewComment\":\"Documento correcto\"}" },
+            "url": "{{baseUrl}}/medical-certificates/{{certificateId}}/review"
+          }
+        },
+        {
+          "name": "listAccessAttempts",
+          "request": { "method": "GET", "url": "{{baseUrl}}/access-attempts?page={{page}}&limit={{limit}}" }
+        },
+        {
+          "name": "createAccessAttempt",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"qrToken\":\"{{qrToken}}\"}" },
+            "url": "{{baseUrl}}/access-attempts"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Branches, schedules and classes",
+      "item": [
+        {
+          "name": "listBranches",
+          "request": { "method": "GET", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/branches?page={{page}}&limit={{limit}}" }
+        },
+        {
+          "name": "createBranch",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"name\":\"Sede de prueba\",\"address\":\"Calle Test 123\",\"phone\":\"1122334455\",\"openingHours\":\"08:00-20:00\",\"description\":\"Sede sintetica\",\"imageUrl\":\"https://example.test/branch.jpg\"}" },
+            "url": "{{baseUrl}}/branches"
+          }
+        },
+        {
+          "name": "getBranch",
+          "request": { "method": "GET", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/branches/{{branchId}}" }
+        },
+        {
+          "name": "updateBranch",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"description\":\"Sede actualizada\"}" },
+            "url": "{{baseUrl}}/branches/{{branchId}}"
+          }
+        },
+        {
+          "name": "updateBranchStatus",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"isActive\":true}" },
+            "url": "{{baseUrl}}/branches/{{branchId}}/status"
+          }
+        },
+        {
+          "name": "listAdminBranches",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/branches?page={{page}}&limit={{limit}}" }
+        },
+        {
+          "name": "getAdminBranch",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/branches/{{branchId}}" }
+        },
+        {
+          "name": "listWeeklySchedules",
+          "request": { "method": "GET", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/weekly-schedules" }
+        },
+        {
+          "name": "getWeeklySchedule",
+          "request": { "method": "GET", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/weekly-schedules/{{scheduleId}}" }
+        },
+        {
+          "name": "copyWeeklySchedule",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"weekStartsOn\":\"2030-09-09\"}" },
+            "url": "{{baseUrl}}/weekly-schedules/{{scheduleId}}/copies"
+          }
+        },
+        {
+          "name": "createScheduledClass",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"weekStartsOn\":\"2030-09-02\",\"activity\":\"Yoga\",\"startsAt\":\"2030-09-02T10:00:00-03:00\",\"branchId\":\"{{branchId}}\",\"trainerId\":\"{{trainerId}}\"}" },
+            "url": "{{baseUrl}}/scheduled-classes"
+          }
+        },
+        {
+          "name": "updateScheduledClass",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"activity\":\"Pilates\"}" },
+            "url": "{{baseUrl}}/scheduled-classes/{{classId}}"
+          }
+        },
+        {
+          "name": "deleteScheduledClass",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/scheduled-classes/{{classId}}" }
+        }
+      ]
+    },
+    {
+      "name": "Trainers, events, news and notifications",
+      "item": [
+        {
+          "name": "listTrainers",
+          "request": { "method": "GET", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/trainers?page={{page}}&limit={{limit}}" }
+        },
+        {
+          "name": "getOwnTrainerClasses",
+          "request": { "method": "GET", "url": "{{baseUrl}}/trainer/classes" }
+        },
+        {
+          "name": "listEvents",
+          "request": { "method": "GET", "url": "{{baseUrl}}/events" }
+        },
+        {
+          "name": "createEvent",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"title\":\"Evento de prueba\",\"description\":\"Descripcion sintetica\",\"startsAt\":\"2030-10-01T18:00:00Z\",\"location\":\"Sede de prueba\",\"imageUrl\":\"https://example.test/event.jpg\",\"status\":\"DRAFT\"}" },
+            "url": "{{baseUrl}}/events"
+          }
+        },
+        {
+          "name": "getEvent",
+          "request": { "method": "GET", "url": "{{baseUrl}}/events/{{eventId}}" }
+        },
+        {
+          "name": "updateEvent",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"title\":\"Evento actualizado\"}" },
+            "url": "{{baseUrl}}/events/{{eventId}}"
+          }
+        },
+        {
+          "name": "updateEventStatus",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"status\":\"PUBLISHED\"}" },
+            "url": "{{baseUrl}}/events/{{eventId}}/status"
+          }
+        },
+        {
+          "name": "listNewsPosts",
+          "request": { "method": "GET", "url": "{{baseUrl}}/news-posts" }
+        },
+        {
+          "name": "createNewsPost",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"title\":\"Novedad de prueba\",\"content\":\"Contenido sintetico\",\"audience\":\"ALL\",\"status\":\"DRAFT\"}" },
+            "url": "{{baseUrl}}/news-posts"
+          }
+        },
+        {
+          "name": "getNewsPost",
+          "request": { "method": "GET", "url": "{{baseUrl}}/news-posts/{{newsPostId}}" }
+        },
+        {
+          "name": "updateNewsPost",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"title\":\"Novedad actualizada\"}" },
+            "url": "{{baseUrl}}/news-posts/{{newsPostId}}"
+          }
+        },
+        {
+          "name": "updateNewsPostStatus",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"status\":\"PUBLISHED\"}" },
+            "url": "{{baseUrl}}/news-posts/{{newsPostId}}/status"
+          }
+        },
+        {
+          "name": "listNotifications",
+          "request": { "method": "GET", "url": "{{baseUrl}}/notifications" }
+        },
+        {
+          "name": "markAllNotificationsAsRead",
+          "request": { "method": "PATCH", "url": "{{baseUrl}}/notifications/read-status" }
+        },
+        {
+          "name": "getNotification",
+          "request": { "method": "GET", "url": "{{baseUrl}}/notifications/{{notificationId}}" }
+        },
+        {
+          "name": "markNotificationAsRead",
+          "request": { "method": "PATCH", "url": "{{baseUrl}}/notifications/{{notificationId}}/read-status" }
+        }
+      ]
+    }
+  ]
+}
