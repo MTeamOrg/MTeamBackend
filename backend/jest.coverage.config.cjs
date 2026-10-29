@@ -4,6 +4,7 @@ module.exports = {
   ...require("./jest.config.cjs"),
   coverageProvider: "v8",
   collectCoverageFrom: [
+    "qase-result-guard.cjs",
     "src/**/*.ts",
     "!src/generated/**",
     "!src/**/*.d.ts",
