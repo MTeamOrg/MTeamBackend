@@ -35,6 +35,12 @@ Iniciar frontend con `npm run dev`. Abrir /iniciar-sesion, solicitar recuperaci�
 
 Los enlaces y tokens de recuperación nunca se registran, tampoco en staging ni para cuentas de prueba. Se eliminó la opción `PASSWORD_RECOVERY_LOG_TEST_EMAIL`; quitarla de la configuración de los entornos donde se hubiera definido. Los fallos de SMTP o la falta de configuración devuelven 503 en todos los entornos. El registro no reemplaza el envío del correo.
 
+### Decisión operativa aportada por el equipo
+
+La evidencia del equipo indica que, por limitaciones económicas del despliegue utilizado, se intentó obtener el enlace mediante logs de Render en lugar de enviar correo. Esta alternativa **no está implementada en el código actual**: `PASSWORD_RECOVERY_LOG_TEST_EMAIL` no forma parte de la configuración y los tests verifican que una variable residual no habilite un fallback. El servicio solo registra metadatos SMTP sanitizados cuando existe un fallo y nunca registra destinatarios, enlaces, tokens ni contraseñas.
+
+Por lo tanto, no hay evidencia de que Gmail SMTP esté operativo en producción ni de que exista un mecanismo seguro de recuperación por logs. Habilitar logs con enlaces expondría un token reutilizable durante su vigencia a cualquier persona o integración con acceso a los logs. La alternativa recomendada es probar Gmail en un ambiente aislado con una cuenta autorizada, o contratar un proveedor transaccional con credenciales y políticas por ambiente; no se habilita ningún fallback desde esta documentación.
+
 Los logs de errores contienen únicamente códigos SMTP conocidos, comandos sin argumentos y códigos de respuesta numéricos. No incluyen destinatarios, enlaces, tokens, contraseñas ni mensajes o respuestas completas del proveedor.
 
 ## Contrato
