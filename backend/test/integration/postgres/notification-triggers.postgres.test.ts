@@ -499,6 +499,41 @@ describe("medical certificate result notifications (API, services and PostgreSQL
     expect(await notificationsOf(owner.id)).toHaveLength(1);
   });
 
+  test("a member upload racing an administrator rejection never leaves multiple pending certificates", async () => {
+    const admin = await fixtures.user("ADMIN");
+    const owner = await fixtures.user("MEMBER");
+    const certificate = await fixtures.pendingCertificate(owner.id);
+    const reject = () => request(app)
+      .patch(`/api/medical-certificates/${certificate.id}/review`)
+      .set(bearer(admin))
+      .send({ status: "REJECTED", reviewComment: "Falta la firma." });
+    const upload = () => request(app)
+      .post("/api/members/me/medical-certificates")
+      .set(bearer(owner))
+      .attach("file", Buffer.from("%PDF-1.7\nnew certificate"), {
+        filename: "certificate.pdf",
+        contentType: "application/pdf",
+      });
+
+    const [review, submission] = await Promise.all([reject(), upload()]);
+    expect(review.status).toBe(200);
+    expect([201, 409]).toContain(submission.status);
+
+    const certificates = await database.medicalCertificate.findMany({
+      where: { memberId: owner.id },
+      orderBy: [{ uploadedAt: "asc" }, { id: "asc" }],
+    });
+    expect(certificates[0]).toMatchObject({ id: certificate.id, status: "REJECTED" });
+    expect(certificates.filter(({ status }) => status === "PENDING")).toHaveLength(submission.status === 201 ? 1 : 0);
+    expect(await notificationsOf(owner.id)).toHaveLength(1);
+
+    if (submission.status === 409) {
+      const retry = await upload();
+      expect(retry.status).toBe(201);
+      expect(await database.medicalCertificate.count({ where: { memberId: owner.id, status: "PENDING" } })).toBe(1);
+    }
+  });
+
   test("a certificate presented after a rejection gets its own review and its own notice, and the history stays intact", async () => {
     const { admin, owner, other, certificate, review } = await setup();
     expect((await review({ status: "REJECTED", reviewComment: "Falta el sello." })).status).toBe(200);

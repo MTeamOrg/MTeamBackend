@@ -11,14 +11,16 @@ controller
 
 `createAuthenticationMiddleware` valida `Authorization: Bearer <JWT>` mediante
 el servicio de tokens existente (HS256, firma, expiración y estructura de
-claims). El contrato emitido sigue siendo `sub`, `role` y `exp`; `sub` debe ser
-un UUID.
+claims). El contrato emitido contiene `sub`, `role`, `sessionVersion` y `exp`;
+`sub` debe ser un UUID y `sessionVersion` identifica la generación de sesión
+que debe seguir vigente.
 
 En cada solicitud se consultan `id`, `role`, `status` e
 `isPasswordChangeRequired` del usuario actual. Si no existe, se responde 401
 `UNAUTHORIZED`; si no está activo, se responde 403 `ACCOUNT_INACTIVE`. De esta
 forma, los cambios de estado, rol o exigencia de cambio de contraseña se aplican
-en la siguiente solicitud aunque el JWT no haya vencido.
+en la siguiente solicitud aunque el JWT no haya vencido. Si la versión del JWT
+no coincide con `User.sessionVersion`, se responde 401 por sesión revocada.
 
 La request recibe solamente:
 
@@ -48,9 +50,10 @@ bloqueo por contraseña temporal. La primera debe permanecer accesible para que
 el usuario pueda reemplazarla y la segunda permite cerrar la sesión. El cambio
 exitoso desactiva `isPasswordChangeRequired`.
 
-El cierre de sesión valida el JWT y devuelve `204`. Debido a que no se
-persisten sesiones, el frontend es responsable de eliminar el token almacenado
-y redirigir al formulario de ingreso.
+El cierre de sesión valida el JWT y devuelve `204`. Como el endpoint no
+mantiene una sesión de servidor individual, el frontend elimina el token
+almacenado y redirige al formulario de ingreso; los cambios de contraseña sí
+revocan las generaciones anteriores mediante `sessionVersion`.
 
 El restablecimiento administrativo almacena exclusivamente el hash bcrypt,
 activa `isPasswordChangeRequired` y registra en `UserAuditLog` el usuario
@@ -74,4 +77,6 @@ Los futuros endpoints privados deben aplicar autenticación y el bloqueo por
 contraseña temporal, además de `authorize(...)` cuando correspondan roles
 específicos.
 
-No hay revocación de JWT ni persistencia de sesiones.
+No hay persistencia de sesiones individuales ni revocación específica por
+logout; sí existe revocación por generación mediante `User.sessionVersion` al
+cambiar o restablecer una contraseña.

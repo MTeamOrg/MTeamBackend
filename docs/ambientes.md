@@ -42,7 +42,7 @@ Reglas:
 
 ## Configuración del backend
 
-Cuando se cree `backend/`, su plantilla `backend/.env.example` deberá contener solamente nombres y valores no sensibles:
+El repositorio `MTeamBackend` ya contiene la aplicación. Su plantilla `backend/.env.example` o la configuración equivalente de cada plataforma debe contener solamente nombres y valores no sensibles:
 
 ```dotenv
 NODE_ENV=development
@@ -57,6 +57,9 @@ SUPABASE_SERVICE_ROLE_KEY=
 SUPABASE_STORAGE_BUCKET=
 SUPABASE_PROFILE_PHOTO_BUCKET=
 CORS_ORIGIN=http://localhost:5173
+FRONTEND_PUBLIC_URL=http://localhost:5173
+GOOGLE_SMTP_USER=
+GOOGLE_APP_PASSWORD=
 ```
 
 Propósito de las variables:
@@ -75,6 +78,9 @@ Propósito de las variables:
 | `SUPABASE_STORAGE_BUCKET` | Bucket privado para aptos médicos y otros documentos restringidos. |
 | `SUPABASE_PROFILE_PHOTO_BUCKET` | Bucket público exclusivo para fotografías de perfil; no almacena aptos médicos. |
 | `CORS_ORIGIN` | Origen del frontend autorizado para ese ambiente. |
+| `FRONTEND_PUBLIC_URL` | URL pública usada para construir el enlace de recuperación de contraseña. |
+| `GOOGLE_SMTP_USER` | Cuenta Gmail usada por Nodemailer como remitente SMTP; solo backend. |
+| `GOOGLE_APP_PASSWORD` | Contraseña de aplicación de Google para SMTP; solo backend y nunca en Git. |
 
 ### Buckets de Supabase Storage
 
@@ -96,7 +102,7 @@ automáticamente: deben configurarse antes de probar la carga de fotografías.
 
 ## Configuración del frontend
 
-Cuando se cree `frontend/`, su plantilla `frontend/.env.example` deberá contener:
+El repositorio `MTeamFrontend` ya contiene la aplicación. Su plantilla `frontend/.env.example` deberá contener:
 
 ```dotenv
 VITE_API_URL=http://localhost:3000/api
@@ -134,6 +140,8 @@ La aplicación y los scripts de prueba deberán cargar el archivo correspondient
 | PostgreSQL | Local o desarrollo | Base temporal aislada | Supabase de staging | Supabase de producción |
 | Storage | Bucket de desarrollo | Emulado o bucket de prueba | Bucket de staging | Bucket de producción |
 | Google Maps | Clave restringida de desarrollo | Simulado en pruebas | Clave restringida de staging | Clave restringida de producción |
+
+La tabla anterior describe la estrategia objetivo. En esta auditoría no se confirmó acceso a Vercel, Render, Supabase, Google Maps ni Gmail de los ambientes remotos; las URLs, proyectos, buckets y claves reales deben registrarse en la evidencia de cierre sin copiar secretos.
 
 Si los límites gratuitos impiden mantener todos los servicios activos, el aislamiento de datos y secretos se conserva. Se puede ejecutar `development` y `test` localmente, pero staging y producción no deben compartir base, Storage ni credenciales administrativas.
 

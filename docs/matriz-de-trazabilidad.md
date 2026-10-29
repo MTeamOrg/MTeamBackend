@@ -15,7 +15,7 @@ Esta matriz vincula los requerimientos funcionales del documento de alcance con 
 | USR-01 | `User`, `MemberProfile`, `UserRole` | Cubierto | Documento y correo deberán tener restricciones únicas. |
 | USR-02 | `User`, `UserStatus` | Aplicación | Validación de credenciales y mensajes seguros en autenticación. |
 | USR-03 | `User` | Aplicación | La invalidación de credenciales pertenece al mecanismo de sesión. |
-| USR-04 | `User.isPasswordChangeRequired`, `UserAuditLog` | Cubierto | El administrador asigna una clave temporal; no se requiere correo automático. |
+| USR-04 | `User.sessionVersion`, `PasswordRecoveryToken`, `UserAuditLog` | Cubierto | La recuperación usa token de un solo uso por correo Gmail SMTP; el cambio incrementa `sessionVersion` y conserva auditoría. |
 | USR-05 | `User.role`, `UserRole` | Aplicación | La autorización se valida en el backend. |
 | USR-06 | `User`, `MemberProfile`, `TrainerProfile` | Cubierto | La API debe impedir modificar campos protegidos. |
 | USR-07 | `User.status`, `UserAuditLog` | Cubierto | La desactivación no elimina relaciones ni historial. |
@@ -39,7 +39,7 @@ Esta matriz vincula los requerimientos funcionales del documento de alcance con 
 | CUO-04 | `Payment.accreditedAt`, `Payment.expiresAt` | Aplicación | El backend fija 30 días sin acumular vigencias. |
 | CUO-05 | `Payment` | Aplicación | `CURRENT`, `EXPIRING_SOON` y `EXPIRED` son estados calculados; el umbral es cinco días. |
 | CUO-06 | `MembershipPrice`, `Notification` | Cubierto | Un cambio de precio genera una notificación interna. |
-| PAG-01 | `Payment`, `MemberProfile`, `User` | Cubierto | Incluye socio, importe, medio, comprobante, acreditación y responsable. |
+| PAG-01 | `Payment`, `User` | Cubierto | `Payment.memberId` referencia directamente a `User`; incluye socio, importe, medio, comprobante, acreditación y responsable. |
 | PAG-02 | `MembershipPrice`, `Payment` | Aplicación | El resumen previo no necesita persistencia adicional. |
 | PAG-03 | `Payment`, `PaymentStatus` | Cubierto | Conserva estado y vencimiento generado, incluso al anularse. |
 | PAG-04 | `Payment`, `User` | Aplicación | Los filtros se implementan en el repositorio/API. |
@@ -51,13 +51,13 @@ Esta matriz vincula los requerimientos funcionales del documento de alcance con 
 
 | Requisito | Clases o reglas relacionadas | Cobertura | Observación |
 |---|---|---|---|
-| APM-01 | `MedicalCertificate`, `MemberProfile` | Aplicación | Formatos, tamaño y vista previa se validan en frontend, backend y almacenamiento. |
+| APM-01 | `MedicalCertificate`, `User` | Aplicación | `MedicalCertificate.memberId` referencia directamente a `User`; formatos, tamaño y vista previa se validan en frontend, backend y almacenamiento. |
 | APM-02 | `MedicalCertificateStatus.PENDING`, `Payment` | Cubierto | Todo documento nuevo queda pendiente; la excepción inicial se calcula desde el primer pago válido. |
 | APM-03 | `MedicalCertificate`, `Payment` | Cubierto | Estado, carga, observación y período restante están disponibles o se calculan. |
 | APM-04 | `MedicalCertificate`, `User` | Aplicación | Filtros y acceso privado al archivo se controlan en API y Storage. |
 | APM-05 | `MedicalCertificate`, `User` | Cubierto | Registra decisión, observación, responsable y momento; el aprobado no vence. |
 | APM-06 | `MedicalCertificate`, `Notification` | Cubierto | La notificación puede incluir la observación del rechazo. |
-| APM-07 | `MemberProfile` 1—N `MedicalCertificate` | Cubierto | El modelo conserva cada carga y su revisión en el historial. |
+| APM-07 | `User` 1—N `MedicalCertificate` | Cubierto | El modelo conserva cada carga y su revisión en el historial; la FK física es `medical_certificate.member_id -> user.id`. |
 
 ## Accesos mediante QR
 
@@ -118,5 +118,6 @@ La revisión de trazabilidad permitió resolver estas brechas antes de derivar e
 2. Se completó la trazabilidad de `Payment` exigida por PAG-06, diferenciando creación, confirmación y anulación.
 3. `AccessLog` conserva el rol utilizado y la sede correspondiente al momento del intento, como exige ACC-06.
 4. Se incorporó la regla de PAG-05: si se anula el primer pago, el período inicial se recalcula desde la acreditación válida más antigua.
+5. Se alineó el modelo con Prisma: `sessionVersion`, `PasswordRecoveryToken`, claves de idempotencia en cuota/pago y `Notification.dedupeKey`.
 
 Ninguna de estas brechas requiere incorporar reservas, cupos, asistencias, beneficios, referidos, evaluaciones ni un QR personal.

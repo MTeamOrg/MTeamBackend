@@ -29,7 +29,32 @@ sequenceDiagram
     WebApp-->>-Socio: Mostrar panel
 ```
 
-La recuperación automática por correo no forma parte del alcance. Cuando sea necesario restablecer una contraseña, el socio deberá solicitarlo a un administrador.
+La recuperación por correo utiliza Gmail SMTP desde el backend. El token aleatorio se almacena como hash en `PasswordRecoveryToken`, vence a los 30 minutos y se consume de forma atómica. Al completar el cambio se incrementa `User.sessionVersion`, invalidando las sesiones anteriores; el frontend no inicia sesión automáticamente.
+
+```mermaid
+sequenceDiagram
+    title Recuperación de contraseña por correo
+    participant Usuario
+    participant WebApp
+    participant API
+    participant Database
+    participant Gmail as Gmail SMTP
+
+    Usuario->>+WebApp: Solicitar recuperación
+    WebApp->>+API: POST /auth/password-recovery
+    API->>+Database: Crear hash, vencimiento y huella
+    Database-->>-API: Token persistido
+    API->>+Gmail: Enviar enlace por SMTP
+    Gmail-->>-API: Aceptación SMTP
+    API-->>-WebApp: 202 respuesta genérica
+    WebApp-->>-Usuario: Confirmar solicitud
+    Usuario->>+WebApp: Abrir enlace y enviar contraseña
+    WebApp->>+API: POST /auth/password-recovery/complete
+    API->>+Database: Validar, consumir token y aumentar sessionVersion
+    Database-->>-API: Cambio confirmado
+    API-->>-WebApp: 204 sin sesión nueva
+    WebApp-->>-Usuario: Solicitar nuevo inicio de sesión
+```
 
 ## Acreditación de un pago
 
@@ -193,4 +218,4 @@ Las notificaciones son internas y conservan su historial. El alcance no contempl
 
 ## Límites del alcance
 
-Estos flujos no incorporan planes de membresía, pagos en línea, reservas, cupos, listas de espera, asistencia, rutinas, alumnos asignados, evaluaciones, beneficios, referidos, QR personal, chat ni una aplicación móvil nativa.
+Estos flujos no incorporan planes de membresía, pagos en línea, reservas, cupos, listas de espera, asistencia, rutinas, alumnos asignados, evaluaciones, beneficios, referidos, QR personal, chat ni una aplicación móvil nativa. Gmail SMTP se documenta como proveedor de correo del flujo de recuperación; la entrega productiva queda pendiente de la evidencia del proveedor y del ambiente.

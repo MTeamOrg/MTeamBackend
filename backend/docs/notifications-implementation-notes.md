@@ -156,6 +156,6 @@ Frontend (repositorio `MTeamFrontend`): el celular no tenía forma de llegar a N
 - El frontend no tiene workflow de CI (lint, build y tests no se ejecutan automáticamente).
 - Los archivos de test del backend no se tipan (SWC los transforma sin chequeo) y varios tienen errores de tipos bajo el `tsconfig` estricto.
 - Un test unitario del frontend (`AdminUsersScreen`) agotó los 5 s de Vitest en una ejecución con la máquina cargada; no es de este módulo y no se reprodujo luego.
-- La recuperación de contraseña por correo (`/auth/password-recovery`) contradice USR-04 y el diagrama "Registro e inicio de sesión", que la dejan fuera de alcance y la resuelven con un administrador que asigna una contraseña temporal (que también existe).
+- La recuperación de contraseña por correo (`/auth/password-recovery`) amplía USR-04 y está documentada como flujo vigente en `account-recovery.md` y `diagramas-de-secuencia.md`. El restablecimiento administrativo con contraseña temporal de ADM-04 también existe como mecanismo separado.
 - `GET /dashboard` figura en `openapi.yaml` pero el backend no lo implementa (responde 404); el frontend usa `/admin/dashboard/metrics`.
 - Los pagos se acreditan con `accreditedAt = now()` y la base impone `expires_at = accredited_at + 30 días`, por lo que ordenar "el último pago" por vencimiento (avisos) o por acreditación (estado de cuota, acceso, listado) es equivalente hoy; conviene unificarlo si algún día se permitiera acreditar con una fecha distinta.

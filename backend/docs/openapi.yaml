@@ -19,7 +19,6 @@ tags:
   - name: Payments
   - name: Medical Certificates
   - name: Access Attempts
-  - name: Access Points
   - name: Branches
   - name: Weekly Schedules
   - name: Scheduled Classes
@@ -236,13 +235,31 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
-  /dashboard:
+  /admin/dashboard/metrics:
     get:
       tags: [Dashboard]
-      summary: Obtener el panel correspondiente al rol autenticado
-      operationId: getDashboard
+      summary: Obtener las metricas del panel administrativo
+      description: Operacion exclusiva de administradores. Devuelve conteos calculados sobre socios, cuotas y aptos medicos.
+      operationId: getAdminDashboardMetrics
+      security:
+        - bearerAuth: []
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Metricas actuales del panel administrativo
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminDashboardMetrics" }
+              example:
+                activeMembers: 42
+                inactiveMembers: 3
+                currentMemberships: 35
+                expiringMemberships: 4
+                expiredMemberships: 6
+                pendingMedicalCertificates: 2
+                rejectedMedicalCertificates: 1
+                initialPeriodMembers: 5
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /users:
     get:
@@ -264,6 +281,13 @@ paths:
         - name: status
           in: query
           schema: { $ref: "#/components/schemas/UserStatus" }
+        - name: membershipStatus
+          in: query
+          schema: { $ref: "#/components/schemas/MembershipStatus" }
+        - name: initialPeriod
+          in: query
+          description: Filtra socios cuyo primer periodo de acceso medico aun esta vigente.
+          schema: { type: string, enum: ["true", "false"] }
       responses:
         "200":
           description: Listado paginado de usuarios
@@ -438,6 +462,47 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /users/{userId}/trainer-branches:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    put:
+      tags: [Users]
+      summary: Reemplazar las sedes asignadas a un entrenador
+      description: >-
+        Operacion exclusiva de administradores. El usuario indicado debe tener
+        rol TRAINER y todas las sedes deben existir y estar activas. Un arreglo
+        vacio quita todas las asignaciones.
+      operationId: updateTrainerBranches
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateTrainerBranchesRequest" }
+            example:
+              branchIds:
+                - 83cd902e-0475-4c92-943c-129b751dacee
+      responses:
+        "200":
+          description: Detalle actualizado del entrenador
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserDetail" }
+        "400":
+          description: Identificador o cuerpo invalido, o el usuario no es entrenador
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Una o mas sedes no existen o estan desactivadas
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
   /users/{userId}/password-resets:
     parameters:
       - $ref: "#/components/parameters/UserId"
@@ -516,17 +581,35 @@ paths:
     get:
       tags: [Members]
       summary: Consultar el estado de la cuota propia
+      description: >-
+        Exclusivo de socios autenticados con el cambio de contraseña temporal completado.
+        El estado se calcula a partir del último pago acreditado válido y del precio vigente.
       operationId: getOwnMembership
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Estado calculado de la cuota del socio autenticado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OwnMembership" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /membership-prices/current:
     get:
       tags: [Membership Prices]
       summary: Consultar el valor vigente de la cuota
+      description: >-
+        Disponible para MEMBER, TRAINER y ADMIN autenticados con el cambio de contraseña
+        temporal completado. El importe se devuelve como string decimal para conservar precisión.
       operationId: getCurrentMembershipPrice
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Valor vigente de la cuota
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MembershipPrice" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /membership-prices:
     get:
@@ -624,6 +707,9 @@ paths:
     post:
       tags: [Payments]
       summary: Registrar y acreditar un pago
+      description: >-
+        Exclusivo de administradores. La clave Idempotency-Key debe ser un UUID y repetirse
+        al reintentar la misma operación. La respuesta no expone la clave de idempotencia.
       operationId: createPayment
       parameters:
         - name: Idempotency-Key
@@ -636,7 +722,11 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/CreatePaymentRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Pago acreditado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Payment" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -695,17 +785,6 @@ paths:
         "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
-
-  /payments/{paymentId}:
-    parameters:
-      - $ref: "#/components/parameters/PaymentId"
-    get:
-      tags: [Payments]
-      summary: Consultar un pago
-      operationId: getPayment
-      responses:
-        "200": { $ref: "#/components/responses/Success" }
-        "404": { $ref: "#/components/responses/NotFound" }
 
   /payments/{paymentId}/voids:
     parameters:
@@ -967,44 +1046,6 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
-  /access-attempts/{attemptId}:
-    parameters:
-      - $ref: "#/components/parameters/AttemptId"
-    get:
-      tags: [Access Attempts]
-      summary: Consultar un intento de ingreso
-      operationId: getAccessAttempt
-      responses:
-        "200": { $ref: "#/components/responses/Success" }
-
-  /access-points:
-    get:
-      tags: [Access Points]
-      summary: Listar puntos de acceso
-      operationId: listAccessPoints
-      responses:
-        "200": { $ref: "#/components/responses/Paginated" }
-    post:
-      tags: [Access Points]
-      summary: Crear un punto de acceso
-      operationId: createAccessPoint
-      requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
-      responses:
-        "201": { $ref: "#/components/responses/Created" }
-
-  /access-points/{accessPointId}:
-    parameters:
-      - $ref: "#/components/parameters/AccessPointId"
-    patch:
-      tags: [Access Points]
-      summary: Modificar o cambiar el estado de un punto de acceso
-      operationId: updateAccessPoint
-      requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
-      responses:
-        "200": { $ref: "#/components/responses/Success" }
-
   /branches:
     get:
       tags: [Branches]
@@ -1028,9 +1069,20 @@ paths:
       summary: Crear una sede
       operationId: createBranch
       requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateBranchRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Sede creada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminBranch" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /branches/{branchId}:
     parameters:
@@ -1053,9 +1105,21 @@ paths:
       summary: Modificar una sede
       operationId: updateBranch
       requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateBranchRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Sede modificada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminBranch" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /branches/{branchId}/status:
     parameters:
@@ -1093,7 +1157,10 @@ paths:
         - $ref: "#/components/parameters/Limit"
         - name: isActive
           in: query
-          schema: { type: boolean }
+          description: Valor textual recibido por Express; usar `true` o `false`.
+          schema:
+            type: string
+            enum: ["true", "false"]
       responses:
         "200":
           description: Sedes filtradas ordenadas por nombre e identificador
@@ -1121,24 +1188,6 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-
-  /branches/{branchId}/access-points:
-    parameters:
-      - $ref: "#/components/parameters/BranchId"
-    get:
-      tags: [Access Points]
-      summary: Listar los puntos de acceso de una sede
-      operationId: listBranchAccessPoints
-      responses:
-        "200": { $ref: "#/components/responses/Paginated" }
-    post:
-      tags: [Access Points]
-      summary: Crear un punto de acceso en una sede
-      operationId: createBranchAccessPoint
-      requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
-      responses:
-        "201": { $ref: "#/components/responses/Created" }
 
   /weekly-schedules:
     get:
@@ -1313,13 +1362,6 @@ paths:
   /scheduled-classes/{classId}:
     parameters:
       - $ref: "#/components/parameters/ClassId"
-    get:
-      tags: [Scheduled Classes]
-      summary: Consultar una clase
-      operationId: getScheduledClass
-      security: []
-      responses:
-        "200": { $ref: "#/components/responses/Success" }
     patch:
       tags: [Scheduled Classes]
       summary: Modificar una clase
@@ -1371,78 +1413,70 @@ paths:
       summary: Listar entrenadores activos
       operationId: listTrainers
       security: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Listado paginado de entrenadores activos
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrainerListResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
 
-  /trainers/me:
-    get:
-      tags: [Trainers]
-      summary: Consultar el perfil profesional propio
-      operationId: getOwnTrainerProfile
-      responses:
-        "200": { $ref: "#/components/responses/Success" }
-    patch:
-      tags: [Trainers]
-      summary: Modificar el perfil profesional propio
-      operationId: updateOwnTrainerProfile
-      requestBody:
-        $ref: "#/components/requestBodies/GenericJson"
-      responses:
-        "200": { $ref: "#/components/responses/Success" }
 
-  /trainers/me/scheduled-classes:
+  /trainer/classes:
     get:
       tags: [Trainers]
       summary: Consultar las clases propias del entrenador
-      operationId: listOwnTrainerClasses
+      description: >-
+        Operacion exclusiva de entrenadores autenticados. Si se omite
+        weekStartsOn se consulta la semana actual de Buenos Aires; si se indica,
+        debe ser un lunes. Solo devuelve las clases asignadas al entrenador.
+      operationId: getOwnTrainerClasses
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: weekStartsOn
+          in: query
+          required: false
+          description: Lunes local; si se omite se usa la semana actual de Buenos Aires.
+          schema: { type: string, format: date, example: "2030-09-02" }
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
-
-  /trainers/{trainerId}:
-    parameters:
-      - $ref: "#/components/parameters/TrainerId"
-    get:
-      tags: [Trainers]
-      summary: Consultar el perfil público de un entrenador
-      operationId: getTrainer
-      security: []
-      responses:
-        "200": { $ref: "#/components/responses/Success" }
-
-  /trainers/{trainerId}/branches:
-    parameters:
-      - $ref: "#/components/parameters/TrainerId"
-    put:
-      tags: [Trainers]
-      summary: Reemplazar las sedes asignadas a un entrenador
-      operationId: replaceTrainerBranches
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [branchIds]
-              properties:
-                branchIds:
-                  type: array
-                  uniqueItems: true
-                  items: { type: string, format: uuid }
-      responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Cronograma semanal filtrado por entrenador
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeeklySchedule" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /events:
     get:
       tags: [Events]
       summary: Listar eventos visibles
+      description: >-
+        Disponible para MEMBER, TRAINER y ADMIN autenticados con el cambio de contraseña
+        temporal completado. Los roles no administradores sólo reciben eventos publicados o cancelados;
+        ADMIN puede filtrar también por estado DRAFT.
       operationId: listEvents
       parameters:
         - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
         - name: status
           in: query
           schema: { $ref: "#/components/schemas/EventStatus" }
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Eventos filtrados y paginados
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventListResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
     post:
       tags: [Events]
       summary: Crear un evento
@@ -1453,7 +1487,14 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/CreateEventRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Evento creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Event" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /events/{eventId}:
     parameters:
@@ -1463,7 +1504,15 @@ paths:
       summary: Consultar un evento
       operationId: getEvent
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Evento solicitado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Event" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
     patch:
       tags: [Events]
       summary: Modificar un evento
@@ -1474,7 +1523,15 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/UpdateEventRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Evento modificado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Event" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /events/{eventId}/status:
     parameters:
@@ -1494,15 +1551,45 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/UpdateEventStatusRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Estado del evento actualizado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Event" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /news-posts:
     get:
       tags: [News Posts]
       summary: Listar novedades visibles para la audiencia
+      description: >-
+        Disponible para MEMBER, TRAINER y ADMIN autenticados con el cambio de contraseña
+        temporal completado. Los roles no administradores reciben sólo publicaciones publicadas
+        y filtradas por su audiencia; ADMIN puede filtrar audiencia y estado.
       operationId: listNewsPosts
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - name: audience
+          in: query
+          schema: { $ref: "#/components/schemas/PublicationAudience" }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/PublicationStatus" }
       responses:
-        "200": { $ref: "#/components/responses/Paginated" }
+        "200":
+          description: Novedades filtradas y paginadas
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NewsPostListResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
     post:
       tags: [News Posts]
       summary: Crear una novedad
@@ -1513,7 +1600,14 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/CreateNewsPostRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Created" }
+        "201":
+          description: Novedad creada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NewsPost" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /news-posts/{newsPostId}:
     parameters:
@@ -1523,7 +1617,15 @@ paths:
       summary: Consultar una novedad
       operationId: getNewsPost
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Novedad solicitada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NewsPost" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
     patch:
       tags: [News Posts]
       summary: Modificar una novedad
@@ -1534,7 +1636,15 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/UpdateNewsPostRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Novedad modificada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NewsPost" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /news-posts/{newsPostId}/status:
     parameters:
@@ -1549,7 +1659,16 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/UpdateNewsPostStatusRequest" }
       responses:
-        "200": { $ref: "#/components/responses/Success" }
+        "200":
+          description: Estado de la novedad actualizado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NewsPost" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /notifications:
     get:
@@ -1576,8 +1695,10 @@ paths:
         - $ref: "#/components/parameters/Limit"
         - name: isRead
           in: query
-          description: "`true` devuelve solo las leídas y `false` solo las no leídas; sin el parámetro, todas."
-          schema: { type: boolean }
+          description: "Valor textual recibido por Express: `true` devuelve solo las leídas y `false` solo las no leídas; sin el parámetro, todas."
+          schema:
+            type: string
+            enum: ["true", "false"]
       responses:
         "200":
           description: Notificaciones propias ordenadas de la más reciente a la más antigua
@@ -1701,12 +1822,9 @@ components:
     MemberId: { name: memberId, in: path, required: true, schema: { type: string, format: uuid } }
     PaymentId: { name: paymentId, in: path, required: true, schema: { type: string, format: uuid } }
     CertificateId: { name: certificateId, in: path, required: true, schema: { type: string, format: uuid } }
-    AttemptId: { name: attemptId, in: path, required: true, schema: { type: string, format: uuid } }
-    AccessPointId: { name: accessPointId, in: path, required: true, schema: { type: string, format: uuid } }
     BranchId: { name: branchId, in: path, required: true, schema: { type: string, format: uuid } }
     ScheduleId: { name: scheduleId, in: path, required: true, schema: { type: string, format: uuid } }
     ClassId: { name: classId, in: path, required: true, schema: { type: string, format: uuid } }
-    TrainerId: { name: trainerId, in: path, required: true, schema: { type: string, format: uuid } }
     EventId: { name: eventId, in: path, required: true, schema: { type: string, format: uuid } }
     NewsPostId: { name: newsPostId, in: path, required: true, schema: { type: string, format: uuid } }
     NotificationId: { name: notificationId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1810,6 +1928,27 @@ components:
         page: { type: integer }
         limit: { type: integer }
         total: { type: integer }
+    AdminDashboardMetrics:
+      type: object
+      additionalProperties: false
+      required:
+        - activeMembers
+        - inactiveMembers
+        - currentMemberships
+        - expiringMemberships
+        - expiredMemberships
+        - pendingMedicalCertificates
+        - rejectedMedicalCertificates
+        - initialPeriodMembers
+      properties:
+        activeMembers: { type: integer, minimum: 0 }
+        inactiveMembers: { type: integer, minimum: 0 }
+        currentMemberships: { type: integer, minimum: 0 }
+        expiringMemberships: { type: integer, minimum: 0 }
+        expiredMemberships: { type: integer, minimum: 0 }
+        pendingMedicalCertificates: { type: integer, minimum: 0 }
+        rejectedMedicalCertificates: { type: integer, minimum: 0 }
+        initialPeriodMembers: { type: integer, minimum: 0 }
     UserRole:
       type: string
       enum: [MEMBER, TRAINER, ADMIN]
@@ -1820,6 +1959,26 @@ components:
       type: string
       description: Estado calculado; no se almacena en la base de datos.
       enum: [CURRENT, EXPIRING_SOON, EXPIRED]
+    MembershipPrice:
+      type: object
+      additionalProperties: false
+      required: [id, amount, effectiveFrom, createdAt, createdById]
+      properties:
+        id: { type: string, format: uuid }
+        amount: { type: string, description: Importe decimal expresado sin pérdida de precisión }
+        effectiveFrom: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        createdById: { type: string, format: uuid }
+    OwnMembership:
+      type: object
+      additionalProperties: false
+      required: [currentPrice, lastPaymentAt, expiresAt, daysRemaining, status]
+      properties:
+        currentPrice: { type: [string, "null"], description: Precio vigente expresado como decimal exacto }
+        lastPaymentAt: { type: [string, "null"], format: date-time }
+        expiresAt: { type: [string, "null"], format: date-time }
+        daysRemaining: { type: integer, minimum: 0 }
+        status: { $ref: "#/components/schemas/MembershipStatus" }
     MemberListItem:
       type: object
       additionalProperties: false
@@ -1848,6 +2007,25 @@ components:
     PaymentStatus:
       type: string
       enum: [ACCREDITED, VOIDED]
+    Payment:
+      type: object
+      additionalProperties: false
+      required: [id, memberId, amount, method, receiptNumber, status, createdById, createdAt, confirmedById, accreditedAt, expiresAt, voidedById, voidedAt, voidReason]
+      properties:
+        id: { type: string, format: uuid }
+        memberId: { type: string, format: uuid }
+        amount: { type: string, description: Importe decimal expresado sin pérdida de precisión }
+        method: { type: string }
+        receiptNumber: { type: [string, "null"] }
+        status: { $ref: "#/components/schemas/PaymentStatus" }
+        createdById: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        confirmedById: { type: string, format: uuid }
+        accreditedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        voidedById: { type: [string, "null"], format: uuid }
+        voidedAt: { type: [string, "null"], format: date-time }
+        voidReason: { type: [string, "null"] }
     PaymentHistoryItem:
       type: object
       additionalProperties: false
@@ -1986,6 +2164,34 @@ components:
         scheduledClasses:
           type: array
           items: { $ref: "#/components/schemas/PublicBranchScheduledClass" }
+    CreateBranchRequest:
+      type: object
+      additionalProperties: false
+      required: [name, address, openingHours, phone, description, imageUrl]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 150 }
+        address: { type: string, minLength: 1, maxLength: 255 }
+        openingHours: { type: string, minLength: 1, maxLength: 255 }
+        phone: { type: string, minLength: 1, maxLength: 30 }
+        description: { type: string, minLength: 1 }
+        imageUrl: { type: string, format: uri, maxLength: 2048 }
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+      description: Latitude and longitude must be provided together or both omitted.
+    UpdateBranchRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 150 }
+        address: { type: string, minLength: 1, maxLength: 255 }
+        openingHours: { type: string, minLength: 1, maxLength: 255 }
+        phone: { type: string, minLength: 1, maxLength: 30 }
+        description: { type: string, minLength: 1 }
+        imageUrl: { type: string, format: uri, maxLength: 2048 }
+        latitude: { type: [number, "null"], minimum: -90, maximum: 90 }
+        longitude: { type: [number, "null"], minimum: -180, maximum: 180 }
+      description: Latitude and longitude must be provided together and must both be null when clearing them.
     UpdateBranchStatusRequest:
       type: object
       additionalProperties: false
@@ -2253,6 +2459,17 @@ components:
         status: { $ref: "#/components/schemas/EventStatus" }
         displayStatus: { $ref: "#/components/schemas/EventDisplayStatus" }
         createdById: { type: string, format: uuid }
+    EventListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Event" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
     CreateEventRequest:
       type: object
       additionalProperties: false
@@ -2299,6 +2516,17 @@ components:
         status: { $ref: "#/components/schemas/PublicationStatus" }
         publishedAt: { type: [string, "null"], format: date-time }
         createdById: { type: string, format: uuid }
+    NewsPostListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/NewsPost" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
     CreateNewsPostRequest:
       type: object
       additionalProperties: false
@@ -2540,6 +2768,38 @@ components:
       properties:
         specialty: { type: string }
         description: { type: string }
+    PublicTrainer:
+      type: object
+      additionalProperties: false
+      required: [id, firstName, lastName, photoUrl, specialty, description, branches]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        photoUrl: { type: [string, "null"], format: uri }
+        specialty: { type: string }
+        description: { type: string }
+        branches:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, address]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              address: { type: string }
+    TrainerListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PublicTrainer" }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
     OwnProfile:
       allOf:
         - $ref: "#/components/schemas/User"
@@ -2669,6 +2929,16 @@ components:
       properties:
         status: { $ref: "#/components/schemas/UserStatus" }
         reason: { type: string }
+    UpdateTrainerBranchesRequest:
+      type: object
+      additionalProperties: false
+      required: [branchIds]
+      properties:
+        branchIds:
+          type: array
+          maxItems: 50
+          uniqueItems: true
+          items: { type: string, format: uuid }
     ResetPasswordResponse:
       type: object
       additionalProperties: false
