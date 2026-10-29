@@ -15,6 +15,13 @@ describe("Qase result guard", () => {
     expect(normalizeQaseResult(result)).toBe(result);
   });
 
+  it("preserves an existing message when shortening a long title", () => {
+    const originalTitle = "long test title ".repeat(20);
+    const result = { title: originalTitle, message: null };
+
+    expect(normalizeQaseResult(result).message).toBe(`Original test title: ${originalTitle}`);
+  });
+
   it("shortens long titles deterministically and retains the original title in the message", () => {
     const originalTitle = `${"flujo de acceso ".repeat(30)}✅`;
     const result = { title: originalTitle, message: "Assertion details" };
@@ -39,6 +46,18 @@ describe("Qase result guard", () => {
     await Promise.allSettled([result]);
 
     expect(onError).toHaveBeenCalledWith(failure);
+    expect(pending.size).toBe(0);
+  });
+
+  it("removes successful uploads from the pending set", async () => {
+    const onError = jest.fn();
+    const pending = new Set<Promise<void>>();
+    const reporter = { addTestResult: jest.fn(async () => undefined) };
+    trackQaseResults(reporter, pending, onError);
+
+    await reporter.addTestResult({ title: "test", message: null });
+
+    expect(onError).not.toHaveBeenCalled();
     expect(pending.size).toBe(0);
   });
 });
